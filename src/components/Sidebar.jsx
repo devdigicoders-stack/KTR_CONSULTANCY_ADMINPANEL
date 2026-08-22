@@ -16,16 +16,43 @@ import {
 } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useState, useEffect } from 'react';
+import api from '../api/axios';
 
 const Sidebar = () => {
   const location = useLocation();
   const { role, logout } = useAuth();
+  const [pendingCount, setPendingCount] = useState(0);
+
+  useEffect(() => {
+    if (role === 'admin') {
+      const fetchPendingCount = async () => {
+        try {
+          const res = await api.get('/clients/pending/count');
+          if (res.data.success) {
+            setPendingCount(res.data.count);
+          }
+        } catch (error) {
+          console.error("Error fetching pending count", error);
+        }
+      };
+      fetchPendingCount();
+    }
+  }, [role, location.pathname]); // Refresh on route change to get updated counts
+
 
   const allNavGroups = [
     {
+      title: 'USERS & ROLES',
+      items: [
+        { name: 'Users & Roles', icon: UserCog, path: '/users' },
+      ],
+      roles: ['admin']
+    },
+    {
       title: 'CLIENT & DATA',
       items: [
-        { name: 'Clients', icon: Users, path: '/clients' },
+        { name: role === 'admin' ? 'Clients' : 'My Application', icon: Users, path: '/clients' },
         { name: 'Documents & Data', icon: FolderOpen, path: '/documents' },
         { name: 'CIBIL / Civil Score', icon: ShieldCheck, path: '/cibil' },
         { name: 'Credit Information', icon: FileText, path: '/credit-info' },
@@ -49,13 +76,7 @@ const Sidebar = () => {
       ],
       roles: ['admin']
     },
-    {
-      title: 'USERS & ROLES',
-      items: [
-        { name: 'Users & Roles', icon: UserCog, path: '/users' },
-      ],
-      roles: ['admin']
-    },
+    
     {
       title: 'REPORTS & MONITORING',
       items: [
@@ -119,6 +140,11 @@ const Sidebar = () => {
                       <item.icon className={`w-4 h-4 ${isActive ? 'text-[#081326]' : 'text-gray-400'}`} />
                       <span>{item.name}</span>
                     </div>
+                    {item.name === 'Clients' && pendingCount > 0 && role === 'admin' && (
+                      <div className="w-5 h-5 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
+                        {pendingCount}
+                      </div>
+                    )}
                   </Link>
                 );
               })}

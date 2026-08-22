@@ -1,4 +1,5 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
+import api from '../api/axios';
 
 const AuthContext = createContext();
 
@@ -10,48 +11,63 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check localStorage on mount
-    const storedUser = localStorage.getItem('user');
-    const storedRole = localStorage.getItem('role');
-    
-    if (storedUser && storedRole) {
-      setUser(JSON.parse(storedUser));
-      setRole(storedRole);
-    }
-    setLoading(false);
+    const fetchUser = async () => {
+      const token = localStorage.getItem('adminToken');
+      if (token) {
+        try {
+          const res = await api.get('/admin/profile');
+          if (res.data.success) {
+            setUser(res.data.data);
+            setRole(res.data.data.role);
+          }
+        } catch (error) {
+          console.error('Failed to fetch user profile:', error);
+          logout();
+        }
+      }
+      setLoading(false);
+    };
+
+    fetchUser();
   }, []);
 
-  const login = (email, password) => {
-    // Hardcoded credentials for demonstration
-    if (email === 'admin@gmail.com' && password === 'admin123') {
-      const userData = { email, name: 'Admin User' };
-      setUser(userData);
-      setRole('admin');
-      localStorage.setItem('user', JSON.stringify(userData));
-      localStorage.setItem('role', 'admin');
-      return { success: true };
-    } else if (email === 'user@gmail.com' && password === 'user123') {
-      const userData = { email, name: 'Regular User' };
-      setUser(userData);
-      setRole('user');
-      localStorage.setItem('user', JSON.stringify(userData));
-      localStorage.setItem('role', 'user');
-      return { success: true };
+  const login = async (email, password) => {
+    try {
+      const res = await api.post('/admin/login', { email, password });
+      
+      if (res.data.success) {
+        const adminData = res.data.data;
+        setUser(adminData);
+        setRole(adminData.role);
+        
+        // Store JWT token and partial user data
+        localStorage.setItem('adminToken', adminData.token);
+        localStorage.setItem('user', JSON.stringify(adminData));
+        localStorage.setItem('role', adminData.role);
+        
+        return { success: true };
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      return { 
+        success: false, 
+        message: error.response?.data?.message || 'Login failed. Please check your credentials.' 
+      };
     }
-    
-    return { success: false, message: 'Invalid credentials' };
   };
 
   const logout = () => {
     setUser(null);
     setRole(null);
+    localStorage.removeItem('adminToken');
     localStorage.removeItem('user');
     localStorage.removeItem('role');
   };
 
   return (
-    <AuthContext.Provider value={{ user, role, login, logout, loading }}>
+    <AuthContext.Provider value={{ user, role, login, logout, loading, setUser }}>
       {!loading && children}
     </AuthContext.Provider>
   );
 };
+

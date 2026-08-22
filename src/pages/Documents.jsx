@@ -1,19 +1,11 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Upload, FileText, CheckCircle, Search, Filter, 
   Eye, Download, MoreVertical, ChevronLeft, ChevronRight,
   FolderOpen
 } from 'lucide-react';
-
-const documentsData = [
-  { id: 'DOC-1025', name: 'PAN Card', client: 'Rahul Sharma', category: 'Identity Proof', file: 'PAN_Card_Rahul.pdf', uploaded: 'May 22, 2025', status: 'Verified' },
-  { id: 'DOC-1024', name: 'Aadhaar Card', client: 'Rahul Sharma', category: 'Identity Proof', file: 'Aadhaar_Card_Rahul.pdf', uploaded: 'May 22, 2025', status: 'Verified' },
-  { id: 'DOC-1023', name: 'ITR 2024', client: 'Neha Verma', category: 'Financial', file: 'ITR_2024_Neha.pdf', uploaded: 'May 22, 2025', status: 'Pending' },
-  { id: 'DOC-1022', name: 'Bank Statement', client: 'Aman Enterprises', category: 'Financial', file: 'Bank_Stmt_May.pdf', uploaded: 'May 21, 2025', status: 'Rejected' },
-  { id: 'DOC-1021', name: 'Company Registration', client: 'Aman Enterprises', category: 'Business Proof', file: 'Comp_Reg.pdf', uploaded: 'May 21, 2025', status: 'Verified' },
-  { id: 'DOC-1020', name: 'Address Proof', client: 'Vikas Singh', category: 'Address Proof', file: 'Address_Vikas.pdf', uploaded: 'May 20, 2025', status: 'Verified' },
-  { id: 'DOC-1019', name: 'GST Certificate', client: 'Kavya Consulting', category: 'Business Proof', file: 'GST_Kavya.pdf', uploaded: 'May 20, 2025', status: 'Pending' },
-];
+import api from '../api/axios';
+import { useAuth } from '../context/AuthContext';
 
 const StatusBadge = ({ status }) => {
   const styles = {
@@ -30,50 +22,107 @@ const StatusBadge = ({ status }) => {
 };
 
 const Documents = () => {
+  const { role } = useAuth();
+  const [documents, setDocuments] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  // Filters
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('All Status');
+  const [typeFilter, setTypeFilter] = useState('All Document Types');
+
+  useEffect(() => {
+    const fetchDocs = async () => {
+      try {
+        setLoading(true);
+        const endpoint = role === 'admin' ? '/clients/documents/all' : '/clients/documents/my';
+        const res = await api.get(endpoint);
+        if (res.data.success) {
+          setDocuments(res.data.data);
+        }
+      } catch (error) {
+        console.error('Error fetching documents:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchDocs();
+  }, [role]);
+
+  const getFullUrl = (path) => {
+    if (!path) return null;
+    return `http://localhost:5000${path}`;
+  };
+
+  // Filter Logic
+  const filteredDocs = documents.filter(doc => {
+    let matchesSearch = true;
+    let matchesStatus = true;
+    let matchesType = true;
+
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      matchesSearch = doc.name.toLowerCase().includes(q) || doc.client.toLowerCase().includes(q);
+    }
+    if (statusFilter !== 'All Status') {
+      matchesStatus = doc.status === statusFilter;
+    }
+    if (typeFilter !== 'All Document Types') {
+      matchesType = doc.category === typeFilter;
+    }
+
+    return matchesSearch && matchesStatus && matchesType;
+  });
+
   return (
-    <div className="flex flex-col space-y-6">
+    <div className="flex flex-col space-y-6 pb-10">
       
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-[#081326] flex items-center gap-2">
-            <FolderOpen className="w-6 h-6 text-[#f59e0b]" /> Documents & Data
+          <h2 className="text-2xl font-black text-[#081326] flex items-center gap-2">
+            <FolderOpen className="w-6 h-6 text-[#f59e0b] stroke-[2.5]" /> 
+            {role === 'admin' ? 'All Client Documents' : 'My Documents'}
           </h2>
-          <p className="text-sm text-gray-500 mt-1">Manage and verify all uploaded client documents securely.</p>
+          <p className="text-sm font-bold text-gray-500 mt-1">
+            {role === 'admin' ? 'Manage and verify all uploaded client documents securely.' : 'View and manage all documents you have submitted.'}
+          </p>
         </div>
-        <button className="bg-[#081326] text-white px-5 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-[#11203d] transition-colors shadow-sm">
-          <Upload className="w-4 h-4" /> Upload Document
-        </button>
+        {role === 'user' && (
+          <button onClick={() => window.location.href = '/clients'} className="bg-[#f59e0b] text-white px-5 py-2.5 rounded-xl text-sm font-black flex items-center gap-2 hover:bg-orange-500 transition-colors shadow-sm">
+            <Upload className="w-4 h-4 stroke-[2.5]" /> Update Profile
+          </button>
+        )}
       </div>
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex items-start gap-4">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex items-start gap-4 hover:border-[#f59e0b] transition-all">
           <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center shrink-0 border border-blue-100"><FileText className="w-6 h-6 text-blue-500" /></div>
           <div>
-            <h5 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Total Documents</h5>
-            <p className="text-2xl font-bold text-[#081326] leading-none">1,458</p>
+            <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-1">Total Documents</h5>
+            <p className="text-2xl font-black text-[#081326] leading-none">{documents.length}</p>
           </div>
         </div>
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex items-start gap-4">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex items-start gap-4 hover:border-[#f59e0b] transition-all">
           <div className="w-12 h-12 rounded-xl bg-green-50 flex items-center justify-center shrink-0 border border-green-100"><CheckCircle className="w-6 h-6 text-green-500" /></div>
           <div>
-            <h5 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Verified</h5>
-            <p className="text-2xl font-bold text-[#081326] leading-none">1,204</p>
+            <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-1">Verified</h5>
+            <p className="text-2xl font-black text-[#081326] leading-none">{documents.filter(d => d.status === 'Verified').length}</p>
           </div>
         </div>
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex items-start gap-4">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex items-start gap-4 hover:border-[#f59e0b] transition-all">
           <div className="w-12 h-12 rounded-xl bg-orange-50 flex items-center justify-center shrink-0 border border-orange-100"><FileText className="w-6 h-6 text-orange-500" /></div>
           <div>
-            <h5 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Pending</h5>
-            <p className="text-2xl font-bold text-[#081326] leading-none">185</p>
+            <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-1">Pending</h5>
+            <p className="text-2xl font-black text-[#081326] leading-none">{documents.filter(d => d.status === 'Pending').length}</p>
           </div>
         </div>
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex items-start gap-4">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex items-start gap-4 hover:border-[#f59e0b] transition-all">
           <div className="w-12 h-12 rounded-xl bg-red-50 flex items-center justify-center shrink-0 border border-red-100"><FileText className="w-6 h-6 text-red-500" /></div>
           <div>
-            <h5 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Rejected</h5>
-            <p className="text-2xl font-bold text-[#081326] leading-none">69</p>
+            <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-1">Rejected</h5>
+            <p className="text-2xl font-black text-[#081326] leading-none">{documents.filter(d => d.status === 'Rejected').length}</p>
           </div>
         </div>
       </div>
@@ -82,77 +131,89 @@ const Documents = () => {
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 flex flex-col overflow-hidden">
         
         {/* Filters */}
-        <div className="p-5 border-b border-gray-50 flex gap-4 flex-wrap">
-          <select className="border border-gray-200 rounded-lg px-4 py-2.5 text-sm font-medium text-gray-600 outline-none w-48 bg-white">
+        <div className="p-5 border-b border-gray-50 flex gap-4 flex-wrap bg-gray-50/30">
+          <select 
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value)}
+            className="border border-gray-200 rounded-lg px-4 py-2.5 text-xs font-bold text-gray-600 outline-none w-48 bg-white cursor-pointer hover:border-gray-300 transition-colors"
+          >
             <option>All Document Types</option>
             <option>Identity Proof</option>
             <option>Address Proof</option>
             <option>Financial</option>
+            <option>Additional</option>
           </select>
-          <select className="border border-gray-200 rounded-lg px-4 py-2.5 text-sm font-medium text-gray-600 outline-none w-40 bg-white">
+          <select 
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="border border-gray-200 rounded-lg px-4 py-2.5 text-xs font-bold text-gray-600 outline-none w-40 bg-white cursor-pointer hover:border-gray-300 transition-colors"
+          >
             <option>All Status</option>
             <option>Verified</option>
             <option>Pending</option>
             <option>Rejected</option>
           </select>
           <div className="relative flex-1 min-w-[250px]">
-            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input type="text" placeholder="Search by document, client name or ID..." className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg text-sm font-medium outline-none" />
+            <Search className="w-4 h-4 text-gray-400 absolute left-4 top-1/2 -translate-y-1/2 stroke-[2.5]" />
+            <input 
+              type="text" 
+              placeholder={role === 'admin' ? "Search by document or client name..." : "Search by document..."} 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg text-xs font-bold outline-none focus:border-[#f59e0b] transition-colors" 
+            />
           </div>
-          <button className="bg-gray-50 text-[#081326] px-5 py-2.5 rounded-lg text-sm font-bold flex items-center gap-2 border border-gray-200 hover:bg-gray-100 transition-colors">
-            <Filter className="w-4 h-4" /> Filter
-          </button>
         </div>
 
         {/* Table */}
         <div className="overflow-x-auto scrollbar-hide">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-gray-50/50 text-xs font-bold text-gray-500 capitalize border-b border-gray-50">
+              <tr className="bg-gray-50/50 text-[11px] font-black text-gray-500 capitalize border-b border-gray-100">
                 <th className="px-6 py-4 whitespace-nowrap">Doc ID</th>
                 <th className="px-6 py-4 whitespace-nowrap">Document Name</th>
-                <th className="px-6 py-4 whitespace-nowrap">Client Name</th>
+                {role === 'admin' && <th className="px-6 py-4 whitespace-nowrap">Client Name</th>}
                 <th className="px-6 py-4 whitespace-nowrap">Category</th>
-                <th className="px-6 py-4 whitespace-nowrap">File Name</th>
                 <th className="px-6 py-4 whitespace-nowrap">Uploaded On</th>
                 <th className="px-6 py-4 whitespace-nowrap">Status</th>
                 <th className="px-6 py-4 whitespace-nowrap text-center">Actions</th>
               </tr>
             </thead>
-            <tbody className="text-sm text-gray-600 divide-y divide-gray-50">
-              {documentsData.map((doc, idx) => (
-                <tr key={idx} className="hover:bg-gray-50/50 transition-colors">
-                  <td className="px-6 py-4 whitespace-nowrap text-gray-500 font-medium">{doc.id}</td>
-                  <td className="px-6 py-4 font-bold text-[#081326] whitespace-nowrap">{doc.name}</td>
-                  <td className="px-6 py-4 font-bold text-[#081326] whitespace-nowrap">{doc.client}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">{doc.category}</td>
-                  <td className="px-6 py-4 whitespace-nowrap font-medium">{doc.file}</td>
-                  <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-500">{doc.uploaded}</td>
-                  <td className="px-6 py-4 whitespace-nowrap"><StatusBadge status={doc.status} /></td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center justify-center gap-4">
-                      <button className="text-gray-400 hover:text-[#081326]"><Eye className="w-4 h-4" /></button>
-                      <button className="text-gray-400 hover:text-[#081326]"><Download className="w-4 h-4" /></button>
-                      <button className="text-gray-400 hover:text-[#081326]"><MoreVertical className="w-4 h-4" /></button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+            <tbody className="text-xs text-gray-600 divide-y divide-gray-50">
+              {loading ? (
+                 <tr>
+                    <td colSpan={role === 'admin' ? 7 : 6} className="px-6 py-10 text-center text-gray-500 font-bold">Loading documents...</td>
+                 </tr>
+              ) : filteredDocs.length === 0 ? (
+                 <tr>
+                    <td colSpan={role === 'admin' ? 7 : 6} className="px-6 py-10 text-center text-gray-500 font-bold">No documents found.</td>
+                 </tr>
+              ) : (
+                filteredDocs.map((doc, idx) => (
+                  <tr key={idx} className="hover:bg-gray-50/50 transition-colors">
+                    <td className="px-6 py-4 whitespace-nowrap text-gray-400 font-bold text-[10px]">{doc.id}</td>
+                    <td className="px-6 py-4 font-black text-[#081326] whitespace-nowrap">{doc.name}</td>
+                    {role === 'admin' && <td className="px-6 py-4 font-bold text-gray-700 whitespace-nowrap">{doc.client}</td>}
+                    <td className="px-6 py-4 whitespace-nowrap font-bold text-gray-500">{doc.category}</td>
+                    <td className="px-6 py-4 whitespace-nowrap font-bold text-gray-500">{new Date(doc.uploaded).toLocaleDateString()}</td>
+                    <td className="px-6 py-4 whitespace-nowrap"><StatusBadge status={doc.status} /></td>
+                    <td className="px-6 py-4 whitespace-nowrap text-center">
+                      <div className="flex items-center justify-center gap-2">
+                        <a href={getFullUrl(doc.file)} target="_blank" rel="noreferrer" className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white flex items-center justify-center transition-all shadow-sm" title="View Document">
+                          <Eye className="w-4 h-4 stroke-[2.5]" />
+                        </a>
+                        <a href={getFullUrl(doc.file)} download target="_blank" rel="noreferrer" className="w-8 h-8 rounded-lg bg-green-50 text-green-600 hover:bg-green-600 hover:text-white flex items-center justify-center transition-all shadow-sm" title="Download Document">
+                          <Download className="w-4 h-4 stroke-[2.5]" />
+                        </a>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
         
-        {/* Pagination */}
-        <div className="p-5 border-t border-gray-50 flex justify-between items-center bg-gray-50/30 flex-wrap gap-4">
-          <span className="text-sm text-gray-500 font-medium">Showing 1 to 7 of 1,458 entries</span>
-          <div className="flex items-center gap-2">
-            <button className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-200 text-gray-400 bg-white hover:bg-gray-50"><ChevronLeft className="w-4 h-4" /></button>
-            <button className="w-9 h-9 flex items-center justify-center rounded-lg border border-[#f59e0b] text-[#f59e0b] font-bold bg-[#f59e0b]/10 text-sm">1</button>
-            <button className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-200 text-gray-600 font-bold bg-white text-sm hover:bg-gray-50">2</button>
-            <button className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-200 text-gray-600 font-bold bg-white text-sm hover:bg-gray-50">3</button>
-            <button className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-200 text-gray-400 bg-white hover:bg-gray-50"><ChevronRight className="w-4 h-4" /></button>
-          </div>
-        </div>
       </div>
       
     </div>

@@ -11,6 +11,7 @@ import Documents from './pages/Documents';
 import Cibil from './pages/Cibil';
 import CreditInfo from './pages/CreditInfo';
 import Profile from './pages/Profile';
+import Users from './pages/Users';
 
 // ProtectedRoute component
 const ProtectedRoute = ({ children }) => {
@@ -40,6 +41,7 @@ function App() {
             <Route path="cibil" element={<Cibil />} />
             <Route path="credit-info" element={<CreditInfo />} />
             <Route path="profile" element={<Profile />} />
+            <Route path="users" element={<Users />} />
           </Route>
           
           <Route path="*" element={<Navigate to="/" replace />} />
