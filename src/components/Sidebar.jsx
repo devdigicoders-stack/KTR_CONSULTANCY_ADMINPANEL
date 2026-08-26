@@ -12,7 +12,8 @@ import {
   Globe,
   UserCog,
   BarChart2,
-  Settings
+  Settings,
+  MapPin
 } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -23,6 +24,12 @@ const Sidebar = () => {
   const location = useLocation();
   const { role, logout } = useAuth();
   const [pendingCount, setPendingCount] = useState(0);
+  const [pendingAppsCount, setPendingAppsCount] = useState(0);
+  const [enquiryUnreadCount, setEnquiryUnreadCount] = useState(0);
+  const [cibilCaseNewCount, setCibilCaseNewCount] = useState(0);
+  const [caQuoteNewCount, setCaQuoteNewCount] = useState(0);
+  const [chainDeedNewCount, setChainDeedNewCount] = useState(0);
+  const [propAssessNewCount, setPropAssessNewCount] = useState(0);
 
   useEffect(() => {
     if (role === 'admin') {
@@ -37,6 +44,75 @@ const Sidebar = () => {
         }
       };
       fetchPendingCount();
+
+      // Poll for pending applications in real-time every 15 seconds
+      const fetchPendingApps = async () => {
+        try {
+          const res = await api.get('/applications/pending-count');
+          if (res.data.success) setPendingAppsCount(res.data.count);
+        } catch (e) {}
+      };
+      fetchPendingApps();
+      const interval = setInterval(fetchPendingApps, 15000);
+
+      // Poll for unread enquiries every 15 seconds
+      const fetchEnquiryUnread = async () => {
+        try {
+          const res = await api.get('/enquiries/unread-count');
+          if (res.data.success) setEnquiryUnreadCount(res.data.count);
+        } catch (e) {}
+      };
+      fetchEnquiryUnread();
+      const interval2 = setInterval(fetchEnquiryUnread, 15000);
+
+      // Poll for new CIBIL cases every 15 seconds
+      const fetchCibilNew = async () => {
+        try {
+          const res = await api.get('/cibil-cases/new-count');
+          if (res.data.success) setCibilCaseNewCount(res.data.count);
+        } catch (e) {}
+      };
+      fetchCibilNew();
+      const interval3 = setInterval(fetchCibilNew, 15000);
+
+      // Poll for new CA Quotes every 15 seconds
+      const fetchCaQuotesNew = async () => {
+        try {
+          const res = await api.get('/ca-quotes/new-count');
+          if (res.data.success) setCaQuoteNewCount(res.data.count);
+        } catch (e) {}
+      };
+      fetchCaQuotesNew();
+      const interval4 = setInterval(fetchCaQuotesNew, 15000);
+
+      // Poll for new Chain Deeds every 15 seconds
+      const fetchChainDeedsNew = async () => {
+        try {
+          const res = await api.get('/chain-deeds/new-count');
+          if (res.data.success) setChainDeedNewCount(res.data.count);
+        } catch (e) {}
+      };
+      fetchChainDeedsNew();
+      const interval5 = setInterval(fetchChainDeedsNew, 15000);
+
+      // Poll for new Property Assessments every 15 seconds
+      const fetchPropAssessNew = async () => {
+        try {
+          const res = await api.get('/property-assessments/new-count');
+          if (res.data.success) setPropAssessNewCount(res.data.count);
+        } catch (e) {}
+      };
+      fetchPropAssessNew();
+      const interval6 = setInterval(fetchPropAssessNew, 15000);
+
+      return () => { 
+        clearInterval(interval); 
+        clearInterval(interval2); 
+        clearInterval(interval3); 
+        clearInterval(interval4); 
+        clearInterval(interval5); 
+        clearInterval(interval6); 
+      };
     }
   }, [role, location.pathname]); // Refresh on route change to get updated counts
 
@@ -54,10 +130,13 @@ const Sidebar = () => {
       items: [
         { name: role === 'admin' ? 'Clients' : 'My Application', icon: Users, path: '/clients' },
         { name: 'Documents & Data', icon: FolderOpen, path: '/documents' },
-        { name: 'CIBIL / Civil Score', icon: ShieldCheck, path: '/cibil' },
-        { name: 'Credit Information', icon: FileText, path: '/credit-info' },
+        ...(role === 'admin' ? [
+          { name: 'CIBIL / Civil Score', icon: ShieldCheck, path: '/cibil' },
+          { name: 'CIBIL Case Submissions', icon: FileText, path: '/cibil-cases' },
+          // { name: 'Credit Information', icon: FileText, path: '/credit-info' },
+        ] : [])
       ],
-      roles: ['admin', 'user']
+      roles: ['admin', 'staff']
     },
     {
       title: 'SERVICES MANAGEMENT',
@@ -65,18 +144,21 @@ const Sidebar = () => {
         { name: 'Services', icon: Briefcase, path: '/services' },
         { name: 'Service Details', icon: FileText, path: '/service-details' },
         { name: 'Add / Edit Services', icon: PlusSquare, path: '/add-service' },
+        { name: 'Property Assessments & Maps', icon: MapPin, path: '/property-assessments' },
+        { name: 'Property Legal (Chain Deed)', icon: FileText, path: '/chain-deeds' },
       ],
       roles: ['admin']
     },
     {
       title: 'ENQUIRIES & QUERIES',
       items: [
+        { name: 'Online Applications', icon: FileText, path: '/online-applications' },
         { name: 'Enquiries', icon: MessageSquare, path: '/enquiries' },
-        { name: 'Website Queries', icon: Globe, path: '/website-queries' },
+        { name: 'Non-Approved Eligibility', icon: FileText, path: '/eligibility-checks' },
+        { name: 'CA Quotes', icon: FileText, path: '/ca-quotes' },
       ],
       roles: ['admin']
     },
-    
     {
       title: 'REPORTS & MONITORING',
       items: [
@@ -87,11 +169,9 @@ const Sidebar = () => {
     {
       title: 'ACCOUNT',
       items: [
-        { name: 'Profile', icon: User, path: '/profile' },
-        // Show settings only for admin
-        ...(role === 'admin' ? [{ name: 'Settings', icon: Settings, path: '/settings' }] : [])
+        { name: 'Profile', icon: User, path: '/profile' }
       ],
-      roles: ['admin', 'user']
+      roles: ['admin', 'staff']
     }
   ];
 
@@ -127,7 +207,7 @@ const Sidebar = () => {
             <h4 className="text-gray-500 text-[10px] font-bold tracking-wider mb-3 px-4 uppercase">{group.title}</h4>
             <div className="flex flex-col gap-1">
               {group.items.map((item, itemIdx) => {
-                const isActive = location.pathname.startsWith(item.path);
+                const isActive = location.pathname === item.path;
                 return (
                   <Link 
                     key={itemIdx} 
@@ -143,6 +223,36 @@ const Sidebar = () => {
                     {item.name === 'Clients' && pendingCount > 0 && role === 'admin' && (
                       <div className="w-5 h-5 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
                         {pendingCount}
+                      </div>
+                    )}
+                    {item.name === 'Online Applications' && pendingAppsCount > 0 && role === 'admin' && (
+                      <div className="w-5 h-5 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center animate-pulse">
+                        {pendingAppsCount}
+                      </div>
+                    )}
+                    {item.name === 'Enquiries' && enquiryUnreadCount > 0 && role === 'admin' && (
+                      <div className="w-5 h-5 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center animate-pulse">
+                        {enquiryUnreadCount}
+                      </div>
+                    )}
+                    {item.name === 'CA Quotes' && caQuoteNewCount > 0 && role === 'admin' && (
+                      <div className="w-5 h-5 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center animate-pulse">
+                        {caQuoteNewCount}
+                      </div>
+                    )}
+                    {item.name === 'Property Assessments & Maps' && propAssessNewCount > 0 && role === 'admin' && (
+                      <div className="w-5 h-5 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center animate-pulse">
+                        {propAssessNewCount}
+                      </div>
+                    )}
+                    {item.name === 'Property Legal (Chain Deed)' && chainDeedNewCount > 0 && role === 'admin' && (
+                      <div className="w-5 h-5 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center animate-pulse">
+                        {chainDeedNewCount}
+                      </div>
+                    )}
+                    {item.name === 'CIBIL Case Submissions' && cibilCaseNewCount > 0 && role === 'admin' && (
+                      <div className="w-5 h-5 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center animate-pulse">
+                        {cibilCaseNewCount}
                       </div>
                     )}
                   </Link>

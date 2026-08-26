@@ -1,7 +1,6 @@
-import React from 'react';
 import { CheckCircle, FileText, Upload, Filter, Users } from 'lucide-react';
 
-const RecordsTab = () => {
+const RecordsTab = ({ client }) => {
   const TimelineIcon = ({ type, color }) => {
     switch(type) {
       case 'success-solid': return <div className="w-9 h-9 rounded-full bg-green-600 flex items-center justify-center shrink-0 shadow-sm z-10 relative"><CheckCircle className="w-4 h-4 text-white" /></div>;
@@ -14,17 +13,20 @@ const RecordsTab = () => {
     }
   };
 
-  const records = [
-    { title: "Client Created", desc: "Admin", time: "May 22, 2025 10:30 AM", type: "success-solid" },
-    { title: "Documents Uploaded", desc: "Admin", time: "May 22, 2025 10:45 AM", type: "info" },
-    { title: "CIVIL Score Checked", desc: "System", time: "May 22, 2025 11:15 AM", type: "danger" },
-    { title: "Basic Credit Information Viewed", desc: "System", time: "May 22, 2025 11:20 AM", type: "warning" },
-    { title: "Service Enquiry Submitted", desc: "Client", time: "May 22, 2025 01:10 PM", type: "warning" },
-    { title: "Record Updated", desc: "Admin", time: "May 22, 2025 02:30 PM", type: "primary" },
-    { title: "Note Added", desc: "Admin", time: "May 22, 2025 03:45 PM", type: "default" },
-    { title: "Documents Verified", desc: "Admin", time: "May 23, 2025 09:10 AM", type: "success" },
-    { title: "Status Updated", desc: "Admin", time: "May 23, 2025 09:30 AM", type: "success-solid" },
-  ];
+  const records = (client?.records || []).map(r => {
+    let type = 'default';
+    if (r.action.includes('Created')) type = 'success-solid';
+    else if (r.action.includes('Document')) type = 'info';
+    else if (r.action.includes('CIBIL')) type = 'danger';
+    else if (r.status === 'Failed') type = 'warning';
+
+    return {
+      title: r.action,
+      desc: r.status,
+      time: new Date(r.date).toLocaleString(),
+      type
+    };
+  });
 
   return (
     <div className="flex flex-col xl:flex-row gap-10">
@@ -35,21 +37,24 @@ const RecordsTab = () => {
           {/* Vertical Line */}
           <div className="absolute left-[17px] top-4 bottom-4 w-[2px] bg-gray-200 z-0"></div>
           
-          <div className="space-y-8">
-            {records.map((record, idx) => (
-              <div key={idx} className="flex gap-6 items-start group">
-                <TimelineIcon type={record.type} />
-                <div className="flex-1 pt-1.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                  <div>
-                    <h4 className="text-xs font-bold text-[#081326]">{record.title}</h4>
-                    <p className="text-[10px] text-gray-500 mt-1 font-medium">{record.desc}</p>
+          <div className="relative border-l-2 border-gray-100 ml-4.5 space-y-8 pb-4">
+            {records.length > 0 ? records.map((record, idx) => (
+              <div key={idx} className="relative pl-8 group">
+                <div className="absolute -left-[19px] top-0">
+                  <TimelineIcon type={record.type} />
+                </div>
+                
+                <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 group-hover:border-[#f59e0b] group-hover:shadow-[0_0_15px_rgba(245,158,11,0.05)] transition-all">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-1">
+                    <h4 className="font-bold text-[#081326]">{record.title}</h4>
+                    <span className="text-[10px] font-bold text-gray-400 bg-gray-50 px-2 py-1 rounded whitespace-nowrap">{record.time}</span>
                   </div>
-                  <div className="text-[10px] font-bold text-gray-500 whitespace-nowrap">
-                    {record.time}
-                  </div>
+                  <p className="text-[11px] font-medium text-gray-500">Status: <span className="font-bold text-gray-700">{record.desc}</span></p>
                 </div>
               </div>
-            ))}
+            )) : (
+              <div className="pl-8 text-sm text-gray-500 font-medium">No activity records found.</div>
+            )}
           </div>
         </div>
       </div>
@@ -66,19 +71,19 @@ const RecordsTab = () => {
           <div className="space-y-6">
             <div className="flex justify-between items-center">
               <span className="text-[11px] font-bold text-gray-500">Total Activities</span>
-              <span className="text-xs font-bold text-[#081326]">9</span>
+              <span className="text-xs font-bold text-[#081326]">{records.length}</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-[11px] font-bold text-gray-500">Last Activity</span>
-              <span className="text-[11px] font-bold text-[#081326]">May 23, 2025 09:30 AM</span>
+              <span className="text-[11px] font-bold text-[#081326]">{records.length > 0 ? records[0].time : 'N/A'}</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-[11px] font-bold text-gray-500">Added By</span>
-              <span className="text-[11px] font-bold text-[#081326]">Admin User</span>
+              <span className="text-[11px] font-bold text-[#081326]">{client?.user?.name || 'Admin'}</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-[11px] font-bold text-gray-500">Assigned To</span>
-              <span className="text-[11px] font-bold text-[#081326]">Aman Verma</span>
+              <span className="text-[11px] font-bold text-[#081326]">Admin</span>
             </div>
           </div>
         </div>

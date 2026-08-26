@@ -1,6 +1,9 @@
-import React, { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ChevronRight, Search, FileText, Bell, MoreHorizontal, ArrowLeft } from 'lucide-react';
+import { ChevronRight, Search, Bell, MoreHorizontal, Edit, Trash2, AlertTriangle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import api from '../api/axios';
+import { useAuth } from '../context/AuthContext';
 
 import OverviewTab from '../components/client/OverviewTab';
 import DocumentsTab from '../components/client/DocumentsTab';
@@ -11,16 +14,39 @@ import ClientDashboardTab from '../components/client/ClientDashboardTab';
 
 const ClientDetails = () => {
   const { id } = useParams();
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('Overview');
+  const [client, setClient] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const navigate = useNavigate();
 
-  const tabs = [
+  useEffect(() => {
+    const fetchClient = async () => {
+      try {
+        const res = await api.get(`/clients/${id}`);
+        if (res.data.success) {
+          setClient(res.data.data);
+        }
+      } catch (err) {
+        console.error('Error fetching client details:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchClient();
+  }, [id]);
+
+  const tabs = user?.role === 'admin' ? [
     'Overview',
     'Documents',
     'Records',
     'CIVIL Score',
     'Credit Information',
-    'Client Dashboard',
-    'Notes'
+    'Client Dashboard'
+  ] : [
+    'Overview',
+    'Documents'
   ];
 
   const getHeaderInfo = () => {
@@ -36,6 +62,32 @@ const ClientDetails = () => {
   };
 
   const headerInfo = getHeaderInfo();
+
+  const handleDeleteClient = async () => {
+    try {
+      const res = await api.delete(`/clients/${id}`);
+      if (res.data.success) {
+        setShowDeleteModal(false);
+        navigate('/clients');
+      }
+    } catch (err) {
+      alert('Error deleting client');
+    }
+  };
+
+  if (loading) {
+    return <div className="p-8 text-center text-gray-500 font-medium">Loading client details...</div>;
+  }
+
+  if (!client) {
+    return <div className="p-8 text-center text-red-500 font-medium">Client not found.</div>;
+  }
+
+  // Helper to get initials
+  const getInitials = (name) => {
+    if (!name) return 'C';
+    return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
+  };
 
   return (
     <div className="flex flex-col space-y-6 max-w-[1600px] mx-auto">
@@ -56,6 +108,22 @@ const ClientDetails = () => {
         </div>
         
         <div className="flex items-center gap-4">
+          {user?.role === 'admin' && (
+            <div className="flex items-center gap-2 pr-4 border-r border-gray-200 mr-2">
+              <button 
+                onClick={() => navigate(`/clients/edit/${id}`)}
+                className="px-4 py-2 bg-orange-50 text-orange-600 rounded-lg text-xs font-bold hover:bg-orange-600 hover:text-white transition-colors shadow-sm flex items-center gap-2"
+              >
+                <Edit className="w-4 h-4 stroke-[2.5]" /> Edit Client
+              </button>
+              <button 
+                onClick={() => setShowDeleteModal(true)}
+                className="px-4 py-2 bg-red-50 text-red-600 rounded-lg text-xs font-bold hover:bg-red-600 hover:text-white transition-colors shadow-sm flex items-center gap-2"
+              >
+                <Trash2 className="w-4 h-4 stroke-[2.5]" /> Delete
+              </button>
+            </div>
+          )}
           <div className="relative hidden md:block">
             <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input type="text" placeholder="Search anything..." className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-xs font-medium outline-none bg-gray-50/50 focus:bg-white transition-colors" />
@@ -65,10 +133,12 @@ const ClientDetails = () => {
             <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
           </button>
           <div className="flex items-center gap-3 pl-4 border-l border-gray-200">
-            <div className="w-10 h-10 rounded-full bg-[#081326] text-white flex items-center justify-center font-bold text-sm">AU</div>
+            <div className="w-10 h-10 rounded-full bg-[#081326] text-white flex items-center justify-center font-bold text-sm uppercase">
+              {getInitials(user?.name) || 'AU'}
+            </div>
             <div className="hidden sm:block">
-              <p className="text-[11px] font-bold text-[#081326] leading-tight">Admin User</p>
-              <p className="text-[9px] font-medium text-gray-500">User</p>
+              <p className="text-[11px] font-bold text-[#081326] leading-tight">{user?.name || 'Admin User'}</p>
+              <p className="text-[9px] font-medium text-gray-500 capitalize">{user?.role || 'Staff'}</p>
             </div>
           </div>
         </div>
@@ -79,13 +149,13 @@ const ClientDetails = () => {
         <div className="p-6 md:p-8 flex flex-col md:flex-row gap-6 md:items-center justify-between">
           <div className="flex items-center gap-6">
             <div className="w-20 h-20 rounded-full bg-[#081326] flex items-center justify-center text-white text-3xl font-bold shadow-lg">
-              RS
+              {getInitials(client.fullName)}
             </div>
             <div>
               <div className="flex items-center gap-3 mb-2">
-                <h2 className="text-2xl font-bold text-[#081326]">Rahul Sharma</h2>
-                <span className="text-green-600 bg-green-50 px-2 py-1 rounded-md font-bold flex items-center gap-1.5 text-[10px]">
-                  <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>Active
+                <h2 className="text-2xl font-bold text-[#081326]">{client.fullName}</h2>
+                <span className={`${client.status === 'Approved' ? 'text-green-600 bg-green-50' : client.status === 'Rejected' ? 'text-red-500 bg-red-50' : 'text-orange-500 bg-orange-50'} px-2 py-1 rounded-md font-bold flex items-center gap-1.5 text-[10px]`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${client.status === 'Approved' ? 'bg-green-500' : client.status === 'Rejected' ? 'bg-red-500' : 'bg-orange-500'}`}></span>{client.status === 'Approved' ? 'Active' : client.status === 'Rejected' ? 'Inactive' : 'Pending'}
                 </span>
               </div>
               <div className="flex gap-8 text-[11px] font-medium text-gray-500">
@@ -95,24 +165,16 @@ const ClientDetails = () => {
                 </div>
                 <div>
                   <p className="text-gray-400 mb-0.5">Added On</p>
-                  <p className="text-[#081326] font-bold">May 22, 2025</p>
+                  <p className="text-[#081326] font-bold">{new Date(client.createdAt).toLocaleDateString()}</p>
                 </div>
                 <div>
-                  <p className="text-gray-400 mb-0.5">Assigned To</p>
-                  <p className="text-[#081326] font-bold">Aman Verma</p>
+                  <p className="text-gray-400 mb-0.5">Added By</p>
+                  <p className="text-[#081326] font-bold">{client.user?.name || 'Website / Self'}</p>
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <button className="border border-gray-200 text-[#081326] px-5 py-2.5 rounded-lg text-xs font-bold hover:bg-gray-50 transition-colors">
-              Edit Client
-            </button>
-            <button className="bg-gray-50 text-[#081326] px-5 py-2.5 rounded-lg text-xs font-bold flex items-center gap-2 hover:bg-gray-100 transition-colors">
-              More Actions <MoreHorizontal className="w-4 h-4" />
-            </button>
-          </div>
         </div>
 
         {/* Tab Navigation */}
@@ -138,19 +200,43 @@ const ClientDetails = () => {
 
       {/* Dynamic Tab Content Area */}
       <div className="flex-1">
-        {activeTab === 'Overview' && <OverviewTab />}
-        {activeTab === 'Documents' && <DocumentsTab />}
-        {activeTab === 'Records' && <RecordsTab />}
-        {activeTab === 'CIVIL Score' && <CibilScoreTab />}
-        {activeTab === 'Credit Information' && <CreditInfoTab />}
-        {activeTab === 'Client Dashboard' && <ClientDashboardTab />}
-        {activeTab === 'Notes' && (
-          <div className="bg-white p-8 rounded-2xl border border-gray-100 text-center">
-            <p className="text-gray-400 text-sm">Notes feature coming soon...</p>
-          </div>
-        )}
+        {activeTab === 'Overview' && <OverviewTab client={client} />}
+        {activeTab === 'Documents' && <DocumentsTab client={client} />}
+        {activeTab === 'Records' && <RecordsTab client={client} />}
+        {activeTab === 'CIVIL Score' && <CibilScoreTab client={client} />}
+        {activeTab === 'Credit Information' && <CreditInfoTab client={client} />}
+        {activeTab === 'Client Dashboard' && <ClientDashboardTab client={client} />}
       </div>
 
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-[#081326]/60 backdrop-blur-sm" onClick={() => setShowDeleteModal(false)}></div>
+          <div className="relative bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+            <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">
+              <AlertTriangle className="w-6 h-6 text-red-600 stroke-[2.5]" />
+            </div>
+            <h3 className="text-lg font-black text-[#081326] text-center mb-2">Delete Client?</h3>
+            <p className="text-sm text-gray-500 text-center mb-6 font-medium leading-relaxed">
+              Are you sure you want to delete this client? This action cannot be undone and all associated records will be removed.
+            </p>
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setShowDeleteModal(false)}
+                className="flex-1 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-sm font-bold transition-colors"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleDeleteClient}
+                className="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-bold transition-colors shadow-sm shadow-red-200"
+              >
+                Yes, Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

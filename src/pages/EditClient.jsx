@@ -1,12 +1,13 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { 
   ChevronRight, User, MapPin, Briefcase, Info, HeadphonesIcon, Check, UploadCloud
 } from 'lucide-react';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 
-const AddNewClient = () => {
+const EditClient = () => {
+  const { id } = useParams();
   const { user } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
@@ -59,6 +60,50 @@ const AddNewClient = () => {
     setFiles({ ...files, [e.target.name]: e.target.files[0] });
   };
 
+  useEffect(() => {
+    const fetchClient = async () => {
+      try {
+        const res = await api.get(`/clients/${id}`);
+        if (res.data.success) {
+          const client = res.data.data;
+          setFormData({
+            fullName: client.fullName || '',
+            dob: client.dob ? client.dob.split('T')[0] : '',
+            gender: client.gender || '',
+            panNumber: client.panNumber || '',
+            aadhaarNumber: client.aadhaarNumber || '',
+            mobile: client.mobile || '',
+            email: client.email || '',
+            alternativeEmail: client.alternativeEmail || '',
+            idProofType: client.idProofType || '',
+            idProofNumber: client.idProofNumber || '',
+            addressLine1: client.addressLine1 || '',
+            addressLine2: client.addressLine2 || '',
+            country: client.country || 'India',
+            state: client.state || '',
+            city: client.city || '',
+            pincode: client.pincode || '',
+            occupation: client.occupation || '',
+            companyName: client.companyName || '',
+            designation: client.designation || '',
+            annualIncome: client.annualIncome || '',
+            sourceOfIncome: client.sourceOfIncome || '',
+            businessType: client.businessType || '',
+            yearsInBusiness: client.yearsInBusiness || '',
+            website: client.website || '',
+            referredBy: client.referredBy || '',
+            referrerMobile: client.referrerMobile || '',
+            relationship: client.relationship || '',
+            notes: client.notes || ''
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching client details for edit', error);
+      }
+    };
+    fetchClient();
+  }, [id]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -75,14 +120,14 @@ const AddNewClient = () => {
     if (files.panCardUrl) submitData.append('panCardUrl', files.panCardUrl);
 
     try {
-      const res = await api.post('/clients/profile', submitData, {
+      const res = await api.put(`/clients/${id}`, submitData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }
       });
 
       if (res.data.success) {
-        setMessage({ type: 'success', text: 'Client added successfully!' });
+        setMessage({ type: 'success', text: 'Client updated successfully!' });
         window.scrollTo(0,0);
         setTimeout(() => navigate('/clients'), 1500);
       }
@@ -98,7 +143,7 @@ const AddNewClient = () => {
     <div className="flex flex-col gap-6 relative h-full pb-8">
       {/* Header */}
       <div className="flex flex-col gap-1">
-        <h2 className="text-xl font-semibold text-gray-800 text-[#081326]">Add New Client</h2>
+        <h2 className="text-xl font-semibold text-gray-800 text-[#081326]">Edit Client Profile</h2>
         <div className="flex items-center gap-2 text-xs font-medium text-gray-500">
           <span className="hover:text-[#081326] cursor-pointer transition-colors">Home</span>
           <ChevronRight className="w-3 h-3" />
@@ -127,18 +172,18 @@ const AddNewClient = () => {
               
               <div className="flex flex-col md:flex-row gap-4">
                 <div className="flex-1 flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-gray-700 mb-1 block">Full Name <span className="text-red-500">*</span></label>
-                  <input type="text" name="fullName" value={formData.fullName} onChange={handleChange} required placeholder="Enter full name" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-200 focus:border-[#f59e0b] focus:bg-white transition-colors" />
+                  <label className="text-xs font-medium text-gray-700 mb-1 block">Full Name</label>
+                  <input type="text" name="fullName" value={formData.fullName} onChange={handleChange} placeholder="Enter full name" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-200 focus:border-[#f59e0b] focus:bg-white transition-colors" />
                 </div>
                 <div className="flex-1 flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-gray-700 mb-1 block">Date of Birth <span className="text-red-500">*</span></label>
+                  <label className="text-xs font-medium text-gray-700 mb-1 block">Date of Birth</label>
                   <div className="relative">
-                    <input type="date" name="dob" value={formData.dob} onChange={handleChange} required className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-200 focus:border-[#f59e0b] focus:bg-white transition-colors" />
+                    <input type="date" name="dob" value={formData.dob} onChange={handleChange} className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-200 focus:border-[#f59e0b] focus:bg-white transition-colors" />
                   </div>
                 </div>
                 <div className="flex-1 flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-gray-700 mb-1 block">Gender <span className="text-red-500">*</span></label>
-                  <select name="gender" value={formData.gender} onChange={handleChange} required className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-lg text-sm font-normal text-gray-800 outline-none hover:border-gray-200 focus:border-[#f59e0b] focus:bg-white transition-colors cursor-pointer">
+                  <label className="text-xs font-medium text-gray-700 mb-1 block">Gender</label>
+                  <select name="gender" value={formData.gender} onChange={handleChange} className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-lg text-sm font-normal text-gray-800 outline-none hover:border-gray-200 focus:border-[#f59e0b] focus:bg-white transition-colors cursor-pointer">
                     <option value="">Select gender</option>
                     <option value="Male">Male</option>
                     <option value="Female">Female</option>
@@ -149,23 +194,23 @@ const AddNewClient = () => {
 
               <div className="flex flex-col md:flex-row gap-4">
                 <div className="flex-1 flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-gray-700 mb-1 block">PAN Number <span className="text-red-500">*</span></label>
-                  <input type="text" name="panNumber" value={formData.panNumber} onChange={handleChange} required placeholder="Enter PAN number" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-200 focus:border-[#f59e0b] focus:bg-white transition-colors uppercase" />
+                  <label className="text-xs font-medium text-gray-700 mb-1 block">PAN Number</label>
+                  <input type="text" name="panNumber" value={formData.panNumber} onChange={handleChange} placeholder="Enter PAN number" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-200 focus:border-[#f59e0b] focus:bg-white transition-colors uppercase" />
                 </div>
                 <div className="flex-1 flex flex-col gap-1.5">
                   <label className="text-xs font-medium text-gray-700 mb-1 block">Aadhaar Number</label>
                   <input type="text" name="aadhaarNumber" value={formData.aadhaarNumber} onChange={handleChange} placeholder="Enter Aadhaar number" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-200 focus:border-[#f59e0b] focus:bg-white transition-colors" />
                 </div>
                 <div className="flex-1 flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-gray-700 mb-1 block">Mobile Number <span className="text-red-500">*</span></label>
-                  <input type="text" name="mobile" value={formData.mobile} onChange={handleChange} required placeholder="Enter mobile number" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-200 focus:border-[#f59e0b] focus:bg-white transition-colors" />
+                  <label className="text-xs font-medium text-gray-700 mb-1 block">Mobile Number</label>
+                  <input type="text" name="mobile" value={formData.mobile} onChange={handleChange} placeholder="Enter mobile number" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-200 focus:border-[#f59e0b] focus:bg-white transition-colors" />
                 </div>
               </div>
 
               <div className="flex flex-col md:flex-row gap-4">
                 <div className="flex-1 flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-gray-700 mb-1 block">Email Address <span className="text-red-500">*</span></label>
-                  <input type="email" name="email" value={formData.email} onChange={handleChange} required placeholder="Enter email address" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-200 focus:border-[#f59e0b] focus:bg-white transition-colors" />
+                  <label className="text-xs font-medium text-gray-700 mb-1 block">Email Address</label>
+                  <input type="email" name="email" value={formData.email} onChange={handleChange} placeholder="Enter email address" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-200 focus:border-[#f59e0b] focus:bg-white transition-colors" />
                 </div>
                 <div className="flex-1 flex flex-col gap-1.5">
                   <label className="text-xs font-medium text-gray-700 mb-1 block">Alternative Email</label>
@@ -182,8 +227,8 @@ const AddNewClient = () => {
               
               <div className="flex flex-col md:flex-row gap-4">
                 <div className="flex-1 flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-gray-700 mb-1 block">ID Proof Type <span className="text-red-500">*</span></label>
-                  <select name="idProofType" value={formData.idProofType} onChange={handleChange} required className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-lg text-sm font-normal text-gray-800 outline-none hover:border-gray-200 focus:border-[#f59e0b] focus:bg-white transition-colors cursor-pointer">
+                  <label className="text-xs font-medium text-gray-700 mb-1 block">ID Proof Type</label>
+                  <select name="idProofType" value={formData.idProofType} onChange={handleChange} className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-lg text-sm font-normal text-gray-800 outline-none hover:border-gray-200 focus:border-[#f59e0b] focus:bg-white transition-colors cursor-pointer">
                     <option value="">Select ID proof type</option>
                     <option value="Aadhaar Card">Aadhaar Card</option>
                     <option value="Passport">Passport</option>
@@ -192,14 +237,14 @@ const AddNewClient = () => {
                   </select>
                 </div>
                 <div className="flex-1 flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-gray-700 mb-1 block">ID Proof Number <span className="text-red-500">*</span></label>
-                  <input type="text" name="idProofNumber" value={formData.idProofNumber} onChange={handleChange} required placeholder="Enter ID proof number" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-200 focus:border-[#f59e0b] focus:bg-white transition-colors" />
+                  <label className="text-xs font-medium text-gray-700 mb-1 block">ID Proof Number</label>
+                  <input type="text" name="idProofNumber" value={formData.idProofNumber} onChange={handleChange} placeholder="Enter ID proof number" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-200 focus:border-[#f59e0b] focus:bg-white transition-colors" />
                 </div>
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-gray-700 mb-1 block">Address Line 1 <span className="text-red-500">*</span></label>
-                <input type="text" name="addressLine1" value={formData.addressLine1} onChange={handleChange} required placeholder="House no., Building, Street" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-200 focus:border-[#f59e0b] focus:bg-white transition-colors" />
+                <label className="text-xs font-medium text-gray-700 mb-1 block">Address Line 1</label>
+                <input type="text" name="addressLine1" value={formData.addressLine1} onChange={handleChange} placeholder="House no., Building, Street" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-200 focus:border-[#f59e0b] focus:bg-white transition-colors" />
               </div>
               
               <div className="flex flex-col gap-1.5">
@@ -209,22 +254,22 @@ const AddNewClient = () => {
 
               <div className="flex flex-col md:flex-row gap-4">
                 <div className="flex-1 flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-gray-700 mb-1 block">Country <span className="text-red-500">*</span></label>
-                  <input type="text" name="country" value={formData.country} onChange={handleChange} required className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-lg text-sm font-normal outline-none text-gray-800" readOnly />
+                  <label className="text-xs font-medium text-gray-700 mb-1 block">Country</label>
+                  <input type="text" name="country" value={formData.country} onChange={handleChange} className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-lg text-sm font-normal outline-none text-gray-800" readOnly />
                 </div>
                 <div className="flex-1 flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-gray-700 mb-1 block">State <span className="text-red-500">*</span></label>
-                  <input type="text" name="state" value={formData.state} onChange={handleChange} required placeholder="Enter state" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-200 focus:border-[#f59e0b] focus:bg-white transition-colors" />
+                  <label className="text-xs font-medium text-gray-700 mb-1 block">State</label>
+                  <input type="text" name="state" value={formData.state} onChange={handleChange} placeholder="Enter state" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-200 focus:border-[#f59e0b] focus:bg-white transition-colors" />
                 </div>
                 <div className="flex-1 flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-gray-700 mb-1 block">City <span className="text-red-500">*</span></label>
-                  <input type="text" name="city" value={formData.city} onChange={handleChange} required placeholder="Enter city" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-200 focus:border-[#f59e0b] focus:bg-white transition-colors" />
+                  <label className="text-xs font-medium text-gray-700 mb-1 block">City</label>
+                  <input type="text" name="city" value={formData.city} onChange={handleChange} placeholder="Enter city" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-200 focus:border-[#f59e0b] focus:bg-white transition-colors" />
                 </div>
               </div>
               <div className="flex gap-4">
                 <div className="flex-1 flex flex-col gap-1.5 max-w-xs">
-                  <label className="text-xs font-medium text-gray-700 mb-1 block">Pincode <span className="text-red-500">*</span></label>
-                  <input type="text" name="pincode" value={formData.pincode} onChange={handleChange} required placeholder="Enter pincode" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-200 focus:border-[#f59e0b] focus:bg-white transition-colors" />
+                  <label className="text-xs font-medium text-gray-700 mb-1 block">Pincode</label>
+                  <input type="text" name="pincode" value={formData.pincode} onChange={handleChange} placeholder="Enter pincode" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-200 focus:border-[#f59e0b] focus:bg-white transition-colors" />
                 </div>
               </div>
             </div>
@@ -284,12 +329,12 @@ const AddNewClient = () => {
                   <input type="file" name="photoUrl" onChange={handleFileChange} className="w-full px-4 py-2 bg-gray-50 border border-gray-100 rounded-lg text-sm font-normal outline-none text-gray-800" accept="image/*" />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-gray-700 mb-1 block">PAN Card (PDF/Image) <span className="text-red-500">*</span></label>
-                  <input type="file" name="panCardUrl" onChange={handleFileChange} required className="w-full px-4 py-2 bg-gray-50 border border-gray-100 rounded-lg text-sm font-normal outline-none text-gray-800" />
+                  <label className="text-xs font-medium text-gray-700 mb-1 block">PAN Card (PDF/Image)</label>
+                  <input type="file" name="panCardUrl" onChange={handleFileChange} className="w-full px-4 py-2 bg-gray-50 border border-gray-100 rounded-lg text-sm font-normal outline-none text-gray-800" />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-gray-700 mb-1 block">Aadhaar/ID Proof (PDF/Image) <span className="text-red-500">*</span></label>
-                  <input type="file" name="idProofUrl" onChange={handleFileChange} required className="w-full px-4 py-2 bg-gray-50 border border-gray-100 rounded-lg text-sm font-normal outline-none text-gray-800" />
+                  <label className="text-xs font-medium text-gray-700 mb-1 block">Aadhaar/ID Proof (PDF/Image)</label>
+                  <input type="file" name="idProofUrl" onChange={handleFileChange} className="w-full px-4 py-2 bg-gray-50 border border-gray-100 rounded-lg text-sm font-normal outline-none text-gray-800" />
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-medium text-gray-700 mb-1 block">Address Proof (PDF/Image)</label>
@@ -299,24 +344,23 @@ const AddNewClient = () => {
               <p className="text-xs text-gray-500 font-normal mt-2">Note: If you have already uploaded files, uploading new ones will replace them.</p>
             </div>
             
-            {/* Action Bar */}
-            <div className="flex justify-between items-center bg-gray-50/50 p-4 rounded-2xl border border-gray-100">
-               <div className="flex items-center gap-3">
-                 <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center shrink-0 border border-blue-100">
-                   <Info className="w-4 h-4" />
-                 </div>
-                 <div>
-                   <p className="text-sm font-medium text-[#081326]">Important Note</p>
-                   <p className="text-xs text-gray-500 font-normal">Please review all details before submitting. An admin will verify them.</p>
-                 </div>
-               </div>
-               
-               <div className="flex gap-4">
-                 <button type="submit" disabled={loading} className="px-6 py-2.5 bg-[#081326] text-white rounded-xl text-sm font-medium hover:bg-[#11203d] transition-colors shadow-sm flex items-center gap-2 disabled:opacity-50">
-                   {loading ? 'Submitting...' : 'Submit Client Profile'} <ChevronRight className="w-4 h-4" />
-                 </button>
-               </div>
-            </div>
+             {/* Action Bar */}
+             <div className="flex justify-between items-center bg-gray-50/50 p-4 rounded-2xl border border-gray-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center shrink-0 border border-blue-100">
+                    <Info className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-[#081326]">Important Note</p>
+                    <p className="text-xs text-gray-500 font-normal">Please review all details before submitting. An admin will verify them.</p>
+                  </div>
+                </div>
+                <div className="flex gap-4">
+                  <button type="submit" disabled={loading} className="px-6 py-2.5 bg-[#081326] text-white rounded-xl text-sm font-medium hover:bg-[#11203d] transition-colors shadow-sm flex items-center gap-2 disabled:opacity-50">
+                    {loading ? 'Updating...' : 'Update Client Profile'} <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+             </div>
 
           </form>
         </div>
@@ -329,7 +373,7 @@ const AddNewClient = () => {
                <div className="w-6 h-6 rounded bg-orange-50 text-orange-500 flex items-center justify-center shrink-0 border border-orange-100"><Check className="w-3.5 h-3.5" /></div> Quick Tips
              </h3>
              <ul className="flex flex-col gap-3 text-xs font-normal text-gray-600">
-               <li className="flex gap-2 items-start"><Check className="w-3.5 h-3.5 text-[#f59e0b] shrink-0 mt-0.5" /> Please fill all mandatory fields marked with <span className="text-red-500">*</span></li>
+               <li className="flex gap-2 items-start"><Check className="w-3.5 h-3.5 text-[#f59e0b] shrink-0 mt-0.5" /> Please fill all mandatory fields marked with</li>
                <li className="flex gap-2 items-start"><Check className="w-3.5 h-3.5 text-[#f59e0b] shrink-0 mt-0.5" /> Ensure the email and mobile number are valid</li>
                <li className="flex gap-2 items-start"><Check className="w-3.5 h-3.5 text-[#f59e0b] shrink-0 mt-0.5" /> Upload clear images/PDFs of your documents</li>
                <li className="flex gap-2 items-start"><Check className="w-3.5 h-3.5 text-[#f59e0b] shrink-0 mt-0.5" /> Review all details before final submission</li>
@@ -355,4 +399,5 @@ const AddNewClient = () => {
   );
 };
 
-export default AddNewClient;
+export default EditClient;
+

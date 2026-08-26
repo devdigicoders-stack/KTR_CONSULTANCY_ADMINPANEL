@@ -1,7 +1,18 @@
 import React from 'react';
 import { MapPin } from 'lucide-react';
 
-export const IndiaMapWidget = () => {
+export const IndiaMapWidget = ({ data }) => {
+  const chartData = data && data.data ? data.data : [
+    { name: 'New Delhi', count: 420 },
+    { name: 'Mumbai', count: 280 },
+    { name: 'Bangalore', count: 180 },
+    { name: 'Hyderabad', count: 150 },
+    { name: 'Chennai', count: 120 },
+    { name: 'Others', count: 100 },
+  ];
+  
+  const totalClients = data && data.total !== undefined ? data.total : 1250;
+
   return (
     <div className="bg-white p-4 xl:p-6 rounded-[20px] shadow-[0_4px_20px_rgb(0,0,0,0.03)] border border-gray-50 flex flex-col h-full overflow-hidden">
       <div className="flex justify-between items-center mb-4 shrink-0">
@@ -32,50 +43,41 @@ export const IndiaMapWidget = () => {
             
             {/* Overlay Markers */}
             <div className="absolute inset-0">
-              {/* Delhi */}
-              <div className="absolute top-[28%] left-[46%] group flex items-center justify-end -ml-[120px]">
-                <div className="bg-white px-2 py-1.5 rounded-lg shadow-sm border border-gray-100 text-center opacity-100 mr-2 shrink-0">
-                  <div className="text-[9px] font-bold text-[#081326]">New Delhi</div>
-                  <div className="text-[8px] font-medium text-gray-500">420 Clients</div>
-                </div>
-                <div className="w-2.5 h-2.5 bg-[#081326] border-2 border-blue-200 rounded-full shadow-md z-10 shrink-0"></div>
-              </div>
-
-              {/* Mumbai */}
-              <div className="absolute top-[52%] left-[26%] group flex items-center justify-end -ml-[120px]">
-                <div className="bg-white px-2 py-1.5 rounded-lg shadow-sm border border-gray-100 text-center opacity-100 mr-2 shrink-0">
-                  <div className="text-[9px] font-bold text-[#081326]">Mumbai</div>
-                  <div className="text-[8px] font-medium text-gray-500">280 Clients</div>
-                </div>
-                <div className="w-2.5 h-2.5 bg-[#081326] border-2 border-blue-200 rounded-full shadow-md z-10 shrink-0"></div>
-              </div>
-
-              {/* Bangalore */}
-              <div className="absolute top-[75%] left-[34%] group flex items-center justify-end -ml-[120px]">
-                <div className="bg-white px-2 py-1.5 rounded-lg shadow-sm border border-gray-100 text-center opacity-100 mr-2 shrink-0">
-                  <div className="text-[9px] font-bold text-[#081326]">Bangalore</div>
-                  <div className="text-[8px] font-medium text-gray-500">180 Clients</div>
-                </div>
-                <div className="w-2.5 h-2.5 bg-[#081326] border-2 border-blue-200 rounded-full shadow-md z-10 shrink-0"></div>
-              </div>
-
-              {/* Hyderabad */}
-              <div className="absolute top-[62%] left-[45%] group flex items-center justify-start">
-                <div className="w-2.5 h-2.5 bg-[#081326] border-2 border-blue-200 rounded-full shadow-md z-10 shrink-0 ml-1.5"></div>
-                <div className="bg-white px-2 py-1.5 rounded-lg shadow-sm border border-gray-100 text-center opacity-100 ml-2 shrink-0">
-                  <div className="text-[9px] font-bold text-[#081326]">Hyderabad</div>
-                  <div className="text-[8px] font-medium text-gray-500">150 Clients</div>
-                </div>
-              </div>
-
-              {/* Chennai */}
-              <div className="absolute top-[78%] left-[47%] group flex items-center justify-start">
-                <div className="w-2.5 h-2.5 bg-[#081326] border-2 border-blue-200 rounded-full shadow-md z-10 shrink-0 ml-1.5"></div>
-                <div className="bg-white px-2 py-1.5 rounded-lg shadow-sm border border-gray-100 text-center opacity-100 ml-2 shrink-0">
-                  <div className="text-[9px] font-bold text-[#081326]">Chennai</div>
-                  <div className="text-[8px] font-medium text-gray-500">120 Clients</div>
-                </div>
-              </div>
+              {/* Dynamic Markers for top cities */}
+              {chartData.slice(0, 5).map((loc, index) => {
+                // Hardcoded positions just for the visual layout based on array index
+                // Since we don't have accurate lat/lng parsing for arbitrary cities, we place them across the visual map
+                const positions = [
+                  "top-[28%] left-[46%]",
+                  "top-[52%] left-[26%]",
+                  "top-[75%] left-[34%]",
+                  "top-[62%] left-[45%]",
+                  "top-[78%] left-[47%]"
+                ];
+                const justify = index < 3 ? "justify-end -ml-[120px]" : "justify-start ml-1.5";
+                
+                return (
+                  <div key={index} className={`absolute ${positions[index]} group flex items-center ${justify}`}>
+                    {index < 3 ? (
+                      <>
+                        <div className="bg-white px-2 py-1.5 rounded-lg shadow-sm border border-gray-100 text-center opacity-100 mr-2 shrink-0">
+                          <div className="text-[9px] font-bold text-[#081326] truncate max-w-[80px]" title={loc.name}>{loc.name}</div>
+                          <div className="text-[8px] font-medium text-gray-500">{loc.count} Clients</div>
+                        </div>
+                        <div className="w-2.5 h-2.5 bg-[#081326] border-2 border-blue-200 rounded-full shadow-md z-10 shrink-0"></div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="w-2.5 h-2.5 bg-[#081326] border-2 border-blue-200 rounded-full shadow-md z-10 shrink-0"></div>
+                        <div className="bg-white px-2 py-1.5 rounded-lg shadow-sm border border-gray-100 text-center opacity-100 ml-2 shrink-0">
+                          <div className="text-[9px] font-bold text-[#081326] truncate max-w-[80px]" title={loc.name}>{loc.name}</div>
+                          <div className="text-[8px] font-medium text-gray-500">{loc.count} Clients</div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -83,25 +85,18 @@ export const IndiaMapWidget = () => {
         {/* Legend */}
         <div className="w-[120px] xl:w-[150px] shrink-0 flex flex-col pt-2 pb-2">
           <h4 className="text-[11px] font-bold text-[#081326] mb-3">Top Locations</h4>
-          <div className="flex flex-col gap-3">
-            {[
-              { name: 'New Delhi', count: 420 },
-              { name: 'Mumbai', count: 280 },
-              { name: 'Bangalore', count: 180 },
-              { name: 'Hyderabad', count: 150 },
-              { name: 'Chennai', count: 120 },
-              { name: 'Others', count: 100 },
-            ].map((loc, i) => (
+          <div className="flex flex-col gap-3 h-[130px] overflow-y-auto pr-1">
+            {chartData.map((loc, i) => (
               <div key={i} className="flex justify-between items-center text-[10px] xl:text-[11px]">
-                <div className="flex items-center gap-1.5 text-[#081326] font-medium">
-                  <MapPin className="w-3.5 h-3.5 text-[#081326] stroke-[2]" /> {loc.name}
+                <div className="flex items-center gap-1.5 text-[#081326] font-medium truncate pr-2 w-2/3" title={loc.name}>
+                  <MapPin className="w-3.5 h-3.5 text-[#081326] stroke-[2] shrink-0" /> <span className="truncate">{loc.name}</span>
                 </div>
-                <span className="font-bold text-[#081326]">{loc.count}</span>
+                <span className="font-bold text-[#081326] text-right">{loc.count}</span>
               </div>
             ))}
           </div>
           <div className="mt-auto border-t border-gray-100 pt-3 flex flex-col text-[11px] font-bold text-[#081326]">
-            <span>Total: 1,250</span>
+            <span>Total: {totalClients}</span>
             <span>Clients</span>
           </div>
         </div>

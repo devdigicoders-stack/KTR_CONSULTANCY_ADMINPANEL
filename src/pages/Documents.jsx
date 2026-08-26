@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { 
-  Upload, FileText, CheckCircle, Search, Filter, 
-  Eye, Download, MoreVertical, ChevronLeft, ChevronRight,
+  Upload, FileText, CheckCircle, Search, 
+  Eye, Download, 
   FolderOpen
 } from 'lucide-react';
 import api from '../api/axios';
@@ -49,9 +49,34 @@ const Documents = () => {
     fetchDocs();
   }, [role]);
 
+  const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000";
+  
   const getFullUrl = (path) => {
     if (!path) return null;
-    return `http://localhost:5000${path}`;
+    return `${BACKEND_URL}${path}`;
+  };
+
+  const handleDownload = async (url, filename) => {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error("Network response was not ok");
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      
+      const ext = url.split('.').pop().toLowerCase();
+      const finalFilename = filename.includes('.') ? filename : `${filename}.${ext.length <= 4 ? ext : 'pdf'}`;
+      
+      link.download = finalFilename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      console.error('Download failed:', error);
+      window.open(url, '_blank');
+    }
   };
 
   // Filter Logic
@@ -88,11 +113,7 @@ const Documents = () => {
             {role === 'admin' ? 'Manage and verify all uploaded client documents securely.' : 'View and manage all documents you have submitted.'}
           </p>
         </div>
-        {role === 'user' && (
-          <button onClick={() => window.location.href = '/clients'} className="bg-[#f59e0b] text-white px-5 py-2.5 rounded-xl text-sm font-black flex items-center gap-2 hover:bg-orange-500 transition-colors shadow-sm">
-            <Upload className="w-4 h-4 stroke-[2.5]" /> Update Profile
-          </button>
-        )}
+
       </div>
 
       {/* Summary Cards */}
@@ -172,7 +193,7 @@ const Documents = () => {
               <tr className="bg-gray-50/50 text-[11px] font-black text-gray-500 capitalize border-b border-gray-100">
                 <th className="px-6 py-4 whitespace-nowrap">Doc ID</th>
                 <th className="px-6 py-4 whitespace-nowrap">Document Name</th>
-                {role === 'admin' && <th className="px-6 py-4 whitespace-nowrap">Client Name</th>}
+                <th className="px-6 py-4 whitespace-nowrap">Client Name</th>
                 <th className="px-6 py-4 whitespace-nowrap">Category</th>
                 <th className="px-6 py-4 whitespace-nowrap">Uploaded On</th>
                 <th className="px-6 py-4 whitespace-nowrap">Status</th>
@@ -182,18 +203,18 @@ const Documents = () => {
             <tbody className="text-xs text-gray-600 divide-y divide-gray-50">
               {loading ? (
                  <tr>
-                    <td colSpan={role === 'admin' ? 7 : 6} className="px-6 py-10 text-center text-gray-500 font-bold">Loading documents...</td>
+                    <td colSpan="7" className="px-6 py-10 text-center text-gray-500 font-bold">Loading documents...</td>
                  </tr>
               ) : filteredDocs.length === 0 ? (
                  <tr>
-                    <td colSpan={role === 'admin' ? 7 : 6} className="px-6 py-10 text-center text-gray-500 font-bold">No documents found.</td>
+                    <td colSpan="7" className="px-6 py-10 text-center text-gray-500 font-bold">No documents found.</td>
                  </tr>
               ) : (
                 filteredDocs.map((doc, idx) => (
                   <tr key={idx} className="hover:bg-gray-50/50 transition-colors">
                     <td className="px-6 py-4 whitespace-nowrap text-gray-400 font-bold text-[10px]">{doc.id}</td>
                     <td className="px-6 py-4 font-black text-[#081326] whitespace-nowrap">{doc.name}</td>
-                    {role === 'admin' && <td className="px-6 py-4 font-bold text-gray-700 whitespace-nowrap">{doc.client}</td>}
+                    <td className="px-6 py-4 font-bold text-gray-700 whitespace-nowrap">{doc.client}</td>
                     <td className="px-6 py-4 whitespace-nowrap font-bold text-gray-500">{doc.category}</td>
                     <td className="px-6 py-4 whitespace-nowrap font-bold text-gray-500">{new Date(doc.uploaded).toLocaleDateString()}</td>
                     <td className="px-6 py-4 whitespace-nowrap"><StatusBadge status={doc.status} /></td>
@@ -202,9 +223,9 @@ const Documents = () => {
                         <a href={getFullUrl(doc.file)} target="_blank" rel="noreferrer" className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white flex items-center justify-center transition-all shadow-sm" title="View Document">
                           <Eye className="w-4 h-4 stroke-[2.5]" />
                         </a>
-                        <a href={getFullUrl(doc.file)} download target="_blank" rel="noreferrer" className="w-8 h-8 rounded-lg bg-green-50 text-green-600 hover:bg-green-600 hover:text-white flex items-center justify-center transition-all shadow-sm" title="Download Document">
+                        <button onClick={() => handleDownload(getFullUrl(doc.file), doc.name)} className="w-8 h-8 rounded-lg bg-green-50 text-green-600 hover:bg-green-600 hover:text-white flex items-center justify-center transition-all shadow-sm" title="Download Document">
                           <Download className="w-4 h-4 stroke-[2.5]" />
-                        </a>
+                        </button>
                       </div>
                     </td>
                   </tr>

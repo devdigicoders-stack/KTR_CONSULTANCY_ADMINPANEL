@@ -25,12 +25,12 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response && error.response.status === 401) {
-      // Clear token and force logout if unauthorized
+    if (error.response && (error.response.status === 401 || error.response.status === 403)) {
+      // Clear token and force logout if unauthorized or inactive
       localStorage.removeItem('adminToken');
       localStorage.removeItem('user');
       localStorage.removeItem('role');
-      // window.location.href = '/login'; // Optional: Redirect to login
+      window.location.href = '/login'; 
     }
     return Promise.reject(error);
   }

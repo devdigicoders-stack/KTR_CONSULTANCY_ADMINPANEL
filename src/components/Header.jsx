@@ -159,10 +159,10 @@ const Header = () => {
             </div>
             <div className="hidden sm:block">
               <p className="text-sm font-bold text-[#081326] leading-none mb-1 group-hover:text-[#f59e0b] transition-colors">
-                {user?.name || 'User'}
+                {user?.name || 'Staff'}
               </p>
               <p className="text-[11px] font-semibold text-gray-500 leading-none capitalize">
-                User
+                {user?.role || 'Staff'}
               </p>
             </div>
             <ChevronDown className="w-4 h-4 text-gray-400 group-hover:text-gray-600 ml-1 transition-colors stroke-[2]" />

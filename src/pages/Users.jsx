@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Users as UsersIcon, Plus, UserPlus, Mail, Phone, Shield, Search, X, Edit, Trash2, Eye, ToggleLeft, ToggleRight, CheckCircle, AlertTriangle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Users as UsersIcon, UserPlus, Mail, Phone, Shield, Search, X, Edit, Trash2, Eye, ToggleLeft, ToggleRight, CheckCircle, AlertTriangle } from 'lucide-react';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 
@@ -12,15 +12,17 @@ const Users = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showStatusModal, setShowStatusModal] = useState(false);
   
   const [selectedUser, setSelectedUser] = useState(null);
+  const [statusUser, setStatusUser] = useState(null);
 
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     phone: '',
     password: '',
-    role: 'user'
+    role: 'staff'
   });
   
   const [formLoading, setFormLoading] = useState(false);
@@ -53,7 +55,7 @@ const Users = () => {
   };
 
   const resetForm = () => {
-    setFormData({ name: '', email: '', phone: '', password: '', role: 'user' });
+    setFormData({ name: '', email: '', phone: '', password: '', role: 'staff' });
     setFormMessage({ type: '', text: '' });
   };
 
@@ -122,14 +124,18 @@ const Users = () => {
     }
   };
 
-  const toggleStatus = async (user) => {
+  const handleToggleStatus = async () => {
+    setFormLoading(true);
     try {
-      const res = await api.patch(`/admin/users/${user._id}/status`);
+      const res = await api.patch(`/admin/users/${statusUser._id}/status`);
       if (res.data.success) {
+        setShowStatusModal(false);
         fetchUsers();
       }
     } catch (error) {
       alert(error.response?.data?.message || 'Failed to toggle status.');
+    } finally {
+      setFormLoading(false);
     }
   };
 
@@ -291,7 +297,7 @@ const Users = () => {
                         {user._id !== currentUser?._id && (
                           <>
                             <button 
-                              onClick={() => toggleStatus(user)}
+                              onClick={() => { setStatusUser(user); setShowStatusModal(true); }}
                               title={user.status === 'active' ? 'Deactivate' : 'Activate'} 
                               className={`p-1.5 rounded-lg transition-colors ${user.status === 'active' ? 'text-gray-400 hover:text-orange-500 hover:bg-orange-50' : 'text-gray-400 hover:text-green-500 hover:bg-green-50'}`}
                             >
@@ -357,7 +363,7 @@ const Users = () => {
                   <label className="block text-[11px] font-bold text-gray-500 mb-1.5">Role</label>
                   <div className="relative">
                     <select name="role" value={formData.role} onChange={handleInputChange} className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-[#f59e0b] focus:bg-white transition-all appearance-none">
-                      <option value="user">User</option>
+                      <option value="staff">Staff</option>
                       <option value="admin">Admin</option>
                     </select>
                     <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none"><ChevronDownIcon /></div>
@@ -417,7 +423,7 @@ const Users = () => {
                     <label className="block text-[11px] font-bold text-gray-500 mb-1.5">Role</label>
                     <div className="relative">
                       <select name="role" value={formData.role} onChange={handleInputChange} className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-[#f59e0b] focus:bg-white transition-all appearance-none">
-                        <option value="user">User</option>
+                        <option value="staff">Staff</option>
                         <option value="admin">Admin</option>
                       </select>
                       <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none"><ChevronDownIcon /></div>
@@ -527,6 +533,41 @@ const Users = () => {
                   className="flex-1 px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-red-500 hover:bg-red-600 transition-colors disabled:opacity-50"
                 >
                   {formLoading ? 'Deleting...' : 'Yes, Delete'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Status Modal */}
+      {showStatusModal && statusUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#081326]/40 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-8 text-center">
+              <div className={`w-16 h-16 rounded-full mx-auto flex items-center justify-center mb-6 ${statusUser.status === 'active' ? 'bg-orange-50 text-orange-500' : 'bg-green-50 text-green-500'}`}>
+                <AlertTriangle className="w-8 h-8" />
+              </div>
+              <h3 className="text-xl font-black text-[#081326] mb-2">
+                {statusUser.status === 'active' ? 'Deactivate User?' : 'Activate User?'}
+              </h3>
+              <p className="text-sm text-gray-500 mb-8 font-medium">
+                Are you sure you want to {statusUser.status === 'active' ? 'deactivate' : 'activate'} <span className="font-bold text-[#081326]">{statusUser.name}</span>? 
+                {statusUser.status === 'active' ? ' They will not be able to log in anymore.' : ' They will regain access to the system.'}
+              </p>
+              <div className="flex items-center gap-3">
+                <button 
+                  onClick={() => setShowStatusModal(false)}
+                  className="flex-1 px-4 py-3 rounded-xl border border-gray-200 text-gray-600 font-bold text-sm hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={handleToggleStatus}
+                  disabled={formLoading}
+                  className={`flex-1 px-4 py-3 rounded-xl text-white font-bold text-sm transition-colors shadow-sm disabled:opacity-50 ${statusUser.status === 'active' ? 'bg-orange-500 hover:bg-orange-600' : 'bg-green-500 hover:bg-green-600'}`}
+                >
+                  {formLoading ? 'Updating...' : 'Yes, Continue'}
                 </button>
               </div>
             </div>

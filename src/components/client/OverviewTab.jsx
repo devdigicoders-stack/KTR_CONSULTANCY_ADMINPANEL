@@ -1,6 +1,7 @@
-import React from 'react';
 
-const OverviewTab = () => {
+const OverviewTab = ({ client }) => {
+  if (!client) return null;
+
   return (
     <div className="flex flex-col xl:flex-row gap-6">
       <div className="flex-1 space-y-6">
@@ -9,35 +10,38 @@ const OverviewTab = () => {
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-6">
             <div>
               <p className="text-[10px] font-medium text-gray-400 mb-1 uppercase tracking-wider">Full Name</p>
-              <p className="text-sm font-bold text-[#081326]">Rahul Sharma</p>
+              <p className="text-sm font-bold text-[#081326]">{client.fullName || 'N/A'}</p>
             </div>
             <div>
               <p className="text-[10px] font-medium text-gray-400 mb-1 uppercase tracking-wider">Date of Birth</p>
-              <p className="text-sm font-bold text-[#081326]">12 Jan 1990</p>
+              <p className="text-sm font-bold text-[#081326]">{client.dob ? new Date(client.dob).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A'}</p>
             </div>
             <div>
               <p className="text-[10px] font-medium text-gray-400 mb-1 uppercase tracking-wider">Gender</p>
-              <p className="text-sm font-bold text-[#081326]">Male</p>
+              <p className="text-sm font-bold text-[#081326]">{client.gender || 'N/A'}</p>
             </div>
             <div>
               <p className="text-[10px] font-medium text-gray-400 mb-1 uppercase tracking-wider">Mobile Number</p>
-              <p className="text-sm font-bold text-[#081326]">+91 98765 43210</p>
+              <p className="text-sm font-bold text-[#081326]">{client.mobile || 'N/A'}</p>
             </div>
             <div>
               <p className="text-[10px] font-medium text-gray-400 mb-1 uppercase tracking-wider">Email Address</p>
-              <p className="text-sm font-bold text-[#081326]">rahul.sharma@email.com</p>
+              <p className="text-sm font-bold text-[#081326]">{client.email || 'N/A'}</p>
             </div>
             <div>
               <p className="text-[10px] font-medium text-gray-400 mb-1 uppercase tracking-wider">PAN Number</p>
-              <p className="text-sm font-bold text-[#081326]">ABCDE1234F</p>
+              <p className="text-sm font-bold text-[#081326]">{client.panNumber || 'N/A'}</p>
             </div>
             <div>
               <p className="text-[10px] font-medium text-gray-400 mb-1 uppercase tracking-wider">Aadhaar Number</p>
-              <p className="text-sm font-bold text-[#081326]">XXXX XXXX 1234</p>
+              <p className="text-sm font-bold text-[#081326]">{client.aadhaarNumber || 'N/A'}</p>
             </div>
             <div className="col-span-2">
               <p className="text-[10px] font-medium text-gray-400 mb-1 uppercase tracking-wider">Address</p>
-              <p className="text-sm font-bold text-[#081326]">123, MG Road, New Delhi, Delhi - 110001</p>
+              <p className="text-sm font-bold text-[#081326]">
+                {[client.addressLine1, client.addressLine2, client.city, client.state].filter(Boolean).join(', ')} 
+                {client.pincode ? ` - ${client.pincode}` : ''}
+              </p>
             </div>
           </div>
         </div>
@@ -47,23 +51,23 @@ const OverviewTab = () => {
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-6">
             <div>
               <p className="text-[10px] font-medium text-gray-400 mb-1 uppercase tracking-wider">Occupation</p>
-              <p className="text-sm font-bold text-[#081326]">Business</p>
+              <p className="text-sm font-bold text-[#081326]">{client.occupation || 'N/A'}</p>
             </div>
             <div>
               <p className="text-[10px] font-medium text-gray-400 mb-1 uppercase tracking-wider">Company Name</p>
-              <p className="text-sm font-bold text-[#081326]">Rahul Traders Pvt. Ltd.</p>
+              <p className="text-sm font-bold text-[#081326]">{client.companyName || 'N/A'}</p>
             </div>
             <div>
               <p className="text-[10px] font-medium text-gray-400 mb-1 uppercase tracking-wider">Annual Income</p>
-              <p className="text-sm font-bold text-[#081326]">₹ 25,00,000</p>
+              <p className="text-sm font-bold text-[#081326]">{client.annualIncome ? `₹ ${client.annualIncome}` : 'N/A'}</p>
             </div>
             <div>
-              <p className="text-[10px] font-medium text-gray-400 mb-1 uppercase tracking-wider">Source of Income</p>
-              <p className="text-sm font-bold text-[#081326]">Business</p>
+              <p className="text-[10px] font-medium text-gray-400 mb-1 uppercase tracking-wider">Business Type</p>
+              <p className="text-sm font-bold text-[#081326]">{client.businessType || 'N/A'}</p>
             </div>
             <div>
-              <p className="text-[10px] font-medium text-gray-400 mb-1 uppercase tracking-wider">Assigned To</p>
-              <p className="text-sm font-bold text-[#081326]">Aman Verma</p>
+              <p className="text-[10px] font-medium text-gray-400 mb-1 uppercase tracking-wider">Added By</p>
+              <p className="text-sm font-bold text-[#081326]">{client?.user?.name || 'Website / Self'}</p>
             </div>
           </div>
         </div>
@@ -78,7 +82,7 @@ const OverviewTab = () => {
           </div>
           <div>
             <p className="text-[10px] font-medium text-gray-500 leading-tight">Documents Uploaded</p>
-            <p className="text-lg font-bold text-[#081326] leading-none mt-1">8</p>
+            <p className="text-lg font-bold text-[#081326] leading-none mt-1">{client.documentsList?.length || 0}</p>
           </div>
         </div>
 
@@ -89,8 +93,9 @@ const OverviewTab = () => {
           <div>
             <p className="text-[10px] font-medium text-gray-500 leading-tight">CIVIL Score</p>
             <div className="flex items-center gap-2 mt-1">
-              <p className="text-lg font-bold text-[#081326] leading-none">782</p>
-              <span className="text-[9px] font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded">↑ 14 points</span>
+              <p className="text-lg font-bold text-[#081326] leading-none">
+                {client.cibilReports && client.cibilReports.length > 0 ? client.cibilReports[0].score : 'N/A'}
+              </p>
             </div>
           </div>
         </div>
@@ -101,7 +106,9 @@ const OverviewTab = () => {
           </div>
           <div>
             <p className="text-[10px] font-medium text-gray-500 leading-tight">Credit Limit</p>
-            <p className="text-lg font-bold text-[#081326] leading-none mt-1">₹ 5,00,000</p>
+            <p className="text-lg font-bold text-[#081326] leading-none mt-1">
+              {client.creditInfo?.creditLimit ? `₹ ${client.creditInfo.creditLimit}` : 'N/A'}
+            </p>
           </div>
         </div>
 
@@ -111,7 +118,9 @@ const OverviewTab = () => {
           </div>
           <div>
             <p className="text-[10px] font-medium text-gray-500 leading-tight">Total Enquiries</p>
-            <p className="text-lg font-bold text-[#081326] leading-none mt-1">3</p>
+            <p className="text-lg font-bold text-[#081326] leading-none mt-1">
+              {client.creditInfo?.totalEnquiries || '0'}
+            </p>
           </div>
         </div>
 
@@ -121,7 +130,7 @@ const OverviewTab = () => {
           </div>
           <div>
             <p className="text-[10px] font-medium text-gray-500 leading-tight">Client Since</p>
-            <p className="text-sm font-bold text-[#081326] leading-none mt-1">May 22, 2025</p>
+            <p className="text-sm font-bold text-[#081326] leading-none mt-1">{new Date(client.createdAt).toLocaleDateString()}</p>
           </div>
         </div>
       </div>

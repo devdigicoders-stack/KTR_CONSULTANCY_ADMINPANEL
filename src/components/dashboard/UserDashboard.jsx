@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Users, FolderOpen, ShieldCheck, MoreVertical, Plus, Upload, FileText, Download 
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ClientOverviewChart, ClientsByStatusChart } from './Charts';
+import api from '../../api/axios';
 
 const StatsCard = ({ title, value, icon: Icon, trend, isPositive, color }) => (
   <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between">
@@ -58,6 +59,30 @@ const QuickActionButton = ({ icon: Icon, label }) => (
 
 const UserDashboard = () => {
   const navigate = useNavigate();
+  const [stats, setStats] = useState({
+    totalClients: 0,
+    totalDocuments: 0,
+    totalCibilChecks: 0,
+    clientOverview: [],
+    clientsByStatus: [],
+    recentActivities: [],
+    latestClients: [],
+    recentDocuments: []
+  });
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const res = await api.get('/clients/dashboard-stats');
+        if (res.data.success) {
+          setStats(res.data.data);
+        }
+      } catch (err) {
+        console.error("Failed to fetch dashboard stats", err);
+      }
+    };
+    fetchStats();
+  }, []);
 
   const handleRowClick = (clientId) => {
     navigate(`/clients/${clientId}`);
@@ -77,16 +102,15 @@ const UserDashboard = () => {
       </div>
 
       {/* Stats Cards Row */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <StatsCard title="Total Clients" value="1,250" icon={Users} trend="↑ 18%" isPositive={true} />
-        <StatsCard title="Documents Uploaded" value="3,480" icon={FolderOpen} trend="↑ 24%" isPositive={true} />
-        <StatsCard title="CIVIL Scores Checked" value="2,150" icon={ShieldCheck} trend="↑ 12%" isPositive={true} />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <StatsCard title="Total Clients" value={stats.totalClients} icon={Users} trend="↑ 0%" isPositive={true} />
+        <StatsCard title="Documents Uploaded" value={stats.totalDocuments} icon={FolderOpen} trend="↑ 0%" isPositive={true} />
       </div>
 
       {/* Charts & Activity Row 1 */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 h-[350px]">
-          <ClientOverviewChart />
+          <ClientOverviewChart data={stats.clientOverview} />
         </div>
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col h-[350px]">
           <div className="flex justify-between items-center mb-6">
@@ -94,23 +118,32 @@ const UserDashboard = () => {
             <Link to="/clients" className="text-xs font-semibold text-[#081326] hover:underline">View All</Link>
           </div>
           <div className="flex-1 overflow-y-auto pr-2 space-y-0 scrollbar-hide">
-            <RecentActivityItem icon={Users} text="New client Rahul Sharma added" highlight="Rahul Sharma" time="2 minutes ago" />
-            <RecentActivityItem icon={FileText} text="Document PAN_Card.pdf uploaded by Neha Verma" highlight="PAN_Card.pdf" time="15 minutes ago" />
-            <RecentActivityItem icon={ShieldCheck} text="CIVIL Score checked for Aman Enterprises" highlight="Aman Enterprises" time="1 hour ago" />
+            {stats.recentActivities && stats.recentActivities.length > 0 ? (
+              stats.recentActivities.map((act, i) => (
+                <RecentActivityItem 
+                  key={i}
+                  icon={act.type === 'client' ? Users : act.type === 'document' ? FileText : ShieldCheck} 
+                  text={act.text} 
+                  highlight={act.highlight} 
+                  time={new Date(act.time).toLocaleDateString()} 
+                />
+              ))
+            ) : (
+              <p className="text-xs text-gray-500 font-medium">No recent activities found.</p>
+            )}
           </div>
         </div>
       </div>
 
       {/* Charts & Quick Actions Row 2 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <ClientsByStatusChart />
+        <ClientsByStatusChart data={stats.clientsByStatus} total={stats.totalClients} />
         
         <div className="bg-white p-5 xl:p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col h-full">
           <h3 className="font-bold text-[#081326] mb-4">Quick Actions</h3>
-          <div className="grid grid-cols-3 gap-3 flex-1">
+          <div className="grid grid-cols-2 gap-3 flex-1">
             <QuickActionButton icon={Plus} label="Add Client" />
             <QuickActionButton icon={Upload} label="Upload Document" />
-            <QuickActionButton icon={ShieldCheck} label="Check CIVIL Score" />
           </div>
         </div>
       </div>
@@ -136,42 +169,27 @@ const UserDashboard = () => {
                 </tr>
               </thead>
               <tbody className="text-xs text-gray-600 divide-y divide-gray-50">
-                <tr className="hover:bg-gray-50/50 transition-colors cursor-pointer" onClick={() => handleRowClick('CLT-00125')}>
-                  <td className="px-5 py-3.5 font-bold text-[#081326] whitespace-nowrap">Rahul Sharma</td>
-                  <td className="px-5 py-3.5 whitespace-nowrap">rahul.sharma@email.com</td>
-                  <td className="px-5 py-3.5 whitespace-nowrap">+91 98765 43210</td>
-                  <td className="px-5 py-3.5 whitespace-nowrap">
-                    <span className="text-green-600 bg-green-50 px-2 py-1 rounded-md font-bold flex items-center gap-1.5 w-fit">
-                      <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>Active
-                    </span>
-                  </td>
-                  <td className="px-5 py-3.5 whitespace-nowrap text-gray-500 font-medium">May 22, 2025</td>
-                  <td className="px-5 py-3.5 text-right"><button className="text-gray-400 hover:text-gray-800"><MoreVertical className="w-4 h-4" /></button></td>
-                </tr>
-                <tr className="hover:bg-gray-50/50 transition-colors cursor-pointer" onClick={() => handleRowClick('CLT-00124')}>
-                  <td className="px-5 py-3.5 font-bold text-[#081326] whitespace-nowrap">Neha Verma</td>
-                  <td className="px-5 py-3.5 whitespace-nowrap">neha.verma@email.com</td>
-                  <td className="px-5 py-3.5 whitespace-nowrap">+91 91234 56789</td>
-                  <td className="px-5 py-3.5 whitespace-nowrap">
-                    <span className="text-green-600 bg-green-50 px-2 py-1 rounded-md font-bold flex items-center gap-1.5 w-fit">
-                      <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>Active
-                    </span>
-                  </td>
-                  <td className="px-5 py-3.5 whitespace-nowrap text-gray-500 font-medium">May 22, 2025</td>
-                  <td className="px-5 py-3.5 text-right"><button className="text-gray-400 hover:text-gray-800"><MoreVertical className="w-4 h-4" /></button></td>
-                </tr>
-                <tr className="hover:bg-gray-50/50 transition-colors cursor-pointer" onClick={() => handleRowClick('CLT-00123')}>
-                  <td className="px-5 py-3.5 font-bold text-[#081326] whitespace-nowrap">Aman Enterprises</td>
-                  <td className="px-5 py-3.5 whitespace-nowrap">contact@amanenterprises.com</td>
-                  <td className="px-5 py-3.5 whitespace-nowrap">+91 99887 66554</td>
-                  <td className="px-5 py-3.5 whitespace-nowrap">
-                    <span className="text-orange-500 bg-orange-50 px-2 py-1 rounded-md font-bold flex items-center gap-1.5 w-fit">
-                      <span className="w-1.5 h-1.5 rounded-full bg-orange-500"></span>Inactive
-                    </span>
-                  </td>
-                  <td className="px-5 py-3.5 whitespace-nowrap text-gray-500 font-medium">May 21, 2025</td>
-                  <td className="px-5 py-3.5 text-right"><button className="text-gray-400 hover:text-gray-800"><MoreVertical className="w-4 h-4" /></button></td>
-                </tr>
+                {stats.latestClients && stats.latestClients.length > 0 ? (
+                  stats.latestClients.map((client) => (
+                    <tr key={client._id} className="hover:bg-gray-50/50 transition-colors cursor-pointer" onClick={() => handleRowClick(client._id)}>
+                      <td className="px-5 py-3.5 font-bold text-[#081326] whitespace-nowrap">{client.name}</td>
+                      <td className="px-5 py-3.5 whitespace-nowrap">{client.email}</td>
+                      <td className="px-5 py-3.5 whitespace-nowrap">{client.mobile}</td>
+                      <td className="px-5 py-3.5 whitespace-nowrap">
+                        <span className={`${client.status === 'Active' ? 'text-green-600 bg-green-50' : client.status === 'Inactive' ? 'text-red-500 bg-red-50' : 'text-orange-500 bg-orange-50'} px-2 py-1 rounded-md font-bold flex items-center gap-1.5 w-fit`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${client.status === 'Active' ? 'bg-green-500' : client.status === 'Inactive' ? 'bg-red-500' : 'bg-orange-500'}`}></span>
+                          {client.status}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3.5 whitespace-nowrap text-gray-500 font-medium">{new Date(client.createdAt).toLocaleDateString()}</td>
+                      <td className="px-5 py-3.5 text-right"><button className="text-gray-400 hover:text-gray-800"><MoreVertical className="w-4 h-4" /></button></td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="6" className="px-5 py-8 text-center text-gray-500 font-medium">No clients found.</td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -195,33 +213,25 @@ const UserDashboard = () => {
                 </tr>
               </thead>
               <tbody className="text-xs text-gray-600 divide-y divide-gray-50">
-                <tr className="hover:bg-gray-50/50 transition-colors">
-                  <td className="px-5 py-3.5 font-bold text-[#081326] whitespace-nowrap">PAN_Card.pdf</td>
-                  <td className="px-5 py-3.5 whitespace-nowrap">Neha Verma</td>
-                  <td className="px-5 py-3.5 whitespace-nowrap text-gray-500 font-medium">May 22, 2025</td>
-                  <td className="px-5 py-3.5 whitespace-nowrap">
-                    <span className="text-green-600 bg-green-50 px-2 py-1 rounded-md font-bold w-fit">Verified</span>
-                  </td>
-                  <td className="px-5 py-3.5 text-right"><button className="text-gray-400 hover:text-gray-800"><MoreVertical className="w-4 h-4" /></button></td>
-                </tr>
-                <tr className="hover:bg-gray-50/50 transition-colors">
-                  <td className="px-5 py-3.5 font-bold text-[#081326] whitespace-nowrap">Aadhar_Card.pdf</td>
-                  <td className="px-5 py-3.5 whitespace-nowrap">Rahul Sharma</td>
-                  <td className="px-5 py-3.5 whitespace-nowrap text-gray-500 font-medium">May 22, 2025</td>
-                  <td className="px-5 py-3.5 whitespace-nowrap">
-                    <span className="text-green-600 bg-green-50 px-2 py-1 rounded-md font-bold w-fit">Verified</span>
-                  </td>
-                  <td className="px-5 py-3.5 text-right"><button className="text-gray-400 hover:text-gray-800"><MoreVertical className="w-4 h-4" /></button></td>
-                </tr>
-                <tr className="hover:bg-gray-50/50 transition-colors">
-                  <td className="px-5 py-3.5 font-bold text-[#081326] whitespace-nowrap">Company_Reg.pdf</td>
-                  <td className="px-5 py-3.5 whitespace-nowrap">Aman Enterprises</td>
-                  <td className="px-5 py-3.5 whitespace-nowrap text-gray-500 font-medium">May 21, 2025</td>
-                  <td className="px-5 py-3.5 whitespace-nowrap">
-                    <span className="text-orange-500 bg-orange-50 px-2 py-1 rounded-md font-bold w-fit">Pending</span>
-                  </td>
-                  <td className="px-5 py-3.5 text-right"><button className="text-gray-400 hover:text-gray-800"><MoreVertical className="w-4 h-4" /></button></td>
-                </tr>
+                {stats.recentDocuments && stats.recentDocuments.length > 0 ? (
+                  stats.recentDocuments.map((doc, idx) => (
+                    <tr key={idx} className="hover:bg-gray-50/50 transition-colors">
+                      <td className="px-5 py-3.5 font-bold text-[#081326] whitespace-nowrap">{doc.name}</td>
+                      <td className="px-5 py-3.5 whitespace-nowrap">{doc.client}</td>
+                      <td className="px-5 py-3.5 whitespace-nowrap text-gray-500 font-medium">{new Date(doc.uploaded).toLocaleDateString()}</td>
+                      <td className="px-5 py-3.5 whitespace-nowrap">
+                        <span className={`${doc.status === 'Verified' ? 'text-green-600 bg-green-50' : doc.status === 'Rejected' ? 'text-red-500 bg-red-50' : 'text-orange-500 bg-orange-50'} px-2 py-1 rounded-md font-bold w-fit`}>
+                          {doc.status}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3.5 text-right"><button className="text-gray-400 hover:text-gray-800"><MoreVertical className="w-4 h-4" /></button></td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="5" className="px-5 py-8 text-center text-gray-500 font-medium">No documents found.</td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>

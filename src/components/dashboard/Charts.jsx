@@ -1,4 +1,3 @@
-import React from 'react';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell
@@ -31,20 +30,20 @@ const clientStatusData = [
   { name: 'Pending', value: 150, color: '#d1d5db' },
 ];
 
-export const ClientOverviewChart = () => {
+export const ClientOverviewChart = ({ data }) => {
+  const chartData = data && data.length > 0 ? data : clientData;
   return (
     <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 h-full flex flex-col">
       <div className="flex justify-between items-center mb-6">
         <h3 className="font-bold text-gray-800">Client Overview</h3>
         <select className="text-xs font-semibold text-gray-500 bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 outline-none">
-          <option>This Week</option>
-          <option>This Month</option>
+          <option>Last 7 Days</option>
         </select>
       </div>
       
       <div className="flex-1 w-full h-[250px]">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={clientData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+          <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
             <defs>
               <linearGradient id="colorClients" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.2}/>
@@ -116,7 +115,10 @@ export const ServicesOverviewChart = () => {
   );
 };
 
-export const ClientsByStatusChart = () => {
+export const ClientsByStatusChart = ({ data, total }) => {
+  const chartData = data && data.length > 0 ? data : clientStatusData;
+  const totalClients = total !== undefined ? total : 1250;
+  
   return (
     <div className="bg-white p-5 xl:p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col h-full">
       <h3 className="font-bold text-[#081326] mb-4">Clients by Status</h3>
@@ -125,26 +127,26 @@ export const ClientsByStatusChart = () => {
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
-                data={clientStatusData}
+                data={chartData}
                 innerRadius="60%"
                 outerRadius="90%"
                 paddingAngle={2}
                 dataKey="value"
                 stroke="none"
               >
-                {clientStatusData.map((entry, index) => (
+                {chartData.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={entry.color} />
                 ))}
               </Pie>
             </PieChart>
           </ResponsiveContainer>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="text-lg xl:text-xl font-bold text-[#081326] leading-none">1,250</span>
+            <span className="text-lg xl:text-xl font-bold text-[#081326] leading-none">{totalClients}</span>
             <span className="text-[8px] xl:text-[9px] text-gray-500 uppercase font-semibold mt-1">Total Clients</span>
           </div>
         </div>
         <div className="flex flex-col gap-3 w-full px-1">
-          {clientStatusData.map((item, idx) => (
+          {chartData.map((item, idx) => (
             <div key={idx} className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: item.color }}></div>
@@ -169,10 +171,11 @@ const growthData = [
   { name: 'May 20', clients: 1250, enquiries: 550 },
 ];
 
-export const OverallGrowthChart = () => {
+export const OverallGrowthChart = ({ data }) => {
+  const chartData = data && data.length > 0 ? data : growthData;
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <AreaChart data={growthData} margin={{ top: 20, right: 10, left: -10, bottom: 0 }}>
+      <AreaChart data={chartData} margin={{ top: 20, right: 10, left: -10, bottom: 0 }}>
         <defs>
           <linearGradient id="colorClientsGrowth" x1="0" y1="0" x2="0" y2="1">
             <stop offset="5%" stopColor="#081326" stopOpacity={0.1}/>
@@ -212,14 +215,14 @@ export const OverallGrowthChart = () => {
   );
 };
 
-const adminClientStatusData = [
-  { name: 'Active', value: 800, color: '#081326', percent: '64%' },
-  { name: 'Inactive', value: 300, color: '#f59e0b', percent: '24%' },
-  { name: 'Pending', value: 100, color: '#3b82f6', percent: '8%' },
-  { name: 'Closed', value: 50, color: '#9ca3af', percent: '4%' },
-];
+export const AdminClientStatusChart = ({ data }) => {
+  const chartData = data && data.length > 0 ? data.map((d, i) => ({
+    ...d, 
+    color: i === 0 ? '#081326' : i === 1 ? '#f59e0b' : '#3b82f6'
+  })) : adminClientStatusData;
+  
+  const totalClients = chartData.reduce((acc, curr) => acc + curr.value, 0);
 
-export const AdminClientStatusChart = () => {
   return (
     <div className="flex flex-col items-center justify-between h-full w-full pt-1 pb-1">
       {/* Donut Chart */}
@@ -227,39 +230,42 @@ export const AdminClientStatusChart = () => {
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie
-              data={adminClientStatusData}
+              data={chartData}
               innerRadius="65%"
               outerRadius="100%"
               paddingAngle={2}
               dataKey="value"
               stroke="none"
             >
-              {adminClientStatusData.map((entry, index) => (
+              {chartData.map((entry, index) => (
                 <Cell key={`cell-${index}`} fill={entry.color} />
               ))}
             </Pie>
           </PieChart>
         </ResponsiveContainer>
         <div className="absolute inset-0 flex flex-col items-center justify-center mt-1">
-          <span className="text-xl lg:text-2xl xl:text-[28px] font-bold text-[#081326] leading-none tracking-tight">1,250</span>
+          <span className="text-xl lg:text-2xl xl:text-[28px] font-bold text-[#081326] leading-none tracking-tight">{totalClients}</span>
           <span className="text-[10px] lg:text-[11px] text-gray-500 font-semibold mt-1">Total Clients</span>
         </div>
       </div>
       
       {/* Legend */}
       <div className="flex flex-col w-full gap-2.5 lg:gap-3">
-        {adminClientStatusData.map((item, idx) => (
-          <div key={idx} className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: item.color }}></div>
-              <span className="text-xs font-semibold text-gray-700">{item.name}</span>
+        {chartData.map((item, idx) => {
+          const percent = totalClients > 0 ? Math.round((item.value / totalClients) * 100) : 0;
+          return (
+            <div key={idx} className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: item.color }}></div>
+                <span className="text-xs font-semibold text-gray-700">{item.name}</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-xs font-bold text-[#081326]">{item.value}</span>
+                <span className="text-[10px] font-medium text-gray-400 w-8 text-right">({percent}%)</span>
+              </div>
             </div>
-            <div className="flex items-center gap-3">
-              <span className="text-xs font-bold text-[#081326]">{item.value}</span>
-              <span className="text-[10px] font-medium text-gray-400 w-8 text-right">({item.percent})</span>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

@@ -1,17 +1,8 @@
-import React from 'react';
-import { Eye, Download, MoreVertical, Search, Upload } from 'lucide-react';
+import { Eye, Search, FileText } from 'lucide-react';
 
-const DocumentsTab = () => {
-  const documents = [
-    { name: 'PAN Card', category: 'Identity Proof', file: 'PAN_Card.pdf', uploaded: 'May 22, 2025', status: 'Verified' },
-    { name: 'Aadhaar Card', category: 'Identity Proof', file: 'Aadhaar_Card.pdf', uploaded: 'May 22, 2025', status: 'Verified' },
-    { name: 'Address Proof', category: 'Address Proof', file: 'Address_Proof.pdf', uploaded: 'May 22, 2025', status: 'Verified' },
-    { name: 'Bank Statement', category: 'Financial Document', file: 'Bank_Statement_May.pdf', uploaded: 'May 21, 2025', status: 'Pending' },
-    { name: 'ITR Document', category: 'Financial Document', file: 'ITR_2024.pdf', uploaded: 'May 20, 2025', status: 'Rejected' },
-    { name: 'Photo', category: 'Other Documents', file: 'Photo.jpg', uploaded: 'May 20, 2025', status: 'Verified' },
-    { name: 'Business Proof', category: 'Business Document', file: 'Business_Proof.pdf', uploaded: 'May 19, 2025', status: 'Verified' },
-    { name: 'Signature', category: 'Other Documents', file: 'Signature.png', uploaded: 'May 19, 2025', status: 'Verified' },
-  ];
+const DocumentsTab = ({ client }) => {
+  const documents = client?.documentsList || [];
+  const BACKEND_URL = import.meta.env.VITE_API_BASE_URL ? import.meta.env.VITE_API_BASE_URL.replace('/api', '') : 'http://localhost:5000';
 
   const StatusBadge = ({ status }) => {
     const styles = {
@@ -50,31 +41,53 @@ const DocumentsTab = () => {
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="bg-gray-50/50 text-[10px] font-bold text-gray-500 uppercase tracking-wider border-b border-gray-50">
-              <th className="px-5 py-3 whitespace-nowrap">Document Name</th>
-              <th className="px-5 py-3 whitespace-nowrap">Category</th>
-              <th className="px-5 py-3 whitespace-nowrap">File Name</th>
-              <th className="px-5 py-3 whitespace-nowrap">Uploaded On</th>
-              <th className="px-5 py-3 whitespace-nowrap">Status</th>
-              <th className="px-5 py-3 whitespace-nowrap text-center">Actions</th>
+              <th className="px-6 py-3 whitespace-nowrap">Document</th>
+              <th className="px-6 py-3 whitespace-nowrap">File Name</th>
+              <th className="px-6 py-3 whitespace-nowrap">Uploaded On</th>
+              <th className="px-6 py-3 whitespace-nowrap">Status</th>
+              <th className="px-6 py-3 whitespace-nowrap text-right">Actions</th>
             </tr>
           </thead>
-          <tbody className="text-[11px] text-gray-600 divide-y divide-gray-50">
-            {documents.map((doc, idx) => (
-              <tr key={idx} className="hover:bg-gray-50/50 transition-colors">
-                <td className="px-5 py-3 font-bold text-[#081326] whitespace-nowrap">{doc.name}</td>
-                <td className="px-5 py-3 whitespace-nowrap">{doc.category}</td>
-                <td className="px-5 py-3 whitespace-nowrap font-medium">{doc.file}</td>
-                <td className="px-5 py-3 whitespace-nowrap font-medium text-gray-500">{doc.uploaded}</td>
-                <td className="px-5 py-3 whitespace-nowrap"><StatusBadge status={doc.status} /></td>
-                <td className="px-5 py-3 whitespace-nowrap">
-                  <div className="flex items-center justify-center gap-3">
-                    <button className="text-gray-400 hover:text-[#081326]"><Eye className="w-4 h-4" /></button>
-                    <button className="text-gray-400 hover:text-[#081326]"><Download className="w-4 h-4" /></button>
-                    <button className="text-gray-400 hover:text-[#081326]"><MoreVertical className="w-4 h-4" /></button>
+          <tbody className="text-xs divide-y divide-gray-50">
+            {documents.length > 0 ? documents.map((doc, index) => (
+              <tr key={index} className="hover:bg-gray-50/50 transition-colors group">
+                <td className="px-6 py-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded bg-blue-50 flex items-center justify-center text-blue-500">
+                      <FileText className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <p className="font-bold text-[#081326]">{doc.name}</p>
+                      <p className="text-[10px] text-gray-500 mt-0.5">{doc.category || 'Document'}</p>
+                    </div>
+                  </div>
+                </td>
+                <td className="px-6 py-4 font-medium text-gray-600">
+                  <a href={`${BACKEND_URL}${doc.file}`} target="_blank" rel="noreferrer" className="hover:text-blue-500 hover:underline">
+                    {doc.name}
+                  </a>
+                </td>
+                <td className="px-6 py-4 text-gray-500 font-medium">
+                  {new Date(doc.uploaded).toLocaleDateString()}
+                </td>
+                <td className="px-6 py-4">
+                  <StatusBadge status={doc.status} />
+                </td>
+                <td className="px-6 py-4 text-right">
+                  <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <a href={`${BACKEND_URL}${doc.file}`} target="_blank" rel="noreferrer" className="w-7 h-7 rounded bg-white border border-gray-200 flex items-center justify-center text-gray-500 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 transition-colors">
+                      <Eye className="w-3.5 h-3.5" />
+                    </a>
                   </div>
                 </td>
               </tr>
-            ))}
+            )) : (
+              <tr>
+                <td colSpan="5" className="px-6 py-8 text-center text-gray-500 font-medium">
+                  No documents found for this client.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>

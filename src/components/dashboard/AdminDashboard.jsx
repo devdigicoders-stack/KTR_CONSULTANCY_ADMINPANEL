@@ -1,3 +1,4 @@
+import React, { useState, useEffect } from 'react';
 import { 
   Users, UserPlus, FileText, ShieldCheck, MessageSquare, Briefcase, 
   MoreVertical, Plus, Upload, Eye, FileSignature, Edit, Activity,
@@ -8,6 +9,7 @@ import {
   OverallGrowthChart, AdminClientStatusChart 
 } from './Charts';
 import { IndiaMapWidget } from './IndiaMapWidget';
+import api from '../../api/axios';
 
 const StatsCard = ({ title, value, icon: Icon, trend, isPositive, iconColorClass }) => (
   <div className="bg-white p-5 rounded-[20px] border border-gray-100/80 shadow-sm flex items-center gap-4 xl:gap-5 h-full">
@@ -26,26 +28,83 @@ const StatsCard = ({ title, value, icon: Icon, trend, isPositive, iconColorClass
   </div>
 );
 
-const QuickActionButton = ({ icon: Icon, label }) => (
-  <button className="flex flex-col items-center justify-center py-3 px-2 border border-gray-100/80 rounded-xl hover:border-[#081326] hover:bg-gray-50 transition-colors group shadow-[0_2px_10px_rgb(0,0,0,0.02)] bg-white h-full">
+const QuickActionButton = ({ icon: Icon, label, path }) => (
+  <Link to={path} className="flex flex-col items-center justify-center py-3 px-2 border border-gray-100/80 rounded-xl hover:border-[#081326] hover:bg-gray-50 transition-colors group shadow-[0_2px_10px_rgb(0,0,0,0.02)] bg-white h-full">
     <Icon className="w-5 h-5 xl:w-5 xl:h-5 text-[#081326] mb-1.5 stroke-[1.5]" />
     <span className="text-[9px] xl:text-[10px] font-bold text-[#081326] text-center leading-[1.2] px-1" dangerouslySetInnerHTML={{ __html: label }}></span>
-  </button>
+  </Link>
 );
 
 
 const AdminDashboard = () => {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
+
+  const fetchDashboardData = async () => {
+    try {
+      const res = await api.get('/dashboard/admin');
+      if (res.data.success) {
+        setData(res.data.data);
+      }
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading || !data) {
+    return <div className="flex justify-center items-center h-screen"><div className="animate-spin rounded-full h-12 w-12 border-4 border-[#f59e0b] border-t-transparent"></div></div>;
+  }
+
+  const { stats, clientStatus, documentStatus, latestClients, topServices, recentActivities, overallGrowth, clientLocations } = data;
+
+  const getIconForType = (type) => {
+    switch (type) {
+      case 'Client': return { icon: UserPlus, color: 'bg-green-50 text-green-600', iconColor: 'bg-blue-50 text-blue-600' };
+      case 'Document': return { icon: FileText, color: 'bg-blue-50 text-blue-600', iconColor: 'bg-orange-50 text-orange-600' };
+      case 'CIBIL': return { icon: ShieldCheck, color: 'bg-purple-50 text-purple-600', iconColor: 'bg-purple-50 text-purple-600' };
+      case 'Enquiry': return { icon: MessageSquare, color: 'bg-orange-50 text-orange-600', iconColor: 'bg-green-50 text-green-600' };
+      case 'Service': return { icon: Briefcase, color: 'bg-green-50 text-green-600', iconColor: 'bg-blue-50 text-blue-600' };
+      default: return { icon: Activity, color: 'bg-gray-50 text-gray-600', iconColor: 'bg-gray-50 text-gray-600' };
+    }
+  };
+
+  const getServiceColor = (index) => {
+    const colors = ["bg-[#081326]", "bg-[#f59e0b]", "bg-[#3b82f6]", "bg-[#10b981]", "bg-[#8b5cf6]"];
+    return colors[index % colors.length];
+  };
+
+  const getTimeAgo = (date) => {
+    const seconds = Math.floor((new Date() - new Date(date)) / 1000);
+    let interval = seconds / 31536000;
+    if (interval > 1) return Math.floor(interval) + " yrs ago";
+    interval = seconds / 2592000;
+    if (interval > 1) return Math.floor(interval) + " mos ago";
+    interval = seconds / 86400;
+    if (interval > 1) return Math.floor(interval) + " days ago";
+    interval = seconds / 3600;
+    if (interval > 1) return Math.floor(interval) + " hrs ago";
+    interval = seconds / 60;
+    if (interval > 1) return Math.floor(interval) + " mins ago";
+    return Math.floor(seconds) + " secs ago";
+  };
+
   return (
     <div className="max-w-7xl mx-auto space-y-6">
       
       {/* Row 1: Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-        <StatsCard title="Total Users" value="28" icon={Users} trend="↑ 12% this month" isPositive={true} iconColorClass="bg-blue-50 text-blue-600" />
-        <StatsCard title="Total Clients" value="1,250" icon={Users} trend="↑ 18% this month" isPositive={true} iconColorClass="bg-orange-50 text-orange-500" />
-        <StatsCard title="Total Documents" value="3,480" icon={FileText} trend="↑ 24% this month" isPositive={true} iconColorClass="bg-purple-50 text-purple-600" />
-        <StatsCard title="CIBIL Scores Checked" value="2,150" icon={ShieldCheck} trend="↑ 15% this month" isPositive={true} iconColorClass="bg-green-50 text-green-600" />
-        <StatsCard title="Website Enquiries" value="320" icon={MessageSquare} trend="↑ 19% this month" isPositive={true} iconColorClass="bg-pink-50 text-pink-600" />
-        <StatsCard title="Active Services" value="14" icon={Briefcase} trend="→ No change" isPositive={null} iconColorClass="bg-blue-50 text-blue-600" />
+        <StatsCard title="Total Users" value={stats.totalUsers.value} icon={Users} trend={stats.totalUsers.trend.text} isPositive={stats.totalUsers.trend.isPositive} iconColorClass="bg-blue-50 text-blue-600" />
+        <StatsCard title="Total Clients" value={stats.totalClients.value} icon={Users} trend={stats.totalClients.trend.text} isPositive={stats.totalClients.trend.isPositive} iconColorClass="bg-orange-50 text-orange-500" />
+        <StatsCard title="Total Documents" value={stats.totalDocuments.value} icon={FileText} trend={stats.totalDocuments.trend.text} isPositive={stats.totalDocuments.trend.isPositive} iconColorClass="bg-purple-50 text-purple-600" />
+        <StatsCard title="CIBIL Scores Checked" value={stats.cibilChecks.value} icon={ShieldCheck} trend={stats.cibilChecks.trend.text} isPositive={stats.cibilChecks.trend.isPositive} iconColorClass="bg-green-50 text-green-600" />
+        <StatsCard title="Website Enquiries" value={stats.websiteEnquiries.value} icon={MessageSquare} trend={stats.websiteEnquiries.trend.text} isPositive={stats.websiteEnquiries.trend.isPositive} iconColorClass="bg-pink-50 text-pink-600" />
+        <StatsCard title="Active Services" value={stats.activeServices.value} icon={Briefcase} trend={stats.activeServices.trend.text} isPositive={stats.activeServices.trend.isPositive} iconColorClass="bg-blue-50 text-blue-600" />
       </div>
 
       {/* Row 2: Charts and Quick Actions */}
@@ -55,7 +114,7 @@ const AdminDashboard = () => {
         <div className="lg:col-span-2 xl:col-span-6 bg-white p-6 rounded-[20px] shadow-[0_4px_20px_rgb(0,0,0,0.03)] border border-gray-50 flex flex-col h-[350px]">
           <div className="flex justify-between items-center mb-6">
             <div className="flex items-center gap-6">
-              <h3 className="font-bold text-[#081326]">Overall Growth</h3>
+              <h3 className="font-bold text-[#081326]">Overall Growth (6M)</h3>
               <div className="flex items-center gap-4 text-[11px] font-bold">
                 <div className="flex items-center gap-1.5">
                   <div className="w-2 h-2 rounded-full bg-[#081326]"></div>
@@ -67,19 +126,9 @@ const AdminDashboard = () => {
                 </div>
               </div>
             </div>
-            <div className="flex bg-gray-50 rounded-lg p-1">
-              {['7D', '30D', '6M', '1Y'].map(period => (
-                <button 
-                  key={period}
-                  className={`text-[10px] font-bold px-3 py-1 rounded-md transition-colors ${period === '30D' ? 'bg-white shadow-sm text-[#081326]' : 'text-gray-400 hover:text-gray-600'}`}
-                >
-                  {period}
-                </button>
-              ))}
-            </div>
           </div>
           <div className="flex-1 -ml-4">
-            <OverallGrowthChart />
+            <OverallGrowthChart data={overallGrowth} />
           </div>
         </div>
 
@@ -88,11 +137,11 @@ const AdminDashboard = () => {
           <div className="flex justify-between items-center mb-6">
             <h3 className="font-bold text-[#081326] whitespace-nowrap text-sm xl:text-base">Client Status</h3>
             <select className="text-[10px] xl:text-[11px] font-semibold text-gray-500 bg-gray-50 border border-gray-100 rounded-lg px-2 py-1 outline-none shrink-0 ml-1">
-              <option>This Month</option>
+              <option>All Time</option>
             </select>
           </div>
           <div className="flex-1 min-h-0">
-            <AdminClientStatusChart />
+            <AdminClientStatusChart data={clientStatus} />
           </div>
         </div>
 
@@ -100,12 +149,12 @@ const AdminDashboard = () => {
         <div className="lg:col-span-1 xl:col-span-3 bg-white p-4 xl:p-5 rounded-[20px] border border-gray-100/80 shadow-[0_4px_20px_rgb(0,0,0,0.03)] flex flex-col h-[350px]">
           <h3 className="font-bold text-[#081326] mb-5 text-sm xl:text-base">Quick Actions</h3>
           <div className="grid grid-cols-2 gap-2 xl:gap-3 flex-1">
-            <QuickActionButton icon={UserPlus} label="+ Add New<br/>Client" />
-            <QuickActionButton icon={ShieldCheck} label="Check CIVIL<br/>Score" />
-            <QuickActionButton icon={Upload} label="Upload<br/>Document" />
-            <QuickActionButton icon={Plus} label="Add New<br/>Service" />
-            <QuickActionButton icon={Users} label="Manage<br/>Users" />
-            <QuickActionButton icon={Activity} label="View<br/>Reports" />
+            <QuickActionButton icon={UserPlus} label="+ Add New<br/>Client" path="/clients/new" />
+            <QuickActionButton icon={ShieldCheck} label="Check CIVIL<br/>Score" path="/cibil" />
+            <QuickActionButton icon={Upload} label="Upload<br/>Document" path="/documents" />
+            <QuickActionButton icon={Plus} label="Add New<br/>Service" path="/add-service" />
+            <QuickActionButton icon={Users} label="Manage<br/>Users" path="/users" />
+            <QuickActionButton icon={Activity} label="View<br/>Reports" path="/reports" />
           </div>
         </div>
       </div>
@@ -117,33 +166,26 @@ const AdminDashboard = () => {
         <div className="bg-white p-5 xl:p-6 rounded-[20px] shadow-[0_4px_20px_rgb(0,0,0,0.03)] border border-gray-50 flex flex-col h-full">
           <div className="flex justify-between items-center mb-6 shrink-0">
             <h3 className="font-bold text-[#081326] text-sm xl:text-base">Recent Activities</h3>
-            <button className="text-[10px] font-bold text-[#081326] bg-gray-50 px-2.5 py-1.5 rounded-lg hover:bg-gray-100 transition-colors">View All</button>
           </div>
-          <div className="flex-1 flex flex-col justify-between">
-            {[
-              { text: "New client <b>&quot;Rahul Sharma&quot;</b> added", time: "2 min ago", type: "Client", color: "bg-green-50 text-green-600", icon: UserPlus, iconColor: "bg-blue-50 text-blue-600" },
-              { text: "Document <b>&quot;PAN_Card.pdf&quot;</b> uploaded", time: "15 min ago", type: "Document", color: "bg-blue-50 text-blue-600", icon: FileText, iconColor: "bg-orange-50 text-orange-600" },
-              { text: "CIBIL Score checked for <b>&quot;Aman Ent.&quot;</b>", time: "1 hr ago", type: "CIBIL", color: "bg-purple-50 text-purple-600", icon: ShieldCheck, iconColor: "bg-purple-50 text-purple-600" },
-              { text: "New enquiry from <b>&quot;Vikas Singh&quot;</b>", time: "2 hrs ago", type: "Enquiry", color: "bg-orange-50 text-orange-600", icon: MessageSquare, iconColor: "bg-green-50 text-green-600" },
-              { text: "Service <b>&quot;Business Strategy&quot;</b> added", time: "3 hrs ago", type: "Service", color: "bg-green-50 text-green-600", icon: Briefcase, iconColor: "bg-blue-50 text-blue-600" },
-              { text: "User <b>&quot;Priya Patel&quot;</b> joined as Manager", time: "5 hrs ago", type: "User", color: "bg-blue-50 text-blue-600", icon: Users, iconColor: "bg-blue-50 text-blue-600" }
-            ].map((activity, idx) => {
-              const ActIcon = activity.icon;
+          <div className="flex-1 flex flex-col justify-between overflow-y-auto pr-2" style={{maxHeight: '300px'}}>
+            {recentActivities.map((activity, idx) => {
+              const { icon: ActIcon, color, iconColor } = getIconForType(activity.type);
               return (
                 <div key={idx} className="flex items-center gap-3 pb-3.5 border-b border-gray-50 last:border-0 last:pb-0">
-                  <div className={`w-8 h-8 rounded-full ${activity.iconColor} flex items-center justify-center shrink-0`}>
+                  <div className={`w-8 h-8 rounded-full ${iconColor} flex items-center justify-center shrink-0`}>
                     <ActIcon className="w-4 h-4 stroke-[2]" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-[11px] text-[#081326] leading-snug line-clamp-2" dangerouslySetInnerHTML={{ __html: activity.text }}></p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-[9px] font-medium text-gray-400 w-[45px] text-right">{activity.time}</span>
-                    <span className={`text-[9px] font-bold px-2 py-0.5 rounded-md w-14 text-center ${activity.color}`}>{activity.type}</span>
+                    <span className="text-[9px] font-medium text-gray-400 w-[45px] text-right">{getTimeAgo(activity.date)}</span>
+                    <span className={`text-[9px] font-bold px-2 py-0.5 rounded-md w-14 text-center ${color}`}>{activity.type}</span>
                   </div>
                 </div>
               );
             })}
+            {recentActivities.length === 0 && <p className="text-sm text-gray-500 text-center mt-4">No recent activities</p>}
           </div>
         </div>
 
@@ -151,21 +193,14 @@ const AdminDashboard = () => {
         <div className="bg-white p-5 xl:p-6 rounded-[20px] shadow-[0_4px_20px_rgb(0,0,0,0.03)] border border-gray-50 flex flex-col h-full">
           <div className="flex justify-between items-center mb-5 shrink-0">
             <h3 className="font-bold text-[#081326] text-sm xl:text-base">Top Services</h3>
-            <button className="text-[10px] font-bold text-[#081326] bg-gray-50 px-2.5 py-1.5 rounded-lg hover:bg-gray-100 transition-colors">View All</button>
+            <Link to="/online-applications" className="text-[10px] font-bold text-[#081326] bg-gray-50 px-2.5 py-1.5 rounded-lg hover:bg-gray-100 transition-colors">View All</Link>
           </div>
-          <div className="flex-1 flex flex-col justify-between">
-            {[
-              { name: "Business Strategy", count: 4, percent: 28, color: "bg-[#081326]" },
-              { name: "Digital Transformation", count: 3, percent: 21, color: "bg-[#f59e0b]" },
-              { name: "Operations Consulting", count: 2, percent: 14, color: "bg-[#3b82f6]" },
-              { name: "Data & Analytics", count: 2, percent: 14, color: "bg-[#10b981]" },
-              { name: "Risk Management", count: 2, percent: 14, color: "bg-[#8b5cf6]" },
-              { name: "Others", count: 1, percent: 7, color: "bg-[#9ca3af]" },
-            ].map((service, idx) => (
+          <div className="flex-1 flex flex-col gap-4">
+            {topServices.map((service, idx) => (
               <div key={idx} className="flex items-center justify-between gap-4">
-                <span className="text-[11px] font-semibold text-[#081326] w-32 shrink-0 truncate">{service.name}</span>
+                <span className="text-[11px] font-semibold text-[#081326] w-32 shrink-0 truncate" title={service.name}>{service.name}</span>
                 <div className="flex-1 h-2.5 bg-gray-100 rounded-full overflow-hidden">
-                  <div className={`h-full ${service.color} rounded-full`} style={{ width: `${service.percent}%` }}></div>
+                  <div className={`h-full ${getServiceColor(idx)} rounded-full`} style={{ width: `${service.percent}%` }}></div>
                 </div>
                 <div className="flex items-center gap-1 w-14 shrink-0 justify-end">
                   <span className="text-[11px] font-bold text-[#081326]">{service.count}</span>
@@ -173,11 +208,12 @@ const AdminDashboard = () => {
                 </div>
               </div>
             ))}
+            {topServices.length === 0 && <p className="text-sm text-gray-500 text-center mt-4">No services applied yet</p>}
           </div>
         </div>
 
         {/* Client Distribution Map */}
-        <IndiaMapWidget />
+        <IndiaMapWidget data={clientLocations} />
 
       </div>
 
@@ -193,26 +229,19 @@ const AdminDashboard = () => {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-gray-50/50 text-[10px] font-bold text-gray-500 uppercase">
-                  <th className="px-5 py-3 whitespace-nowrap">#</th>
                   <th className="px-5 py-3 whitespace-nowrap">Client Name</th>
                   <th className="px-5 py-3 whitespace-nowrap">Email</th>
                   <th className="px-5 py-3 whitespace-nowrap">Mobile</th>
                   <th className="px-5 py-3 whitespace-nowrap">Status</th>
                   <th className="px-5 py-3 whitespace-nowrap">Added On</th>
-                  <th className="px-5 py-3 text-center">Actions</th>
                 </tr>
               </thead>
               <tbody className="text-xs text-gray-600 divide-y divide-gray-50">
-                {[
-                  { id: 1, name: 'Rahul Sharma', email: 'rahul.sharma@email.com', mob: '+91 98765 43210', status: 'Active', date: '22 May 2025' },
-                  { id: 2, name: 'Neha Verma', email: 'neha.verma@email.com', mob: '+91 91234 56789', status: 'Active', date: '22 May 2025' },
-                  { id: 3, name: 'Aman Enterprises', email: 'contact@amanent.com', mob: '+91 99887 66554', status: 'Inactive', date: '21 May 2025' },
-                  { id: 4, name: 'Vikas Singh', email: 'vikas.singh@email.com', mob: '+91 90000 11111', status: 'Pending', date: '21 May 2025' },
-                  { id: 5, name: 'Kavya Consulting', email: 'info@kavyaconsulting.com', mob: '+91 95555 12345', status: 'Active', date: '20 May 2025' },
-                ].map(row => (
+                {latestClients.map(row => (
                   <tr key={row.id} className="hover:bg-gray-50/50 transition-colors">
-                    <td className="px-5 py-3.5 font-bold text-gray-400">{row.id}</td>
-                    <td className="px-5 py-3.5 font-bold text-[#081326] whitespace-nowrap">{row.name}</td>
+                    <td className="px-5 py-3.5 font-bold text-[#081326] whitespace-nowrap">
+                      <Link to={`/clients/${row.id}`} className="hover:text-[#de9e48] transition-colors">{row.name}</Link>
+                    </td>
                     <td className="px-5 py-3.5 whitespace-nowrap text-gray-500">{row.email}</td>
                     <td className="px-5 py-3.5 whitespace-nowrap text-gray-500">{row.mob}</td>
                     <td className="px-5 py-3.5 whitespace-nowrap">
@@ -225,15 +254,13 @@ const AdminDashboard = () => {
                       </span>
                     </td>
                     <td className="px-5 py-3.5 whitespace-nowrap text-gray-500 font-medium">{row.date}</td>
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center justify-center gap-2 text-gray-400">
-                        <Eye className="w-3.5 h-3.5 hover:text-[#081326] cursor-pointer" />
-                        <Edit className="w-3.5 h-3.5 hover:text-[#081326] cursor-pointer" />
-                        <MoreVertical className="w-3.5 h-3.5 hover:text-[#081326] cursor-pointer" />
-                      </div>
-                    </td>
                   </tr>
                 ))}
+                {latestClients.length === 0 && (
+                  <tr>
+                    <td colSpan="5" className="text-center py-6 text-gray-500">No clients found</td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -242,7 +269,7 @@ const AdminDashboard = () => {
         {/* Document Status */}
         <div className="bg-white rounded-2xl shadow-[0_2px_10px_rgb(0,0,0,0.02)] border border-gray-100 overflow-hidden">
           <div className="p-5 border-b border-gray-50 flex justify-between items-center">
-            <h3 className="font-bold text-[#081326]">Document Status</h3>
+            <h3 className="font-bold text-[#081326]">Document Status Overview</h3>
             <Link to="/documents" className="text-[10px] font-bold text-[#081326] bg-gray-50 px-2 py-1 rounded-md hover:bg-gray-100">View All</Link>
           </div>
           <div className="overflow-x-auto scrollbar-hide">
@@ -258,31 +285,33 @@ const AdminDashboard = () => {
                 </tr>
               </thead>
               <tbody className="text-xs text-gray-600 divide-y divide-gray-50">
-                {[
-                  { icon: FileSignature, color: 'text-purple-500', name: 'PAN Cards', tot: 850, ver: 680, pen: 120, rej: 50, prog: 80 },
-                  { icon: FileText, color: 'text-orange-500', name: 'Aadhaar Cards', tot: 780, ver: 650, pen: 90, rej: 40, prog: 83 },
-                  { icon: FileText, color: 'text-green-500', name: 'Address Proof', tot: 620, ver: 510, pen: 70, rej: 40, prog: 82 },
-                  { icon: FileText, color: 'text-blue-500', name: 'Bank Statements', tot: 540, ver: 450, pen: 60, rej: 30, prog: 83 },
-                  { icon: FileText, color: 'text-green-500', name: 'Others', tot: 690, ver: 560, pen: 80, rej: 50, prog: 81 },
-                ].map((doc, i) => (
-                  <tr key={i} className="hover:bg-gray-50/50 transition-colors">
-                    <td className="px-5 py-3.5 font-bold text-[#081326] whitespace-nowrap flex items-center gap-2">
-                       <doc.icon className={`w-3.5 h-3.5 ${doc.color}`} /> {doc.name}
-                    </td>
-                    <td className="px-5 py-3.5 text-right font-bold text-gray-600">{doc.tot}</td>
-                    <td className="px-5 py-3.5 text-right font-bold text-gray-500">{doc.ver}</td>
-                    <td className="px-5 py-3.5 text-right font-bold text-gray-500">{doc.pen}</td>
-                    <td className="px-5 py-3.5 text-right font-bold text-gray-500">{doc.rej}</td>
-                    <td className="px-5 py-3.5 min-w-[120px]">
-                      <div className="flex items-center gap-2">
-                        <div className="w-full bg-gray-100 rounded-full h-1.5">
-                          <div className="bg-[#081326] h-1.5 rounded-full" style={{width: `${doc.prog}%`}}></div>
+                {documentStatus.map((doc, i) => {
+                  let docIcon = FileText;
+                  let docColor = 'text-green-500';
+                  if (doc.name === 'PAN Cards') { docIcon = FileSignature; docColor = 'text-purple-500'; }
+                  if (doc.name === 'ID Proofs') { docIcon = FileText; docColor = 'text-orange-500'; }
+                  if (doc.name === 'Address Proofs') { docIcon = MapPin; docColor = 'text-blue-500'; }
+
+                  return (
+                    <tr key={i} className="hover:bg-gray-50/50 transition-colors">
+                      <td className="px-5 py-3.5 font-bold text-[#081326] whitespace-nowrap flex items-center gap-2">
+                        <docIcon className={`w-3.5 h-3.5 ${docColor}`} /> {doc.name}
+                      </td>
+                      <td className="px-5 py-3.5 text-right font-bold text-gray-600">{doc.tot}</td>
+                      <td className="px-5 py-3.5 text-right font-bold text-gray-500">{doc.ver}</td>
+                      <td className="px-5 py-3.5 text-right font-bold text-gray-500">{doc.pen}</td>
+                      <td className="px-5 py-3.5 text-right font-bold text-gray-500">{doc.rej}</td>
+                      <td className="px-5 py-3.5 min-w-[120px]">
+                        <div className="flex items-center gap-2">
+                          <div className="w-full bg-gray-100 rounded-full h-1.5">
+                            <div className="bg-[#081326] h-1.5 rounded-full" style={{width: `${doc.prog}%`}}></div>
+                          </div>
+                          <span className="text-[9px] font-bold text-gray-400">{doc.prog}%</span>
                         </div>
-                        <span className="text-[9px] font-bold text-gray-400">{doc.prog}%</span>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>

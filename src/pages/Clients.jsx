@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  Users, UserCheck, UserMinus, FileWarning, Search, Filter, Eye, X, RefreshCcw, Download, CheckCircle
+  Users, UserCheck, UserMinus, FileWarning, Search, Filter, Eye, X, RefreshCcw, Download, CheckCircle, Trash2, Edit, AlertTriangle
 } from 'lucide-react';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
@@ -37,11 +37,13 @@ const Clients = () => {
   const [selectedClient, setSelectedClient] = useState(null);
   const [previewTab, setPreviewTab] = useState('Overview');
   const [statusLoading, setStatusLoading] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [clientToDelete, setClientToDelete] = useState(null);
 
   const fetchClients = async () => {
     try {
       setLoading(true);
-      const res = await api.get('/clients');
+      const res = await api.get(role === 'admin' ? '/clients' : '/clients/my-clients');
       if (res.data.success) {
         setClients(res.data.data);
       }
@@ -53,14 +55,8 @@ const Clients = () => {
   };
 
   useEffect(() => {
-    if (role === 'admin') {
-      fetchClients();
-    }
+    fetchClients();
   }, [role]);
-
-  if (role === 'user') {
-    return <AddNewClient />;
-  }
 
   const openPreview = (client) => {
     setSelectedClient(client);
@@ -85,6 +81,20 @@ const Clients = () => {
       alert('Error updating status');
     } finally {
       setStatusLoading(false);
+    }
+  };
+
+  const handleDeleteClient = async () => {
+    if (!clientToDelete) return;
+    try {
+      const res = await api.delete(`/clients/${clientToDelete}`);
+      if (res.data.success) {
+        setShowDeleteModal(false);
+        setClientToDelete(null);
+        fetchClients();
+      }
+    } catch (error) {
+      alert('Error deleting client');
     }
   };
 
@@ -178,6 +188,12 @@ const Clients = () => {
             </div>
             <div className="flex items-center gap-3 pr-2">
               <button 
+                onClick={() => navigate('/clients/new')}
+                className="px-4 py-2 bg-[#081326] text-white rounded-lg text-xs font-bold hover:bg-[#11203d] transition-colors shadow-sm"
+              >
+                + Add New Client
+              </button>
+              <button 
                 onClick={() => fetchClients()}
                 className="w-9 h-9 flex items-center justify-center border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 shadow-sm transition-colors"
               >
@@ -233,22 +249,42 @@ const Clients = () => {
                       <td className="px-5 py-3.5 whitespace-nowrap">
                         <div className="flex items-center gap-2">
                           <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-[9px] shrink-0">
-                            {client.user?.name?.substring(0, 2).toUpperCase() || 'NA'}
+                            {client.user?.name?.substring(0, 2).toUpperCase() || 'WS'}
                           </div>
-                          <span className="font-bold text-gray-700">{client.user?.name || 'Unknown User'}</span>
+                          <span className="font-bold text-gray-700">{client.user?.name || 'Website / Self'}</span>
                         </div>
                       </td>
                       <td className="px-5 py-3.5 whitespace-nowrap font-medium text-gray-500">
                         {new Date(client.createdAt).toLocaleDateString('en-IN')}
                       </td>
                       <td className="px-5 py-3.5 whitespace-nowrap text-center">
-                        <button 
-                          onClick={() => openPreview(client)}
-                          className="w-8 h-8 mx-auto rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white flex items-center justify-center transition-all shadow-sm"
-                          title="View Profile"
-                        >
-                          <Eye className="w-4 h-4 stroke-[2.5]" />
-                        </button>
+                        <div className="flex justify-center items-center gap-2">
+                          <button 
+                            onClick={() => openPreview(client)}
+                            className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white flex items-center justify-center transition-all shadow-sm"
+                            title="View Profile"
+                          >
+                            <Eye className="w-4 h-4 stroke-[2.5]" />
+                          </button>
+                          {role === 'admin' && (
+                            <>
+                              <button 
+                                onClick={() => navigate(`/clients/edit/${client._id}`)}
+                                className="w-8 h-8 rounded-lg bg-orange-50 text-orange-600 hover:bg-orange-600 hover:text-white flex items-center justify-center transition-all shadow-sm"
+                                title="Edit Profile"
+                              >
+                                <Edit className="w-4 h-4 stroke-[2.5]" />
+                              </button>
+                              <button 
+                                onClick={() => { setClientToDelete(client._id); setShowDeleteModal(true); }}
+                                className="w-8 h-8 rounded-lg bg-red-50 text-red-600 hover:bg-red-600 hover:text-white flex items-center justify-center transition-all shadow-sm"
+                                title="Delete Profile"
+                              >
+                                <Trash2 className="w-4 h-4 stroke-[2.5]" />
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -276,12 +312,20 @@ const Clients = () => {
               <h2 className="text-lg font-black text-[#081326] flex items-center gap-2">
                 <Eye className="w-5 h-5 text-[#f59e0b] stroke-[2.5]" /> Client Profile Review
               </h2>
-              <button 
-                onClick={closePreview} 
-                className="w-8 h-8 flex items-center justify-center bg-white border border-gray-200 text-gray-500 hover:text-red-500 hover:border-red-200 rounded-lg shadow-sm transition-colors"
-              >
-                <X className="w-4 h-4 stroke-[2.5]" />
-              </button>
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => navigate(`/clients/${selectedClient._id}`)}
+                  className="px-4 py-1.5 bg-[#081326] text-white rounded-lg text-xs font-bold hover:bg-[#11203d] transition-colors shadow-sm"
+                >
+                  View Full Profile
+                </button>
+                <button 
+                  onClick={closePreview} 
+                  className="w-8 h-8 flex items-center justify-center bg-white border border-gray-200 text-gray-500 hover:text-red-500 hover:border-red-200 rounded-lg shadow-sm transition-colors"
+                >
+                  <X className="w-4 h-4 stroke-[2.5]" />
+                </button>
+              </div>
             </div>
 
             {/* Profile Info Header */}
@@ -335,25 +379,33 @@ const Clients = () => {
                       <div className="grid grid-cols-2 gap-y-5 gap-x-4">
                          <div>
                            <p className="text-[10px] text-gray-400 font-bold mb-1">Date of Birth</p>
-                           <p className="text-xs font-black text-[#081326]">{new Date(selectedClient.dob).toLocaleDateString()}</p>
+                           <p className="text-xs font-black text-[#081326]">{selectedClient.dob ? new Date(selectedClient.dob).toLocaleDateString() : 'NA'}</p>
                          </div>
                          <div>
                            <p className="text-[10px] text-gray-400 font-bold mb-1">Gender</p>
-                           <p className="text-xs font-black text-[#081326]">{selectedClient.gender}</p>
+                           <p className="text-xs font-black text-[#081326]">{selectedClient.gender || 'NA'}</p>
+                         </div>
+                         <div>
+                           <p className="text-[10px] text-gray-400 font-bold mb-1">Alternative Email</p>
+                           <p className="text-xs font-black text-[#081326]">{selectedClient.alternativeEmail || 'NA'}</p>
                          </div>
                          <div>
                            <p className="text-[10px] text-gray-400 font-bold mb-1">PAN Number</p>
-                           <p className="text-xs font-black text-[#081326] uppercase">{selectedClient.panNumber}</p>
+                           <p className="text-xs font-black text-[#081326] uppercase">{selectedClient.panNumber || 'NA'}</p>
                          </div>
                          <div>
                            <p className="text-[10px] text-gray-400 font-bold mb-1">Aadhaar Number</p>
                            <p className="text-xs font-black text-[#081326]">{selectedClient.aadhaarNumber || 'NA'}</p>
                          </div>
+                         <div>
+                           <p className="text-[10px] text-gray-400 font-bold mb-1">ID Proof ({selectedClient.idProofType || 'NA'})</p>
+                           <p className="text-xs font-black text-[#081326]">{selectedClient.idProofNumber || 'NA'}</p>
+                         </div>
                          <div className="col-span-2">
                            <p className="text-[10px] text-gray-400 font-bold mb-1">Address Details</p>
                            <p className="text-xs font-bold text-[#081326] bg-gray-50 p-3 rounded border border-gray-100 leading-relaxed">
-                              {selectedClient.addressLine1} {selectedClient.addressLine2},<br/>
-                              {selectedClient.city}, {selectedClient.state} - {selectedClient.pincode}
+                              {selectedClient.addressLine1} {selectedClient.addressLine2 ? `, ${selectedClient.addressLine2}` : ''}<br/>
+                              {selectedClient.city}, {selectedClient.state}, {selectedClient.country || 'India'} - {selectedClient.pincode}
                            </p>
                          </div>
                       </div>
@@ -372,12 +424,34 @@ const Clients = () => {
                            <p className="text-xs font-black text-[#081326]">{selectedClient.companyName || 'NA'}</p>
                          </div>
                          <div>
+                           <p className="text-[10px] text-gray-400 font-bold mb-1">Designation</p>
+                           <p className="text-xs font-black text-[#081326]">{selectedClient.designation || 'NA'}</p>
+                         </div>
+                         <div>
                            <p className="text-[10px] text-gray-400 font-bold mb-1">Annual Income</p>
                            <p className="text-xs font-black text-[#081326]">{selectedClient.annualIncome ? `₹${selectedClient.annualIncome}` : 'NA'}</p>
                          </div>
                          <div>
+                           <p className="text-[10px] text-gray-400 font-bold mb-1">Source of Income</p>
+                           <p className="text-xs font-black text-[#081326]">{selectedClient.sourceOfIncome || 'NA'}</p>
+                         </div>
+                         <div>
                            <p className="text-[10px] text-gray-400 font-bold mb-1">Business Type</p>
                            <p className="text-xs font-black text-[#081326]">{selectedClient.businessType || 'NA'}</p>
+                         </div>
+                         <div>
+                           <p className="text-[10px] text-gray-400 font-bold mb-1">Years in Business</p>
+                           <p className="text-xs font-black text-[#081326]">{selectedClient.yearsInBusiness ? `${selectedClient.yearsInBusiness} Years` : 'NA'}</p>
+                         </div>
+                         <div>
+                           <p className="text-[10px] text-gray-400 font-bold mb-1">Website</p>
+                           {selectedClient.website ? (
+                             <a href={selectedClient.website.startsWith('http') ? selectedClient.website : `https://${selectedClient.website}`} target="_blank" rel="noreferrer" className="text-xs font-black text-blue-500 hover:underline">
+                               {selectedClient.website}
+                             </a>
+                           ) : (
+                             <p className="text-xs font-black text-[#081326]">NA</p>
+                           )}
                          </div>
                       </div>
                     </div>
@@ -399,7 +473,11 @@ const Clients = () => {
                        </div>
                        <div className="p-5 flex justify-center bg-gray-50/30">
                           {selectedClient.panCardUrl ? (
-                             <img src={getFullUrl(selectedClient.panCardUrl)} alt="PAN Card" className="max-h-60 rounded border border-gray-200 shadow-sm" />
+                             selectedClient.panCardUrl.toLowerCase().endsWith('.pdf') ? (
+                                <iframe src={`${getFullUrl(selectedClient.panCardUrl)}#toolbar=0`} title="PAN Card" className="w-full h-60 rounded border border-gray-200 shadow-sm" />
+                             ) : (
+                                <img src={getFullUrl(selectedClient.panCardUrl)} alt="PAN Card" className="max-h-60 rounded border border-gray-200 shadow-sm" />
+                             )
                           ) : (
                              <p className="text-xs text-gray-400 font-bold py-10">Not uploaded</p>
                           )}
@@ -418,7 +496,11 @@ const Clients = () => {
                        </div>
                        <div className="p-5 flex justify-center bg-gray-50/30">
                           {selectedClient.idProofUrl ? (
-                             <img src={getFullUrl(selectedClient.idProofUrl)} alt="ID Proof" className="max-h-60 rounded border border-gray-200 shadow-sm" />
+                             selectedClient.idProofUrl.toLowerCase().endsWith('.pdf') ? (
+                                <iframe src={`${getFullUrl(selectedClient.idProofUrl)}#toolbar=0`} title="ID Proof" className="w-full h-60 rounded border border-gray-200 shadow-sm" />
+                             ) : (
+                                <img src={getFullUrl(selectedClient.idProofUrl)} alt="ID Proof" className="max-h-60 rounded border border-gray-200 shadow-sm" />
+                             )
                           ) : (
                              <p className="text-xs text-gray-400 font-bold py-10">Not uploaded</p>
                           )}
@@ -437,7 +519,11 @@ const Clients = () => {
                        </div>
                        <div className="p-5 flex justify-center bg-gray-50/30">
                           {selectedClient.addressProofUrl ? (
-                             <img src={getFullUrl(selectedClient.addressProofUrl)} alt="Address Proof" className="max-h-60 rounded border border-gray-200 shadow-sm" />
+                             selectedClient.addressProofUrl.toLowerCase().endsWith('.pdf') ? (
+                                <iframe src={`${getFullUrl(selectedClient.addressProofUrl)}#toolbar=0`} title="Address Proof" className="w-full h-60 rounded border border-gray-200 shadow-sm" />
+                             ) : (
+                                <img src={getFullUrl(selectedClient.addressProofUrl)} alt="Address Proof" className="max-h-60 rounded border border-gray-200 shadow-sm" />
+                             )
                           ) : (
                              <p className="text-xs text-gray-400 font-bold py-10">Not uploaded</p>
                           )}
@@ -448,26 +534,57 @@ const Clients = () => {
                )}
             </div>
             
-            {/* Action Footer */}
-            <div className="p-6 border-t border-gray-100 bg-white flex gap-4">
-               {selectedClient.status !== 'Approved' && (
-                  <button 
-                    onClick={() => updateStatus(selectedClient._id, 'Approved')} 
-                    disabled={statusLoading}
-                    className="flex-1 py-3 bg-green-500 text-white rounded-xl text-sm font-black hover:bg-green-600 transition-colors shadow-sm disabled:opacity-50 flex items-center justify-center gap-2"
-                  >
-                    <CheckCircle className="w-4 h-4 stroke-[2.5]" /> Approve Application
-                  </button>
-               )}
-               {selectedClient.status !== 'Rejected' && (
-                  <button 
-                    onClick={() => updateStatus(selectedClient._id, 'Rejected')} 
-                    disabled={statusLoading}
-                    className="flex-1 py-3 border-2 border-red-200 text-red-600 bg-red-50 rounded-xl text-sm font-black hover:bg-red-100 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-                  >
-                    <X className="w-4 h-4 stroke-[2.5]" /> Reject
-                  </button>
-               )}
+            {/* Action Footer (Admin Only) */}
+            {role === 'admin' && (
+              <div className="p-6 border-t border-gray-100 bg-white flex gap-4">
+                 {selectedClient.status !== 'Approved' && (
+                    <button 
+                      onClick={() => updateStatus(selectedClient._id, 'Approved')} 
+                      disabled={statusLoading}
+                      className="flex-1 py-3 bg-green-500 text-white rounded-xl text-sm font-black hover:bg-green-600 transition-colors shadow-sm disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      <CheckCircle className="w-4 h-4 stroke-[2.5]" /> Approve Application
+                    </button>
+                 )}
+                 {selectedClient.status !== 'Rejected' && (
+                    <button 
+                      onClick={() => updateStatus(selectedClient._id, 'Rejected')} 
+                      disabled={statusLoading}
+                      className="flex-1 py-3 border-2 border-red-200 text-red-600 bg-red-50 rounded-xl text-sm font-black hover:bg-red-100 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      <X className="w-4 h-4 stroke-[2.5]" /> Reject
+                    </button>
+                 )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-[#081326]/60 backdrop-blur-sm" onClick={() => setShowDeleteModal(false)}></div>
+          <div className="relative bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+            <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">
+              <AlertTriangle className="w-6 h-6 text-red-600 stroke-[2.5]" />
+            </div>
+            <h3 className="text-lg font-black text-[#081326] text-center mb-2">Delete Client?</h3>
+            <p className="text-sm text-gray-500 text-center mb-6 font-medium leading-relaxed">
+              Are you sure you want to delete this client? This action cannot be undone and all associated records will be removed.
+            </p>
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setShowDeleteModal(false)}
+                className="flex-1 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-sm font-bold transition-colors"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleDeleteClient}
+                className="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-bold transition-colors shadow-sm shadow-red-200"
+              >
+                Yes, Delete
+              </button>
             </div>
           </div>
         </div>
