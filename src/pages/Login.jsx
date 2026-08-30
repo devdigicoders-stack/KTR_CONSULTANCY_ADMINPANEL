@@ -154,24 +154,16 @@ const Login = () => {
               </div>
             </div>
 
-            <div className="flex items-center justify-between pt-1">
-              <div className="flex items-center">
-                <input 
-                  id="remember-me" 
-                  name="remember-me" 
-                  type="checkbox" 
-                  className="h-3.5 w-3.5 text-[#f59e0b] focus:ring-[#f59e0b] border-gray-300 rounded cursor-pointer accent-[#081326]"
-                />
-                <label htmlFor="remember-me" className="ml-2 block text-xs text-gray-700 cursor-pointer font-medium">
-                  Remember Me
-                </label>
-              </div>
-
-              <div className="text-xs">
-                <a href="#" className="font-semibold text-[#f59e0b] hover:text-[#d97706]">
-                  Forgot Password?
-                </a>
-              </div>
+            <div className="flex items-center pt-1">
+              <input 
+                id="remember-me" 
+                name="remember-me" 
+                type="checkbox" 
+                className="h-3.5 w-3.5 text-[#f59e0b] focus:ring-[#f59e0b] border-gray-300 rounded cursor-pointer accent-[#081326]"
+              />
+              <label htmlFor="remember-me" className="ml-2 block text-xs text-gray-700 cursor-pointer font-medium">
+                Remember Me
+              </label>
             </div>
 
             <div className="pt-2">
