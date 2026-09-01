@@ -117,28 +117,26 @@ const AddNewClient = () => {
           )}
 
 
-          <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-6">
+          <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-5 sm:gap-6">
             
             {/* Personal Information */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex flex-col gap-5">
-              <h3 className="font-semibold text-gray-800 text-sm flex items-center gap-2 mb-2 border-b border-gray-50 pb-4">
+            <div className="bg-white rounded-2xl shadow-xs border border-gray-100 p-4 sm:p-6 flex flex-col gap-4 sm:gap-5">
+              <h3 className="font-semibold text-[#081326] text-sm flex items-center gap-2 mb-1 border-b border-gray-50 pb-3 sm:pb-4">
                 <User className="w-4 h-4 text-[#f59e0b]" /> Personal Information
               </h3>
               
-              <div className="flex flex-col md:flex-row gap-4">
-                <div className="flex-1 flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-gray-700 mb-1 block">Full Name <span className="text-red-500">*</span></label>
-                  <input type="text" name="fullName" value={formData.fullName} onChange={handleChange} required placeholder="Enter full name" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-200 focus:border-[#f59e0b] focus:bg-white transition-colors" />
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-gray-700 block">Full Name <span className="text-red-500">*</span></label>
+                  <input type="text" name="fullName" value={formData.fullName} onChange={handleChange} required placeholder="Enter full name" className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-300 focus:border-[#f59e0b] focus:bg-white transition-colors" />
                 </div>
-                <div className="flex-1 flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-gray-700 mb-1 block">Date of Birth <span className="text-red-500">*</span></label>
-                  <div className="relative">
-                    <input type="date" name="dob" value={formData.dob} onChange={handleChange} required className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-200 focus:border-[#f59e0b] focus:bg-white transition-colors" />
-                  </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-gray-700 block">Date of Birth <span className="text-red-500">*</span></label>
+                  <input type="date" name="dob" value={formData.dob} onChange={handleChange} required className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-300 focus:border-[#f59e0b] focus:bg-white transition-colors" />
                 </div>
-                <div className="flex-1 flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-gray-700 mb-1 block">Gender <span className="text-red-500">*</span></label>
-                  <select name="gender" value={formData.gender} onChange={handleChange} required className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-lg text-sm font-normal text-gray-800 outline-none hover:border-gray-200 focus:border-[#f59e0b] focus:bg-white transition-colors cursor-pointer">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-gray-700 block">Gender <span className="text-red-500">*</span></label>
+                  <select name="gender" value={formData.gender} onChange={handleChange} required className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-normal text-gray-800 outline-none hover:border-gray-300 focus:border-[#f59e0b] focus:bg-white transition-colors cursor-pointer">
                     <option value="">Select gender</option>
                     <option value="Male">Male</option>
                     <option value="Female">Female</option>
@@ -147,43 +145,43 @@ const AddNewClient = () => {
                 </div>
               </div>
 
-              <div className="flex flex-col md:flex-row gap-4">
-                <div className="flex-1 flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-gray-700 mb-1 block">PAN Number <span className="text-red-500">*</span></label>
-                  <input type="text" name="panNumber" value={formData.panNumber} onChange={handleChange} required placeholder="Enter PAN number" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-200 focus:border-[#f59e0b] focus:bg-white transition-colors uppercase" />
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-gray-700 block">PAN Number <span className="text-red-500">*</span></label>
+                  <input type="text" name="panNumber" value={formData.panNumber} onChange={handleChange} required placeholder="Enter PAN number" className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-300 focus:border-[#f59e0b] focus:bg-white transition-colors uppercase" />
                 </div>
-                <div className="flex-1 flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-gray-700 mb-1 block">Aadhaar Number</label>
-                  <input type="text" name="aadhaarNumber" value={formData.aadhaarNumber} onChange={handleChange} placeholder="Enter Aadhaar number" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-200 focus:border-[#f59e0b] focus:bg-white transition-colors" />
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-gray-700 block">Aadhaar Number</label>
+                  <input type="text" name="aadhaarNumber" value={formData.aadhaarNumber} onChange={handleChange} placeholder="Enter Aadhaar number" className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-300 focus:border-[#f59e0b] focus:bg-white transition-colors" />
                 </div>
-                <div className="flex-1 flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-gray-700 mb-1 block">Mobile Number <span className="text-red-500">*</span></label>
-                  <input type="text" name="mobile" value={formData.mobile} onChange={handleChange} required placeholder="Enter mobile number" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-200 focus:border-[#f59e0b] focus:bg-white transition-colors" />
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-gray-700 block">Mobile Number <span className="text-red-500">*</span></label>
+                  <input type="tel" name="mobile" value={formData.mobile} onChange={handleChange} required placeholder="Enter mobile number" className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-300 focus:border-[#f59e0b] focus:bg-white transition-colors" />
                 </div>
               </div>
 
-              <div className="flex flex-col md:flex-row gap-4">
-                <div className="flex-1 flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-gray-700 mb-1 block">Email Address <span className="text-red-500">*</span></label>
-                  <input type="email" name="email" value={formData.email} onChange={handleChange} required placeholder="Enter email address" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-200 focus:border-[#f59e0b] focus:bg-white transition-colors" />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-gray-700 block">Email Address <span className="text-red-500">*</span></label>
+                  <input type="email" name="email" value={formData.email} onChange={handleChange} required placeholder="Enter email address" className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-300 focus:border-[#f59e0b] focus:bg-white transition-colors" />
                 </div>
-                <div className="flex-1 flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-gray-700 mb-1 block">Alternative Email</label>
-                  <input type="email" name="alternativeEmail" value={formData.alternativeEmail} onChange={handleChange} placeholder="Enter alternative email (optional)" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-200 focus:border-[#f59e0b] focus:bg-white transition-colors" />
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-gray-700 block">Alternative Email</label>
+                  <input type="email" name="alternativeEmail" value={formData.alternativeEmail} onChange={handleChange} placeholder="Enter alternative email (optional)" className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-300 focus:border-[#f59e0b] focus:bg-white transition-colors" />
                 </div>
               </div>
             </div>
 
             {/* Identity & Address */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex flex-col gap-5">
-              <h3 className="font-semibold text-gray-800 text-sm flex items-center gap-2 mb-2 border-b border-gray-50 pb-4">
+            <div className="bg-white rounded-2xl shadow-xs border border-gray-100 p-4 sm:p-6 flex flex-col gap-4 sm:gap-5">
+              <h3 className="font-semibold text-[#081326] text-sm flex items-center gap-2 mb-1 border-b border-gray-50 pb-3 sm:pb-4">
                 <MapPin className="w-4 h-4 text-[#f59e0b]" /> Identity & Address
               </h3>
               
-              <div className="flex flex-col md:flex-row gap-4">
-                <div className="flex-1 flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-gray-700 mb-1 block">ID Proof Type <span className="text-red-500">*</span></label>
-                  <select name="idProofType" value={formData.idProofType} onChange={handleChange} required className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-lg text-sm font-normal text-gray-800 outline-none hover:border-gray-200 focus:border-[#f59e0b] focus:bg-white transition-colors cursor-pointer">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-gray-700 block">ID Proof Type <span className="text-red-500">*</span></label>
+                  <select name="idProofType" value={formData.idProofType} onChange={handleChange} required className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-normal text-gray-800 outline-none hover:border-gray-300 focus:border-[#f59e0b] focus:bg-white transition-colors cursor-pointer">
                     <option value="">Select ID proof type</option>
                     <option value="Aadhaar Card">Aadhaar Card</option>
                     <option value="Passport">Passport</option>
@@ -191,128 +189,118 @@ const AddNewClient = () => {
                     <option value="Driving License">Driving License</option>
                   </select>
                 </div>
-                <div className="flex-1 flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-gray-700 mb-1 block">ID Proof Number <span className="text-red-500">*</span></label>
-                  <input type="text" name="idProofNumber" value={formData.idProofNumber} onChange={handleChange} required placeholder="Enter ID proof number" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-200 focus:border-[#f59e0b] focus:bg-white transition-colors" />
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-gray-700 block">ID Proof Number <span className="text-red-500">*</span></label>
+                  <input type="text" name="idProofNumber" value={formData.idProofNumber} onChange={handleChange} required placeholder="Enter ID proof number" className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-300 focus:border-[#f59e0b] focus:bg-white transition-colors" />
                 </div>
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-gray-700 mb-1 block">Address Line 1 <span className="text-red-500">*</span></label>
-                <input type="text" name="addressLine1" value={formData.addressLine1} onChange={handleChange} required placeholder="House no., Building, Street" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-200 focus:border-[#f59e0b] focus:bg-white transition-colors" />
+                <label className="text-xs font-medium text-gray-700 block">Address Line 1 <span className="text-red-500">*</span></label>
+                <input type="text" name="addressLine1" value={formData.addressLine1} onChange={handleChange} required placeholder="House no., Building, Street" className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-300 focus:border-[#f59e0b] focus:bg-white transition-colors" />
               </div>
               
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-gray-700 mb-1 block">Address Line 2</label>
-                <input type="text" name="addressLine2" value={formData.addressLine2} onChange={handleChange} placeholder="Area, Landmark (optional)" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-200 focus:border-[#f59e0b] focus:bg-white transition-colors" />
+                <label className="text-xs font-medium text-gray-700 block">Address Line 2</label>
+                <input type="text" name="addressLine2" value={formData.addressLine2} onChange={handleChange} placeholder="Area, Landmark (optional)" className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-300 focus:border-[#f59e0b] focus:bg-white transition-colors" />
               </div>
 
-              <div className="flex flex-col md:flex-row gap-4">
-                <div className="flex-1 flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-gray-700 mb-1 block">Country <span className="text-red-500">*</span></label>
-                  <input type="text" name="country" value={formData.country} onChange={handleChange} required className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-lg text-sm font-normal outline-none text-gray-800" readOnly />
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-gray-700 block">Country <span className="text-red-500">*</span></label>
+                  <input type="text" name="country" value={formData.country} onChange={handleChange} required className="w-full px-3.5 py-2.5 bg-gray-100 border border-gray-200 rounded-lg text-sm font-normal outline-none text-gray-800" readOnly />
                 </div>
-                <div className="flex-1 flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-gray-700 mb-1 block">State <span className="text-red-500">*</span></label>
-                  <input type="text" name="state" value={formData.state} onChange={handleChange} required placeholder="Enter state" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-200 focus:border-[#f59e0b] focus:bg-white transition-colors" />
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-gray-700 block">State <span className="text-red-500">*</span></label>
+                  <input type="text" name="state" value={formData.state} onChange={handleChange} required placeholder="Enter state" className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-300 focus:border-[#f59e0b] focus:bg-white transition-colors" />
                 </div>
-                <div className="flex-1 flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-gray-700 mb-1 block">City <span className="text-red-500">*</span></label>
-                  <input type="text" name="city" value={formData.city} onChange={handleChange} required placeholder="Enter city" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-200 focus:border-[#f59e0b] focus:bg-white transition-colors" />
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-gray-700 block">City <span className="text-red-500">*</span></label>
+                  <input type="text" name="city" value={formData.city} onChange={handleChange} required placeholder="Enter city" className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-300 focus:border-[#f59e0b] focus:bg-white transition-colors" />
                 </div>
-              </div>
-              <div className="flex gap-4">
-                <div className="flex-1 flex flex-col gap-1.5 max-w-xs">
-                  <label className="text-xs font-medium text-gray-700 mb-1 block">Pincode <span className="text-red-500">*</span></label>
-                  <input type="text" name="pincode" value={formData.pincode} onChange={handleChange} required placeholder="Enter pincode" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-200 focus:border-[#f59e0b] focus:bg-white transition-colors" />
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-gray-700 block">Pincode <span className="text-red-500">*</span></label>
+                  <input type="text" name="pincode" value={formData.pincode} onChange={handleChange} required placeholder="Enter pincode" className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-300 focus:border-[#f59e0b] focus:bg-white transition-colors" />
                 </div>
               </div>
             </div>
 
             {/* Additional Information */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex flex-col gap-5">
-              <h3 className="font-semibold text-gray-800 text-sm flex items-center gap-2 mb-2 border-b border-gray-50 pb-4">
+            <div className="bg-white rounded-2xl shadow-xs border border-gray-100 p-4 sm:p-6 flex flex-col gap-4 sm:gap-5">
+              <h3 className="font-semibold text-[#081326] text-sm flex items-center gap-2 mb-1 border-b border-gray-50 pb-3 sm:pb-4">
                 <Briefcase className="w-4 h-4 text-[#f59e0b]" /> Additional Information
               </h3>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-gray-700 mb-1 block">Occupation</label>
-                  <input type="text" name="occupation" value={formData.occupation} onChange={handleChange} placeholder="e.g. Salaried, Business" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-200 focus:border-[#f59e0b] focus:bg-white transition-colors" />
+                  <label className="text-xs font-medium text-gray-700 block">Occupation</label>
+                  <input type="text" name="occupation" value={formData.occupation} onChange={handleChange} placeholder="e.g. Salaried, Business" className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-300 focus:border-[#f59e0b] focus:bg-white transition-colors" />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-gray-700 mb-1 block">Company Name</label>
-                  <input type="text" name="companyName" value={formData.companyName} onChange={handleChange} placeholder="Enter company name" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-200 focus:border-[#f59e0b] focus:bg-white transition-colors" />
+                  <label className="text-xs font-medium text-gray-700 block">Company Name</label>
+                  <input type="text" name="companyName" value={formData.companyName} onChange={handleChange} placeholder="Enter company name" className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-300 focus:border-[#f59e0b] focus:bg-white transition-colors" />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-gray-700 mb-1 block">Designation</label>
-                  <input type="text" name="designation" value={formData.designation} onChange={handleChange} placeholder="Enter designation" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-200 focus:border-[#f59e0b] focus:bg-white transition-colors" />
+                  <label className="text-xs font-medium text-gray-700 block">Designation</label>
+                  <input type="text" name="designation" value={formData.designation} onChange={handleChange} placeholder="Enter designation" className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-300 focus:border-[#f59e0b] focus:bg-white transition-colors" />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-gray-700 mb-1 block">Annual Income (₹)</label>
-                  <input type="number" name="annualIncome" value={formData.annualIncome} onChange={handleChange} placeholder="Enter annual income" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-200 focus:border-[#f59e0b] focus:bg-white transition-colors" />
+                  <label className="text-xs font-medium text-gray-700 block">Annual Income (₹)</label>
+                  <input type="number" name="annualIncome" value={formData.annualIncome} onChange={handleChange} placeholder="Enter annual income" className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-300 focus:border-[#f59e0b] focus:bg-white transition-colors" />
                 </div>
                 
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-gray-700 mb-1 block">Source of Income</label>
-                  <input type="text" name="sourceOfIncome" value={formData.sourceOfIncome} onChange={handleChange} placeholder="Select source" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-200 focus:border-[#f59e0b] focus:bg-white transition-colors" />
+                  <label className="text-xs font-medium text-gray-700 block">Source of Income</label>
+                  <input type="text" name="sourceOfIncome" value={formData.sourceOfIncome} onChange={handleChange} placeholder="Select source" className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-300 focus:border-[#f59e0b] focus:bg-white transition-colors" />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-gray-700 mb-1 block">Business Type</label>
-                  <input type="text" name="businessType" value={formData.businessType} onChange={handleChange} placeholder="e.g. Proprietor, Pvt Ltd" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-200 focus:border-[#f59e0b] focus:bg-white transition-colors" />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-gray-700 mb-1 block">Years in Business</label>
-                  <input type="number" name="yearsInBusiness" value={formData.yearsInBusiness} onChange={handleChange} placeholder="Enter years (optional)" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-200 focus:border-[#f59e0b] focus:bg-white transition-colors" />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-gray-700 mb-1 block">Website</label>
-                  <input type="text" name="website" value={formData.website} onChange={handleChange} placeholder="Enter website (optional)" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-200 focus:border-[#f59e0b] focus:bg-white transition-colors" />
+                  <label className="text-xs font-medium text-gray-700 block">Business Type</label>
+                  <input type="text" name="businessType" value={formData.businessType} onChange={handleChange} placeholder="e.g. Proprietor, Pvt Ltd" className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-300 focus:border-[#f59e0b] focus:bg-white transition-colors" />
                 </div>
               </div>
             </div>
 
-            {/* Document Uploads */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex flex-col gap-5">
-              <h3 className="font-semibold text-gray-800 text-sm flex items-center gap-2 mb-2 border-b border-gray-50 pb-4">
+            {/* Document Uploads - Phone & Touch Friendly */}
+            <div className="bg-white rounded-2xl shadow-xs border border-gray-100 p-4 sm:p-6 flex flex-col gap-4 sm:gap-5">
+              <h3 className="font-semibold text-[#081326] text-sm flex items-center gap-2 mb-1 border-b border-gray-50 pb-3 sm:pb-4">
                 <UploadCloud className="w-4 h-4 text-[#f59e0b]" /> Document Uploads
               </h3>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-gray-700 mb-1 block">Photo (Optional)</label>
-                  <input type="file" name="photoUrl" onChange={handleFileChange} className="w-full px-4 py-2 bg-gray-50 border border-gray-100 rounded-lg text-sm font-normal outline-none text-gray-800" accept="image/*" />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1.5 bg-gray-50/70 p-3.5 rounded-xl border border-gray-100">
+                  <label className="text-xs font-bold text-gray-700 block">Photo (Optional)</label>
+                  <input type="file" name="photoUrl" onChange={handleFileChange} className="w-full text-xs text-gray-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-[#081326] file:text-white hover:file:bg-[#11203d] cursor-pointer" accept="image/*" />
                 </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-gray-700 mb-1 block">PAN Card (PDF/Image) <span className="text-red-500">*</span></label>
-                  <input type="file" name="panCardUrl" onChange={handleFileChange} required className="w-full px-4 py-2 bg-gray-50 border border-gray-100 rounded-lg text-sm font-normal outline-none text-gray-800" />
+                <div className="flex flex-col gap-1.5 bg-gray-50/70 p-3.5 rounded-xl border border-gray-100">
+                  <label className="text-xs font-bold text-gray-700 block">PAN Card (PDF/Image) <span className="text-red-500">*</span></label>
+                  <input type="file" name="panCardUrl" onChange={handleFileChange} required className="w-full text-xs text-gray-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-[#081326] file:text-white hover:file:bg-[#11203d] cursor-pointer" />
                 </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-gray-700 mb-1 block">Aadhaar/ID Proof (PDF/Image) <span className="text-red-500">*</span></label>
-                  <input type="file" name="idProofUrl" onChange={handleFileChange} required className="w-full px-4 py-2 bg-gray-50 border border-gray-100 rounded-lg text-sm font-normal outline-none text-gray-800" />
+                <div className="flex flex-col gap-1.5 bg-gray-50/70 p-3.5 rounded-xl border border-gray-100">
+                  <label className="text-xs font-bold text-gray-700 block">Aadhaar/ID Proof (PDF/Image) <span className="text-red-500">*</span></label>
+                  <input type="file" name="idProofUrl" onChange={handleFileChange} required className="w-full text-xs text-gray-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-[#081326] file:text-white hover:file:bg-[#11203d] cursor-pointer" />
                 </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-gray-700 mb-1 block">Address Proof (PDF/Image)</label>
-                  <input type="file" name="addressProofUrl" onChange={handleFileChange} className="w-full px-4 py-2 bg-gray-50 border border-gray-100 rounded-lg text-sm font-normal outline-none text-gray-800" />
+                <div className="flex flex-col gap-1.5 bg-gray-50/70 p-3.5 rounded-xl border border-gray-100">
+                  <label className="text-xs font-bold text-gray-700 block">Address Proof (PDF/Image)</label>
+                  <input type="file" name="addressProofUrl" onChange={handleFileChange} className="w-full text-xs text-gray-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-[#081326] file:text-white hover:file:bg-[#11203d] cursor-pointer" />
                 </div>
               </div>
-              <p className="text-xs text-gray-500 font-normal mt-2">Note: If you have already uploaded files, uploading new ones will replace them.</p>
+              <p className="text-[11px] text-gray-500 font-normal">Tip: You can take pictures directly from your mobile camera or upload from gallery.</p>
             </div>
             
             {/* Action Bar */}
-            <div className="flex justify-between items-center bg-gray-50/50 p-4 rounded-2xl border border-gray-100">
+            <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4 bg-gray-50/80 p-4 sm:p-5 rounded-2xl border border-gray-100">
                <div className="flex items-center gap-3">
                  <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center shrink-0 border border-blue-100">
                    <Info className="w-4 h-4" />
                  </div>
                  <div>
-                   <p className="text-sm font-medium text-[#081326]">Important Note</p>
-                   <p className="text-xs text-gray-500 font-normal">Please review all details before submitting. An admin will verify them.</p>
+                   <p className="text-xs sm:text-sm font-bold text-[#081326]">Important Note</p>
+                   <p className="text-[11px] text-gray-500 font-normal">Please review all details before submitting.</p>
                  </div>
                </div>
                
-               <div className="flex gap-4">
-                 <button type="submit" disabled={loading} className="px-6 py-2.5 bg-[#081326] text-white rounded-xl text-sm font-medium hover:bg-[#11203d] transition-colors shadow-sm flex items-center gap-2 disabled:opacity-50">
+               <div className="flex">
+                 <button type="submit" disabled={loading} className="w-full sm:w-auto px-6 py-3 bg-[#081326] text-white rounded-xl text-sm font-bold hover:bg-[#11203d] transition-colors shadow-sm flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer">
                    {loading ? 'Submitting...' : 'Submit Client Profile'} <ChevronRight className="w-4 h-4" />
                  </button>
                </div>

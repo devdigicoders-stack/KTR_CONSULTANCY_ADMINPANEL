@@ -156,25 +156,25 @@ const OnlineApplications = () => {
     <div className="flex gap-6 relative items-start h-full pb-8">
       <Toaster position="top-right" />
       {/* Main Content */}
-      <div className={`flex flex-col space-y-6 transition-all duration-300 ${showPreview ? 'w-[calc(100%-400px)]' : 'w-full'}`}>
+      <div className="flex flex-col space-y-6 transition-all duration-300 w-full min-w-0">
         
         {/* Header Stats */}
-        <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
-          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
-            <p className="text-[11px] font-bold text-gray-500 mb-1">Total Submissions</p>
-            <h4 className="text-2xl font-black text-[#081326]">{applications.length}</h4>
+        <div className="grid gap-3 sm:gap-4 grid-cols-2 md:grid-cols-4">
+          <div className="bg-white p-3.5 sm:p-5 rounded-2xl border border-gray-100 shadow-xs">
+            <p className="text-[11px] font-bold text-gray-500 mb-0.5">Total Submissions</p>
+            <h4 className="text-xl sm:text-2xl font-black text-[#081326] leading-none">{applications.length}</h4>
           </div>
-          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
-            <p className="text-[11px] font-bold text-gray-500 mb-1">Pending</p>
-            <h4 className="text-2xl font-black text-orange-500">{applications.filter(a => a.status === 'Pending').length}</h4>
+          <div className="bg-white p-3.5 sm:p-5 rounded-2xl border border-gray-100 shadow-xs">
+            <p className="text-[11px] font-bold text-gray-500 mb-0.5">Pending</p>
+            <h4 className="text-xl sm:text-2xl font-black text-orange-500 leading-none">{applications.filter(a => a.status === 'Pending').length}</h4>
           </div>
-          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
-            <p className="text-[11px] font-bold text-gray-500 mb-1">In Progress</p>
-            <h4 className="text-2xl font-black text-blue-500">{applications.filter(a => a.status === 'In Progress').length}</h4>
+          <div className="bg-white p-3.5 sm:p-5 rounded-2xl border border-gray-100 shadow-xs">
+            <p className="text-[11px] font-bold text-gray-500 mb-0.5">In Progress</p>
+            <h4 className="text-xl sm:text-2xl font-black text-blue-500 leading-none">{applications.filter(a => a.status === 'In Progress').length}</h4>
           </div>
-          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
-            <p className="text-[11px] font-bold text-gray-500 mb-1">Completed</p>
-            <h4 className="text-2xl font-black text-green-500">{applications.filter(a => a.status === 'Completed').length}</h4>
+          <div className="bg-white p-3.5 sm:p-5 rounded-2xl border border-gray-100 shadow-xs">
+            <p className="text-[11px] font-bold text-gray-500 mb-0.5">Completed</p>
+            <h4 className="text-xl sm:text-2xl font-black text-green-500 leading-none">{applications.filter(a => a.status === 'Completed').length}</h4>
           </div>
         </div>
 
@@ -331,18 +331,23 @@ const OnlineApplications = () => {
         </div>
       </div>
 
-      {/* Slide-over Preview */}
+      {/* Slide-over Preview Drawer */}
       {showPreview && selectedApp && (
-        <div className="w-[380px] bg-white rounded-2xl shadow-xl border border-gray-100 flex flex-col h-[calc(100vh-120px)] sticky top-6 overflow-hidden animate-in slide-in-from-right-8 duration-300">
-          <div className="p-5 border-b border-gray-50 flex justify-between items-center bg-gray-50/50">
-            <h3 className="font-black text-[#081326]">Application Details</h3>
-            <button 
-              onClick={() => setShowPreview(false)}
-              className="w-8 h-8 rounded-full hover:bg-gray-200 flex items-center justify-center text-gray-500 transition-colors"
-            >
-              <X className="w-4 h-4 stroke-[2.5]" />
-            </button>
-          </div>
+        <div className="fixed inset-0 z-50 flex justify-end">
+          <div 
+            className="absolute inset-0 bg-[#081326]/60 backdrop-blur-xs transition-opacity" 
+            onClick={() => setShowPreview(false)}
+          ></div>
+          <div className="relative w-full max-w-lg bg-white h-full shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
+            <div className="p-4 sm:p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50/80">
+              <h3 className="font-black text-[#081326]">Application Details</h3>
+              <button 
+                onClick={() => setShowPreview(false)}
+                className="w-8 h-8 rounded-lg hover:bg-gray-200 flex items-center justify-center text-gray-500 transition-colors"
+              >
+                <X className="w-4 h-4 stroke-[2.5]" />
+              </button>
+            </div>
 
           <div className="flex-1 overflow-y-auto p-5 scrollbar-hide">
             <div className="space-y-6">
@@ -435,7 +440,7 @@ const OnlineApplications = () => {
                   </div>
                 </div>
               </div>
-            </div>
+           </div>
           </div>
           
           <div className="p-5 border-t border-gray-100 bg-gray-50/50 space-y-3">
@@ -479,7 +484,8 @@ const OnlineApplications = () => {
                      </button>
                   </>
                 )}
-             </div>
+              </div>
+           </div>
           </div>
         </div>
       )}

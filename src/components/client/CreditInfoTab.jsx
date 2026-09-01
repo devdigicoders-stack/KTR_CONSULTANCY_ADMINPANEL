@@ -120,10 +120,10 @@ const CreditInfoTab = ({ client }) => {
           
           <div className="space-y-4">
             {formData.accounts.map((acc, index) => (
-              <div key={index} className="grid grid-cols-6 gap-4 items-end bg-gray-50 p-4 rounded-xl border border-gray-100">
+              <div key={index} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4 items-end bg-gray-50 p-3.5 sm:p-4 rounded-xl border border-gray-100">
                 <div>
                   <label className="text-[10px] font-bold text-gray-500 mb-1 block">Type</label>
-                  <select value={acc.accountType} onChange={e => handleAccountChange(index, 'accountType', e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded text-xs outline-none">
+                  <select value={acc.accountType} onChange={e => handleAccountChange(index, 'accountType', e.target.value)} className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs outline-none">
                     <option>Credit Card</option>
                     <option>Personal Loan</option>
                     <option>Auto Loan</option>
@@ -132,15 +132,15 @@ const CreditInfoTab = ({ client }) => {
                 </div>
                 <div>
                   <label className="text-[10px] font-bold text-gray-500 mb-1 block">Lender</label>
-                  <input type="text" value={acc.lender} onChange={e => handleAccountChange(index, 'lender', e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded text-xs outline-none" placeholder="Bank Name" />
+                  <input type="text" value={acc.lender} onChange={e => handleAccountChange(index, 'lender', e.target.value)} className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs outline-none" placeholder="Bank Name" />
                 </div>
                 <div>
                   <label className="text-[10px] font-bold text-gray-500 mb-1 block">Number</label>
-                  <input type="text" value={acc.number} onChange={e => handleAccountChange(index, 'number', e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded text-xs outline-none" placeholder="XXXX-1234" />
+                  <input type="text" value={acc.number} onChange={e => handleAccountChange(index, 'number', e.target.value)} className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs outline-none" placeholder="XXXX-1234" />
                 </div>
                 <div>
                   <label className="text-[10px] font-bold text-gray-500 mb-1 block">Status</label>
-                  <select value={acc.status} onChange={e => handleAccountChange(index, 'status', e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded text-xs outline-none">
+                  <select value={acc.status} onChange={e => handleAccountChange(index, 'status', e.target.value)} className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs outline-none">
                     <option>Active</option>
                     <option>Closed</option>
                     <option>Default</option>
@@ -148,11 +148,11 @@ const CreditInfoTab = ({ client }) => {
                 </div>
                 <div>
                   <label className="text-[10px] font-bold text-gray-500 mb-1 block">Limit/Amount</label>
-                  <input type="text" value={acc.limit} onChange={e => handleAccountChange(index, 'limit', e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded text-xs outline-none" placeholder="₹ 1,00,000" />
+                  <input type="text" value={acc.limit} onChange={e => handleAccountChange(index, 'limit', e.target.value)} className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-xs outline-none" placeholder="₹ 1,00,000" />
                 </div>
-                <div className="flex justify-end pb-1.5">
-                  <button onClick={() => removeAccount(index)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg">
-                    <Trash2 className="w-4 h-4" />
+                <div className="flex justify-end pb-1">
+                  <button onClick={() => removeAccount(index)} className="w-full sm:w-auto p-2 text-red-500 hover:bg-red-50 rounded-lg flex items-center justify-center gap-1 text-xs font-bold">
+                    <Trash2 className="w-4 h-4" /> <span className="sm:hidden">Delete</span>
                   </button>
                 </div>
               </div>

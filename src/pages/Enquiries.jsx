@@ -130,25 +130,25 @@ const Enquiries = () => {
       <Toaster position="top-right" />
       
       {/* Main Content */}
-      <div className={`flex flex-col space-y-6 transition-all duration-300 ${showPreview ? 'w-[calc(100%-400px)]' : 'w-full'}`}>
+      <div className="flex flex-col space-y-6 transition-all duration-300 w-full min-w-0">
 
         {/* Stats */}
-        <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
-          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
-            <p className="text-[11px] font-bold text-gray-500 mb-1">Total Enquiries</p>
-            <h4 className="text-2xl font-black text-[#081326]">{enquiries.length}</h4>
+        <div className="grid gap-3 sm:gap-4 grid-cols-2 md:grid-cols-4">
+          <div className="bg-white p-3.5 sm:p-5 rounded-2xl border border-gray-100 shadow-xs">
+            <p className="text-[11px] font-bold text-gray-500 mb-0.5">Total Enquiries</p>
+            <h4 className="text-xl sm:text-2xl font-black text-[#081326] leading-none">{enquiries.length}</h4>
           </div>
-          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
-            <p className="text-[11px] font-bold text-gray-500 mb-1">Unread</p>
-            <h4 className="text-2xl font-black text-orange-500">{enquiries.filter(e => e.status === 'Unread').length}</h4>
+          <div className="bg-white p-3.5 sm:p-5 rounded-2xl border border-gray-100 shadow-xs">
+            <p className="text-[11px] font-bold text-gray-500 mb-0.5">Unread</p>
+            <h4 className="text-xl sm:text-2xl font-black text-orange-500 leading-none">{enquiries.filter(e => e.status === 'Unread').length}</h4>
           </div>
-          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
-            <p className="text-[11px] font-bold text-gray-500 mb-1">Read</p>
-            <h4 className="text-2xl font-black text-blue-500">{enquiries.filter(e => e.status === 'Read').length}</h4>
+          <div className="bg-white p-3.5 sm:p-5 rounded-2xl border border-gray-100 shadow-xs">
+            <p className="text-[11px] font-bold text-gray-500 mb-0.5">Read</p>
+            <h4 className="text-xl sm:text-2xl font-black text-blue-500 leading-none">{enquiries.filter(e => e.status === 'Read').length}</h4>
           </div>
-          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
-            <p className="text-[11px] font-bold text-gray-500 mb-1">Replied</p>
-            <h4 className="text-2xl font-black text-green-500">{enquiries.filter(e => e.status === 'Replied').length}</h4>
+          <div className="bg-white p-3.5 sm:p-5 rounded-2xl border border-gray-100 shadow-xs">
+            <p className="text-[11px] font-bold text-gray-500 mb-0.5">Replied</p>
+            <h4 className="text-xl sm:text-2xl font-black text-green-500 leading-none">{enquiries.filter(e => e.status === 'Replied').length}</h4>
           </div>
         </div>
 
@@ -271,12 +271,16 @@ const Enquiries = () => {
         </div>
       </div>
 
-      {/* Slide-over Preview */}
+      {/* Slide-over Preview Drawer */}
       {showPreview && selectedEnq && (
-        <div className="w-[390px] flex-shrink-0 sticky top-0">
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col max-h-[calc(100vh-80px)]">
+        <div className="fixed inset-0 z-50 flex justify-end">
+          <div 
+            className="absolute inset-0 bg-[#081326]/60 backdrop-blur-xs transition-opacity" 
+            onClick={() => { setShowPreview(false); setSelectedEnq(null); }}
+          ></div>
+          <div className="relative w-full max-w-lg bg-white h-full shadow-2xl animate-in slide-in-from-right duration-300 flex flex-col">
             {/* Header */}
-            <div className="p-5 border-b border-gray-100 flex items-start justify-between">
+            <div className="p-4 sm:p-5 border-b border-gray-100 flex items-start justify-between bg-gray-50/80">
               <div>
                 <h3 className="font-black text-[#081326] text-[15px]">{selectedEnq.fullName}</h3>
                 <p className="text-gray-400 text-[12px] font-medium mt-0.5">{selectedEnq.phone}{selectedEnq.email && ` · ${selectedEnq.email}`}</p>

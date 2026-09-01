@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Download, Search, CheckCircle, XCircle, Clock, Save, FileText } from 'lucide-react';
-import * as XLSX from 'xlsx';
 
 const EligibilityChecks = () => {
   const [checks, setChecks] = useState([]);
@@ -64,26 +63,31 @@ const EligibilityChecks = () => {
   };
 
   const exportToExcel = () => {
-    const exportData = filteredChecks.map(item => ({
-      'Case ID': item.caseId,
-      'Date': new Date(item.createdAt).toLocaleDateString(),
-      'Name': item.fullName,
-      'Mobile': item.mobile,
-      'Location': item.location,
-      'Property Name': item.propertyName || 'N/A',
-      'Property Type': item.propertyType,
-      'Loan Requirement': item.loanRequirement,
-      'Property Status': item.propertyStatus || 'N/A',
-      'Existing Docs': item.existingDocs || 'N/A',
-      'Additional Details': item.additionalDetails || 'N/A',
-      'Status': item.status,
-      'Remark': item.remark || ''
-    }));
+    const headers = ['Case ID', 'Date', 'Name', 'Mobile', 'Location', 'Property Name', 'Property Type', 'Loan Requirement', 'Property Status', 'Existing Docs', 'Additional Details', 'Status', 'Remark'];
+    const rows = filteredChecks.map(item => [
+      item.caseId || '',
+      new Date(item.createdAt).toLocaleDateString(),
+      `"${(item.fullName || '').replace(/"/g, '""')}"`,
+      item.mobile || '',
+      `"${(item.location || '').replace(/"/g, '""')}"`,
+      `"${(item.propertyName || 'N/A').replace(/"/g, '""')}"`,
+      `"${(item.propertyType || '').replace(/"/g, '""')}"`,
+      `"${(item.loanRequirement || '').replace(/"/g, '""')}"`,
+      `"${(item.propertyStatus || 'N/A').replace(/"/g, '""')}"`,
+      `"${(item.existingDocs || 'N/A').replace(/"/g, '""')}"`,
+      `"${(item.additionalDetails || 'N/A').replace(/"/g, '""')}"`,
+      item.status || '',
+      `"${(item.remark || '').replace(/"/g, '""')}"`
+    ]);
 
-    const ws = XLSX.utils.json_to_sheet(exportData);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Eligibility Checks");
-    XLSX.writeFile(wb, "Eligibility_Checks.xlsx");
+    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "Eligibility_Checks.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const filteredChecks = checks.filter(item => {

@@ -117,71 +117,73 @@ const Documents = () => {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex items-start gap-4 hover:border-[#f59e0b] transition-all">
-          <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center shrink-0 border border-blue-100"><FileText className="w-6 h-6 text-blue-500" /></div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div className="bg-white rounded-2xl shadow-xs border border-gray-100 p-3.5 sm:p-5 flex items-start gap-3 sm:gap-4 hover:border-[#f59e0b] transition-all">
+          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-blue-50 flex items-center justify-center shrink-0 border border-blue-100"><FileText className="w-5 h-5 sm:w-6 sm:h-6 text-blue-500" /></div>
           <div>
-            <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-1">Total Documents</h5>
-            <p className="text-2xl font-black text-[#081326] leading-none">{documents.length}</p>
+            <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-0.5">Total</h5>
+            <p className="text-xl sm:text-2xl font-black text-[#081326] leading-none">{documents.length}</p>
           </div>
         </div>
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex items-start gap-4 hover:border-[#f59e0b] transition-all">
-          <div className="w-12 h-12 rounded-xl bg-green-50 flex items-center justify-center shrink-0 border border-green-100"><CheckCircle className="w-6 h-6 text-green-500" /></div>
+        <div className="bg-white rounded-2xl shadow-xs border border-gray-100 p-3.5 sm:p-5 flex items-start gap-3 sm:gap-4 hover:border-[#f59e0b] transition-all">
+          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-green-50 flex items-center justify-center shrink-0 border border-green-100"><CheckCircle className="w-5 h-5 sm:w-6 sm:h-6 text-green-500" /></div>
           <div>
-            <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-1">Verified</h5>
-            <p className="text-2xl font-black text-[#081326] leading-none">{documents.filter(d => d.status === 'Verified').length}</p>
+            <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-0.5">Verified</h5>
+            <p className="text-xl sm:text-2xl font-black text-[#081326] leading-none">{documents.filter(d => d.status === 'Verified').length}</p>
           </div>
         </div>
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex items-start gap-4 hover:border-[#f59e0b] transition-all">
-          <div className="w-12 h-12 rounded-xl bg-orange-50 flex items-center justify-center shrink-0 border border-orange-100"><FileText className="w-6 h-6 text-orange-500" /></div>
+        <div className="bg-white rounded-2xl shadow-xs border border-gray-100 p-3.5 sm:p-5 flex items-start gap-3 sm:gap-4 hover:border-[#f59e0b] transition-all">
+          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-orange-50 flex items-center justify-center shrink-0 border border-orange-100"><FileText className="w-5 h-5 sm:w-6 sm:h-6 text-orange-500" /></div>
           <div>
-            <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-1">Pending</h5>
-            <p className="text-2xl font-black text-[#081326] leading-none">{documents.filter(d => d.status === 'Pending').length}</p>
+            <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-0.5">Pending</h5>
+            <p className="text-xl sm:text-2xl font-black text-[#081326] leading-none">{documents.filter(d => d.status === 'Pending').length}</p>
           </div>
         </div>
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex items-start gap-4 hover:border-[#f59e0b] transition-all">
-          <div className="w-12 h-12 rounded-xl bg-red-50 flex items-center justify-center shrink-0 border border-red-100"><FileText className="w-6 h-6 text-red-500" /></div>
+        <div className="bg-white rounded-2xl shadow-xs border border-gray-100 p-3.5 sm:p-5 flex items-start gap-3 sm:gap-4 hover:border-[#f59e0b] transition-all">
+          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-red-50 flex items-center justify-center shrink-0 border border-red-100"><FileText className="w-5 h-5 sm:w-6 sm:h-6 text-red-500" /></div>
           <div>
-            <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-1">Rejected</h5>
-            <p className="text-2xl font-black text-[#081326] leading-none">{documents.filter(d => d.status === 'Rejected').length}</p>
+            <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-wider mb-0.5">Rejected</h5>
+            <p className="text-xl sm:text-2xl font-black text-[#081326] leading-none">{documents.filter(d => d.status === 'Rejected').length}</p>
           </div>
         </div>
       </div>
 
       {/* Main Table Area */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 flex flex-col overflow-hidden">
+      <div className="bg-white rounded-2xl shadow-xs border border-gray-100 flex flex-col overflow-hidden">
         
         {/* Filters */}
-        <div className="p-5 border-b border-gray-50 flex gap-4 flex-wrap bg-gray-50/30">
-          <select 
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value)}
-            className="border border-gray-200 rounded-lg px-4 py-2.5 text-xs font-bold text-gray-600 outline-none w-48 bg-white cursor-pointer hover:border-gray-300 transition-colors"
-          >
-            <option>All Document Types</option>
-            <option>Identity Proof</option>
-            <option>Address Proof</option>
-            <option>Financial</option>
-            <option>Additional</option>
-          </select>
-          <select 
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="border border-gray-200 rounded-lg px-4 py-2.5 text-xs font-bold text-gray-600 outline-none w-40 bg-white cursor-pointer hover:border-gray-300 transition-colors"
-          >
-            <option>All Status</option>
-            <option>Verified</option>
-            <option>Pending</option>
-            <option>Rejected</option>
-          </select>
-          <div className="relative flex-1 min-w-[250px]">
-            <Search className="w-4 h-4 text-gray-400 absolute left-4 top-1/2 -translate-y-1/2 stroke-[2.5]" />
+        <div className="p-3.5 sm:p-5 border-b border-gray-100 flex flex-col sm:flex-row gap-2.5 sm:gap-4 bg-gray-50/30">
+          <div className="flex gap-2 w-full sm:w-auto">
+            <select 
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+              className="flex-1 sm:flex-none border border-gray-200 rounded-lg px-3 py-2.5 text-xs font-bold text-gray-600 outline-none sm:w-44 bg-white cursor-pointer hover:border-gray-300 transition-colors"
+            >
+              <option>All Document Types</option>
+              <option>Identity Proof</option>
+              <option>Address Proof</option>
+              <option>Financial</option>
+              <option>Additional</option>
+            </select>
+            <select 
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="flex-1 sm:flex-none border border-gray-200 rounded-lg px-3 py-2.5 text-xs font-bold text-gray-600 outline-none sm:w-36 bg-white cursor-pointer hover:border-gray-300 transition-colors"
+            >
+              <option>All Status</option>
+              <option>Verified</option>
+              <option>Pending</option>
+              <option>Rejected</option>
+            </select>
+          </div>
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 stroke-[2.5]" />
             <input 
               type="text" 
-              placeholder={role === 'admin' ? "Search by document or client name..." : "Search by document..."} 
+              placeholder={role === 'admin' ? "Search document or client..." : "Search document..."} 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg text-xs font-bold outline-none focus:border-[#f59e0b] transition-colors" 
+              className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg text-xs font-bold outline-none focus:border-[#f59e0b] transition-colors bg-white" 
             />
           </div>
         </div>

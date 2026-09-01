@@ -12,14 +12,14 @@ import { IndiaMapWidget } from './IndiaMapWidget';
 import api from '../../api/axios';
 
 const StatsCard = ({ title, value, icon: Icon, trend, isPositive, iconColorClass }) => (
-  <div className="bg-white p-5 rounded-[20px] border border-gray-100/80 shadow-sm flex items-center gap-4 xl:gap-5 h-full">
-    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 ${iconColorClass}`}>
-      <Icon className="w-6 h-6 stroke-[1.5]" />
+  <div className="bg-white p-3.5 sm:p-5 rounded-2xl border border-gray-100/80 shadow-xs flex items-center gap-3 sm:gap-4 xl:gap-5 h-full hover:border-[#f59e0b]/40 transition-colors">
+    <div className={`w-11 h-11 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center shrink-0 ${iconColorClass}`}>
+      <Icon className="w-5 h-5 sm:w-6 sm:h-6 stroke-[1.8]" />
     </div>
-    <div className="flex flex-col items-start justify-center">
-      <h4 className="text-[11px] xl:text-xs text-[#081326] font-semibold mb-0.5">{title}</h4>
-      <p className="text-2xl xl:text-[28px] font-bold text-[#081326] leading-none mb-1.5 tracking-tight">{value}</p>
-      <div className="flex items-center text-[10px] font-medium">
+    <div className="flex flex-col items-start justify-center min-w-0">
+      <h4 className="text-[11px] xl:text-xs text-gray-500 font-semibold mb-0.5 truncate">{title}</h4>
+      <p className="text-xl sm:text-2xl xl:text-[26px] font-black text-[#081326] leading-none mb-1 tracking-tight">{value}</p>
+      <div className="flex items-center text-[10px] font-semibold">
         <span className={isPositive ? "text-green-600" : (isPositive === false ? "text-red-500" : "text-gray-400")}>
           {trend}
         </span>
@@ -29,8 +29,8 @@ const StatsCard = ({ title, value, icon: Icon, trend, isPositive, iconColorClass
 );
 
 const QuickActionButton = ({ icon: Icon, label, path }) => (
-  <Link to={path} className="flex flex-col items-center justify-center py-3 px-2 border border-gray-100/80 rounded-xl hover:border-[#081326] hover:bg-gray-50 transition-colors group shadow-[0_2px_10px_rgb(0,0,0,0.02)] bg-white h-full">
-    <Icon className="w-5 h-5 xl:w-5 xl:h-5 text-[#081326] mb-1.5 stroke-[1.5]" />
+  <Link to={path} className="flex flex-col items-center justify-center py-2.5 px-2 border border-gray-100/80 rounded-xl hover:border-[#081326] hover:bg-gray-50 transition-colors group shadow-xs bg-white h-full">
+    <Icon className="w-4 h-4 sm:w-5 sm:h-5 text-[#081326] mb-1 stroke-[1.8]" />
     <span className="text-[9px] xl:text-[10px] font-bold text-[#081326] text-center leading-[1.2] px-1" dangerouslySetInnerHTML={{ __html: label }}></span>
   </Link>
 );
@@ -58,7 +58,7 @@ const AdminDashboard = () => {
   };
 
   if (loading || !data) {
-    return <div className="flex justify-center items-center h-screen"><div className="animate-spin rounded-full h-12 w-12 border-4 border-[#f59e0b] border-t-transparent"></div></div>;
+    return <div className="flex justify-center items-center h-[50vh]"><div className="animate-spin rounded-full h-10 w-10 border-4 border-[#f59e0b] border-t-transparent"></div></div>;
   }
 
   const { stats, clientStatus, documentStatus, latestClients, topServices, recentActivities, overallGrowth, clientLocations } = data;
@@ -95,10 +95,10 @@ const AdminDashboard = () => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6">
+    <div className="max-w-7xl mx-auto space-y-5 sm:space-y-6">
       
       {/* Row 1: Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-5">
         <StatsCard title="Total Users" value={stats.totalUsers.value} icon={Users} trend={stats.totalUsers.trend.text} isPositive={stats.totalUsers.trend.isPositive} iconColorClass="bg-blue-50 text-blue-600" />
         <StatsCard title="Total Clients" value={stats.totalClients.value} icon={Users} trend={stats.totalClients.trend.text} isPositive={stats.totalClients.trend.isPositive} iconColorClass="bg-orange-50 text-orange-500" />
         <StatsCard title="Total Documents" value={stats.totalDocuments.value} icon={FileText} trend={stats.totalDocuments.trend.text} isPositive={stats.totalDocuments.trend.isPositive} iconColorClass="bg-purple-50 text-purple-600" />
@@ -111,11 +111,11 @@ const AdminDashboard = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-12 gap-5">
         
         {/* Overall Growth Chart */}
-        <div className="lg:col-span-2 xl:col-span-6 bg-white p-6 rounded-[20px] shadow-[0_4px_20px_rgb(0,0,0,0.03)] border border-gray-50 flex flex-col h-[350px]">
-          <div className="flex justify-between items-center mb-6">
-            <div className="flex items-center gap-6">
-              <h3 className="font-bold text-[#081326]">Overall Growth (6M)</h3>
-              <div className="flex items-center gap-4 text-[11px] font-bold">
+        <div className="lg:col-span-2 xl:col-span-6 bg-white p-4 sm:p-6 rounded-2xl shadow-xs border border-gray-100 flex flex-col min-h-[320px] sm:h-[350px]">
+          <div className="flex justify-between items-center mb-4 sm:mb-6">
+            <div className="flex items-center gap-4 sm:gap-6">
+              <h3 className="font-bold text-[#081326] text-sm sm:text-base">Overall Growth (6M)</h3>
+              <div className="flex items-center gap-3 text-[11px] font-bold">
                 <div className="flex items-center gap-1.5">
                   <div className="w-2 h-2 rounded-full bg-[#081326]"></div>
                   <span className="text-gray-600">Clients</span>
@@ -133,10 +133,10 @@ const AdminDashboard = () => {
         </div>
 
         {/* Client Status Donut */}
-        <div className="lg:col-span-1 xl:col-span-3 bg-white p-4 xl:p-5 rounded-[20px] shadow-[0_4px_20px_rgb(0,0,0,0.03)] border border-gray-50 flex flex-col h-[350px]">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="font-bold text-[#081326] whitespace-nowrap text-sm xl:text-base">Client Status</h3>
-            <select className="text-[10px] xl:text-[11px] font-semibold text-gray-500 bg-gray-50 border border-gray-100 rounded-lg px-2 py-1 outline-none shrink-0 ml-1">
+        <div className="lg:col-span-1 xl:col-span-3 bg-white p-4 sm:p-5 rounded-2xl shadow-xs border border-gray-100 flex flex-col min-h-[300px] sm:h-[350px]">
+          <div className="flex justify-between items-center mb-4 sm:mb-6">
+            <h3 className="font-bold text-[#081326] whitespace-nowrap text-sm sm:text-base">Client Status</h3>
+            <select className="text-[10px] sm:text-[11px] font-semibold text-gray-500 bg-gray-50 border border-gray-100 rounded-lg px-2 py-1 outline-none shrink-0 ml-1">
               <option>All Time</option>
             </select>
           </div>
@@ -146,18 +146,19 @@ const AdminDashboard = () => {
         </div>
 
         {/* Quick Actions */}
-        <div className="lg:col-span-1 xl:col-span-3 bg-white p-4 xl:p-5 rounded-[20px] border border-gray-100/80 shadow-[0_4px_20px_rgb(0,0,0,0.03)] flex flex-col h-[350px]">
-          <h3 className="font-bold text-[#081326] mb-5 text-sm xl:text-base">Quick Actions</h3>
-          <div className="grid grid-cols-2 gap-2 xl:gap-3 flex-1">
-            <QuickActionButton icon={UserPlus} label="+ Add New<br/>Client" path="/clients/new" />
-            <QuickActionButton icon={ShieldCheck} label="Check CIVIL<br/>Score" path="/cibil" />
-            <QuickActionButton icon={Upload} label="Upload<br/>Document" path="/documents" />
-            <QuickActionButton icon={Plus} label="Add New<br/>Service" path="/add-service" />
-            <QuickActionButton icon={Users} label="Manage<br/>Users" path="/users" />
-            <QuickActionButton icon={Activity} label="View<br/>Reports" path="/reports" />
+        <div className="lg:col-span-1 xl:col-span-3 bg-white p-4 sm:p-5 rounded-2xl border border-gray-100 shadow-xs flex flex-col min-h-[250px] sm:h-[350px]">
+          <h3 className="font-bold text-[#081326] mb-3 sm:mb-4 text-sm sm:text-base">Quick Actions</h3>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-2 gap-2 sm:gap-2.5 flex-1">
+            <QuickActionButton icon={UserPlus} label="+ Add Client" path="/clients/new" />
+            <QuickActionButton icon={ShieldCheck} label="Check CIVIL" path="/cibil" />
+            <QuickActionButton icon={Upload} label="Upload Docs" path="/documents" />
+            <QuickActionButton icon={Plus} label="Add Service" path="/add-service" />
+            <QuickActionButton icon={Users} label="Manage Users" path="/users" />
+            <QuickActionButton icon={Activity} label="View Reports" path="/reports" />
           </div>
         </div>
       </div>
+
 
       {/* Row 3: Activity, Services, Map */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">

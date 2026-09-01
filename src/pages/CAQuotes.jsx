@@ -132,25 +132,25 @@ const CAQuotes = () => {
       <Toaster position="top-right" />
 
       {/* Main Content */}
-      <div className={`flex flex-col space-y-6 transition-all duration-300 ${showPreview ? 'w-[calc(100%-400px)]' : 'w-full'}`}>
+      <div className="flex flex-col space-y-6 transition-all duration-300 w-full min-w-0">
 
         {/* Stats */}
-        <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
-          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
-            <p className="text-[11px] font-bold text-gray-500 mb-1">Total Requests</p>
-            <h4 className="text-2xl font-black text-[#081326]">{quotes.length}</h4>
+        <div className="grid gap-3 sm:gap-4 grid-cols-2 md:grid-cols-4">
+          <div className="bg-white p-3.5 sm:p-5 rounded-2xl border border-gray-100 shadow-xs">
+            <p className="text-[11px] font-bold text-gray-500 mb-0.5">Total Requests</p>
+            <h4 className="text-xl sm:text-2xl font-black text-[#081326] leading-none">{quotes.length}</h4>
           </div>
-          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
-            <p className="text-[11px] font-bold text-gray-500 mb-1">New</p>
-            <h4 className="text-2xl font-black text-orange-500">{quotes.filter(q => q.status === 'New').length}</h4>
+          <div className="bg-white p-3.5 sm:p-5 rounded-2xl border border-gray-100 shadow-xs">
+            <p className="text-[11px] font-bold text-gray-500 mb-0.5">New</p>
+            <h4 className="text-xl sm:text-2xl font-black text-orange-500 leading-none">{quotes.filter(q => q.status === 'New').length}</h4>
           </div>
-          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
-            <p className="text-[11px] font-bold text-gray-500 mb-1">In Discussion</p>
-            <h4 className="text-2xl font-black text-blue-500">{quotes.filter(q => q.status === 'In Discussion').length}</h4>
+          <div className="bg-white p-3.5 sm:p-5 rounded-2xl border border-gray-100 shadow-xs">
+            <p className="text-[11px] font-bold text-gray-500 mb-0.5">In Discussion</p>
+            <h4 className="text-xl sm:text-2xl font-black text-blue-500 leading-none">{quotes.filter(q => q.status === 'In Discussion').length}</h4>
           </div>
-          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
-            <p className="text-[11px] font-bold text-gray-500 mb-1">Quote Sent</p>
-            <h4 className="text-2xl font-black text-purple-500">{quotes.filter(q => q.status === 'Quote Sent').length}</h4>
+          <div className="bg-white p-3.5 sm:p-5 rounded-2xl border border-gray-100 shadow-xs">
+            <p className="text-[11px] font-bold text-gray-500 mb-0.5">Quote Sent</p>
+            <h4 className="text-xl sm:text-2xl font-black text-purple-500 leading-none">{quotes.filter(q => q.status === 'Quote Sent').length}</h4>
           </div>
         </div>
 
@@ -270,12 +270,16 @@ const CAQuotes = () => {
         </div>
       </div>
 
-      {/* Slide-over Preview */}
+      {/* Slide-over Preview Drawer */}
       {showPreview && selectedQuote && (
-        <div className="w-[390px] flex-shrink-0 sticky top-0">
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col max-h-[calc(100vh-80px)]">
+        <div className="fixed inset-0 z-50 flex justify-end">
+          <div 
+            className="absolute inset-0 bg-[#081326]/60 backdrop-blur-xs transition-opacity" 
+            onClick={() => { setShowPreview(false); setSelectedQuote(null); }}
+          ></div>
+          <div className="relative w-full max-w-lg bg-white h-full shadow-2xl animate-in slide-in-from-right duration-300 flex flex-col">
             {/* Header */}
-            <div className="p-5 border-b border-gray-100 flex items-start justify-between">
+            <div className="p-4 sm:p-5 border-b border-gray-100 flex items-start justify-between bg-gray-50/80">
               <div>
                 <h3 className="font-black text-[#081326] text-[15px]">{selectedQuote.fullName}</h3>
                 <p className="text-gray-400 text-[12px] font-medium mt-0.5">{selectedQuote.quoteId}</p>

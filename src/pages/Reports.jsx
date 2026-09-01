@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { Download, Calendar, Activity, Users, FileText, CheckSquare, Briefcase } from 'lucide-react';
-import * as XLSX from 'xlsx';
 
 const Reports = () => {
   const [reportData, setReportData] = useState(null);
@@ -61,34 +60,25 @@ const Reports = () => {
     if (!reportData) return;
 
     const summaryData = [
-      { Category: 'Total Clients', Count: reportData.summary.clients },
-      { Category: 'Online Applications', Count: reportData.summary.applications },
-      { Category: 'Enquiries', Count: reportData.summary.enquiries },
-      { Category: 'Cibil Cases', Count: reportData.summary.cibilCases },
-      { Category: 'CA Quotes', Count: reportData.summary.caQuotes },
-      { Category: 'Chain Deeds', Count: reportData.summary.chainDeeds },
-      { Category: 'Property Assessments', Count: reportData.summary.propertyAssessments },
-      { Category: 'Eligibility Checks', Count: reportData.summary.eligibilityChecks },
+      ['Category', 'Count'],
+      ['Total Clients', reportData.summary.clients],
+      ['Online Applications', reportData.summary.applications],
+      ['Enquiries', reportData.summary.enquiries],
+      ['Cibil Cases', reportData.summary.cibilCases],
+      ['CA Quotes', reportData.summary.caQuotes],
+      ['Chain Deeds', reportData.summary.chainDeeds],
+      ['Property Assessments', reportData.summary.propertyAssessments],
+      ['Eligibility Checks', reportData.summary.eligibilityChecks],
     ];
 
-    const ws = XLSX.utils.json_to_sheet(summaryData);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Report Summary");
-    
-    // Detailed list export for applications as an example sheet
-    if (reportData.lists.applications.length > 0) {
-      const appData = reportData.lists.applications.map(app => ({
-        ID: app.applicationId,
-        Date: new Date(app.createdAt).toLocaleDateString(),
-        Name: app.personalInfo?.fullName || 'N/A',
-        Service: app.serviceRequired,
-        Status: app.status
-      }));
-      const wsApps = XLSX.utils.json_to_sheet(appData);
-      XLSX.utils.book_append_sheet(wb, wsApps, "Applications");
-    }
-
-    XLSX.writeFile(wb, `KTR_Report_${new Date().toISOString().split('T')[0]}.xlsx`);
+    const csvContent = "data:text/csv;charset=utf-8," + summaryData.map(e => e.join(',')).join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `KTR_Report_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const getChartData = () => {

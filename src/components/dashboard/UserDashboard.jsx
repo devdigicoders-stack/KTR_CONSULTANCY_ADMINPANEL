@@ -1,21 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Users, FolderOpen, ShieldCheck, MoreVertical, Plus, Upload, FileText, Download 
+  Users, FolderOpen, ShieldCheck, MoreVertical, Plus, Upload, FileText, Download, BarChart2, ChevronDown
 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ClientOverviewChart, ClientsByStatusChart } from './Charts';
 import api from '../../api/axios';
 
-const StatsCard = ({ title, value, icon: Icon, trend, isPositive, color }) => (
-  <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between">
-    <div className="flex items-start justify-between mb-4">
+const StatsCard = ({ title, value, icon: Icon, trend, isPositive }) => (
+  <div className="bg-white p-4 sm:p-5 rounded-2xl shadow-xs border border-gray-100 flex flex-col justify-between">
+    <div className="flex items-start justify-between mb-3 sm:mb-4">
       <div className="flex items-center gap-3">
-        <div className="w-11 h-11 rounded-full flex items-center justify-center bg-[#f59e0b]/10 text-[#081326] shrink-0">
-          <Icon className="w-5 h-5 stroke-[1.5]" />
+        <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center bg-[#f59e0b]/10 text-[#081326] shrink-0">
+          <Icon className="w-5 h-5 stroke-[1.8]" />
         </div>
-        <div className="flex flex-col">
-          <h4 className="text-xs text-gray-500 font-medium mb-1 leading-tight">{title}</h4>
-          <p className="text-xl font-bold text-[#081326] leading-none">{value}</p>
+        <div className="flex flex-col min-w-0">
+          <h4 className="text-xs text-gray-500 font-medium mb-0.5 leading-tight truncate">{title}</h4>
+          <p className="text-xl sm:text-2xl font-black text-[#081326] leading-none">{value}</p>
         </div>
       </div>
       <button className="text-gray-400 hover:text-gray-600 shrink-0">
@@ -24,10 +24,10 @@ const StatsCard = ({ title, value, icon: Icon, trend, isPositive, color }) => (
     </div>
     
     <div className="flex items-center gap-1.5 text-xs">
-      <span className={isPositive ? "text-green-500 font-medium" : "text-gray-500 font-medium"}>
+      <span className={isPositive ? "text-green-600 font-semibold" : "text-gray-500 font-medium"}>
         {trend}
       </span>
-      <span className="text-gray-400">
+      <span className="text-gray-400 text-[11px]">
         from last month
       </span>
     </div>
@@ -37,7 +37,7 @@ const StatsCard = ({ title, value, icon: Icon, trend, isPositive, color }) => (
 const RecentActivityItem = ({ icon: Icon, text, highlight, time }) => (
   <div className="flex gap-3 items-center py-3 border-b border-gray-50 last:border-0 first:pt-0 last:pb-0">
     <div className="w-8 h-8 rounded-full bg-[#f59e0b]/10 flex items-center justify-center shrink-0">
-      <Icon className="w-4 h-4 text-[#081326] stroke-[1.5]" />
+      <Icon className="w-4 h-4 text-[#081326] stroke-[1.8]" />
     </div>
     <div className="flex-1 min-w-0 pr-2">
       <p className="text-xs text-gray-600 leading-relaxed truncate">
@@ -50,10 +50,10 @@ const RecentActivityItem = ({ icon: Icon, text, highlight, time }) => (
   </div>
 );
 
-const QuickActionButton = ({ icon: Icon, label }) => (
-  <button className="flex flex-col items-center justify-center py-4 px-2 border border-gray-100 rounded-xl hover:border-[#f59e0b] hover:bg-[#f59e0b]/5 transition-colors group shadow-sm bg-white h-full">
-    <Icon className="w-5 h-5 text-[#081326] group-hover:text-[#f59e0b] mb-2 transition-colors stroke-[1.5]" />
-    <span className="text-[10px] xl:text-[11px] font-semibold text-[#081326] text-center leading-tight">{label}</span>
+const QuickActionButton = ({ icon: Icon, label, onClick }) => (
+  <button onClick={onClick} className="flex flex-col items-center justify-center py-3.5 px-2 border border-gray-100 rounded-xl hover:border-[#f59e0b] hover:bg-[#f59e0b]/5 transition-colors group shadow-xs bg-white h-full cursor-pointer">
+    <Icon className="w-5 h-5 text-[#081326] group-hover:text-[#f59e0b] mb-1.5 transition-colors stroke-[1.8]" />
+    <span className="text-[10px] xl:text-[11px] font-bold text-[#081326] text-center leading-tight">{label}</span>
   </button>
 );
 
@@ -89,33 +89,30 @@ const UserDashboard = () => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6">
+    <div className="max-w-7xl mx-auto space-y-5 sm:space-y-6">
       
-      {/* Top Header with Export */}
-      <div className="flex justify-between items-center">
-        <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-          <BarChartIcon className="w-5 h-5 text-gray-500" /> Dashboard Overview
+      {/* Top Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+        <h2 className="text-xl font-bold text-[#081326] flex items-center gap-2">
+          <BarChart2 className="w-5 h-5 text-[#f59e0b]" /> Dashboard Overview
         </h2>
-        <button className="bg-[#081326] text-white px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 shadow-sm hover:bg-[#11203d] transition-colors">
-          <Download className="w-4 h-4" /> Export Report <ChevronDownIcon className="w-3 h-3 ml-1" />
-        </button>
       </div>
 
       {/* Stats Cards Row */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <StatsCard title="Total Clients" value={stats.totalClients} icon={Users} trend="↑ 0%" isPositive={true} />
-        <StatsCard title="Documents Uploaded" value={stats.totalDocuments} icon={FolderOpen} trend="↑ 0%" isPositive={true} />
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4">
+        <StatsCard title="Total Clients" value={stats.totalClients} icon={Users} trend="↑ Active" isPositive={true} />
+        <StatsCard title="Documents Uploaded" value={stats.totalDocuments} icon={FolderOpen} trend="↑ Uploaded" isPositive={true} />
       </div>
 
       {/* Charts & Activity Row 1 */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 h-[350px]">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 sm:gap-6">
+        <div className="lg:col-span-2 min-h-[300px] sm:h-[350px]">
           <ClientOverviewChart data={stats.clientOverview} />
         </div>
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col h-[350px]">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="font-bold text-gray-800">Recent Activities</h3>
-            <Link to="/clients" className="text-xs font-semibold text-[#081326] hover:underline">View All</Link>
+        <div className="bg-white p-4 sm:p-6 rounded-2xl shadow-xs border border-gray-100 flex flex-col min-h-[280px] sm:h-[350px]">
+          <div className="flex justify-between items-center mb-4 sm:mb-6">
+            <h3 className="font-bold text-[#081326] text-sm sm:text-base">Recent Activities</h3>
+            <Link to="/clients" className="text-xs font-semibold text-[#f59e0b] hover:underline">View All</Link>
           </div>
           <div className="flex-1 overflow-y-auto pr-2 space-y-0 scrollbar-hide">
             {stats.recentActivities && stats.recentActivities.length > 0 ? (
@@ -134,6 +131,7 @@ const UserDashboard = () => {
           </div>
         </div>
       </div>
+
 
       {/* Charts & Quick Actions Row 2 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
