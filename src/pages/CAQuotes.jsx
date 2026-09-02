@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
-import { RefreshCcw, Eye, Trash2, X, CheckCircle, MessageSquare, AlertTriangle } from 'lucide-react';
+import { RefreshCcw, Eye, Trash2, X, CheckCircle, MessageSquare, AlertTriangle, FileText, Download, ExternalLink } from 'lucide-react';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import toast, { Toaster } from 'react-hot-toast';
+
+const BACKEND_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api').replace('/api', '');
 
 const StatusBadge = ({ status }) => {
   const styles = {
@@ -236,7 +238,14 @@ const CAQuotes = () => {
                         </div>
                       </td>
                       <td className="px-5 py-3.5 whitespace-nowrap">
-                        <span className="text-[11px] text-blue-600 font-bold">{q.serviceType}</span>
+                        <div className="flex flex-col gap-1">
+                          <span className="text-[11px] text-blue-600 font-bold">{q.serviceType}</span>
+                          {q.documents && q.documents.length > 0 && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded w-fit">
+                              📎 {q.documents.length} doc{q.documents.length > 1 ? 's' : ''}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-5 py-3.5 whitespace-nowrap">
                         <span className="font-bold text-gray-600 text-[11px]">{q.city}</span>
@@ -336,6 +345,50 @@ const CAQuotes = () => {
                     {new Date(selectedQuote.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                   </p>
                 </div>
+              </div>
+
+              {/* Uploaded Documents */}
+              <div>
+                <h4 className="text-[11px] font-black text-[#081326] uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+                  <FileText className="w-3.5 h-3.5 text-gray-500" />
+                  Uploaded Documents {selectedQuote.documents?.length > 0 ? `(${selectedQuote.documents.length})` : ''}
+                </h4>
+                {selectedQuote.documents && selectedQuote.documents.length > 0 ? (
+                  <div className="space-y-2">
+                    {selectedQuote.documents.map((doc, idx) => (
+                      <div key={idx} className="bg-gray-50/90 border border-gray-200 rounded-xl p-3 flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-8 h-8 rounded-lg bg-blue-50 border border-blue-100 text-blue-600 flex items-center justify-center shrink-0">
+                            <FileText className="w-4 h-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-[#081326] truncate" title={doc.originalName}>
+                              {doc.originalName || doc.filename}
+                            </p>
+                            {doc.size && (
+                              <p className="text-[10px] text-gray-400">
+                                {(doc.size / 1024).toFixed(1)} KB
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <a
+                          href={`${BACKEND_URL}${doc.url}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="shrink-0 px-2.5 py-1.5 bg-white border border-gray-200 hover:border-blue-300 text-blue-600 hover:bg-blue-50 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 shadow-xs"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>View</span>
+                        </a>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="bg-gray-50 border border-gray-100 rounded-xl p-3 text-center">
+                    <p className="text-xs text-gray-400 font-medium italic">No documents attached (Basic Details Only)</p>
+                  </div>
+                )}
               </div>
 
               {/* Message */}
