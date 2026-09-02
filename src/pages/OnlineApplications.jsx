@@ -428,10 +428,12 @@ const OnlineApplications = () => {
                     <p className="text-[10px] text-gray-400 font-bold mb-1">Loan Amount</p>
                     <p className="text-xs font-bold text-[#081326]">{selectedApp.loanAmount ? `₹ ${selectedApp.loanAmount}` : 'N/A'}</p>
                   </div>
-                  <div>
-                    <p className="text-[10px] text-gray-400 font-bold mb-1">Source</p>
-                    <p className="text-xs font-bold text-[#081326]">{selectedApp.source || 'N/A'}</p>
-                  </div>
+                  {selectedApp.propertyAddress && (
+                    <div className="col-span-2">
+                      <p className="text-[10px] text-gray-400 font-bold mb-1">Property Address</p>
+                      <p className="text-xs font-bold text-[#081326] bg-gray-50 p-2.5 rounded-lg border border-gray-100">{selectedApp.propertyAddress}</p>
+                    </div>
+                  )}
                   <div className="col-span-2">
                     <p className="text-[10px] text-gray-400 font-bold mb-1">Additional Message</p>
                     <div className="p-3 bg-gray-50 rounded-lg text-xs text-gray-700 leading-relaxed font-medium">
