@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import { 
-  RefreshCcw, Eye, Trash2, X, CheckCircle, Clock, AlertTriangle 
+  RefreshCcw, Eye, Trash2, X, CheckCircle, Clock, AlertTriangle, FileText, Download, ExternalLink 
 } from 'lucide-react';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import toast, { Toaster } from 'react-hot-toast';
+
+const BACKEND_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api').replace('/api', '');
 
 const StatusBadge = ({ status }) => {
   const styles = {
@@ -289,6 +291,11 @@ const OnlineApplications = () => {
                         <div className="flex flex-col gap-1">
                           <span className="font-bold text-blue-600">{app.serviceType}</span>
                           <span className="text-gray-400 font-bold">{app.purpose}</span>
+                          {app.documents && app.documents.length > 0 && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded w-fit">
+                              📎 {app.documents.length} doc{app.documents.length > 1 ? 's' : ''}
+                            </span>
+                          )}
                         </div>
                       </td>
                       <td className="px-5 py-3.5 max-w-[160px]">
@@ -428,6 +435,23 @@ const OnlineApplications = () => {
                     <p className="text-[10px] text-gray-400 font-bold mb-1">Loan Amount</p>
                     <p className="text-xs font-bold text-[#081326]">{selectedApp.loanAmount ? `₹ ${selectedApp.loanAmount}` : 'N/A'}</p>
                   </div>
+                  {selectedApp.approxPropertyValue && (
+                    <div>
+                      <p className="text-[10px] text-gray-400 font-bold mb-1">Approx Property Value</p>
+                      <p className="text-xs font-bold text-[#081326]">₹ {selectedApp.approxPropertyValue}</p>
+                    </div>
+                  )}
+                  {selectedApp.hasExistingLoan && (
+                    <div>
+                      <p className="text-[10px] text-gray-400 font-bold mb-1">Existing Loan / EMI</p>
+                      <p className="text-xs font-bold text-[#081326]">
+                        {selectedApp.hasExistingLoan}
+                        {selectedApp.hasExistingLoan === 'Yes' && selectedApp.existingEmiAmount && (
+                          <span className="text-gray-500 font-normal ml-1">(₹ {selectedApp.existingEmiAmount})</span>
+                        )}
+                      </p>
+                    </div>
+                  )}
                   {selectedApp.propertyAddress && (
                     <div className="col-span-2">
                       <p className="text-[10px] text-gray-400 font-bold mb-1">Property Address</p>
@@ -435,12 +459,56 @@ const OnlineApplications = () => {
                     </div>
                   )}
                   <div className="col-span-2">
-                    <p className="text-[10px] text-gray-400 font-bold mb-1">Additional Message</p>
+                    <p className="text-[10px] text-gray-400 font-bold mb-1">Additional Message / Notes</p>
                     <div className="p-3 bg-gray-50 rounded-lg text-xs text-gray-700 leading-relaxed font-medium">
                       {selectedApp.message || 'No additional message provided.'}
                     </div>
                   </div>
                 </div>
+              </div>
+
+              {/* Uploaded Documents Section */}
+              <div>
+                <h4 className="text-xs font-black text-gray-800 mb-3 border-b border-gray-100 pb-2 flex items-center gap-1.5">
+                  <FileText className="w-3.5 h-3.5 text-gray-500" />
+                  Uploaded Documents {selectedApp.documents?.length > 0 ? `(${selectedApp.documents.length})` : ''}
+                </h4>
+                {selectedApp.documents && selectedApp.documents.length > 0 ? (
+                  <div className="space-y-2">
+                    {selectedApp.documents.map((doc, idx) => (
+                      <div key={idx} className="bg-gray-50/90 border border-gray-200 rounded-xl p-3 flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-8 h-8 rounded-lg bg-blue-50 border border-blue-100 text-blue-600 flex items-center justify-center shrink-0">
+                            <FileText className="w-4 h-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-[#081326] truncate" title={doc.originalName}>
+                              {doc.originalName || doc.filename}
+                            </p>
+                            {doc.size && (
+                              <p className="text-[10px] text-gray-400">
+                                {(doc.size / 1024).toFixed(1)} KB
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <a
+                          href={`${BACKEND_URL}${doc.url}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="shrink-0 px-2.5 py-1.5 bg-white border border-gray-200 hover:border-blue-300 text-blue-600 hover:bg-blue-50 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 shadow-xs"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>View</span>
+                        </a>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="bg-gray-50 border border-gray-100 rounded-xl p-3 text-center">
+                    <p className="text-xs text-gray-400 font-medium italic">No documents attached (Basic Details / Query Only)</p>
+                  </div>
+                )}
               </div>
            </div>
           </div>
