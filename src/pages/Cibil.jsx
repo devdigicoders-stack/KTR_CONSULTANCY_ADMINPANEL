@@ -1,25 +1,28 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronRight, Download, Eye, Trash2, X, AlertTriangle, FileText, CheckCircle, Info } from 'lucide-react';
+import { ChevronRight, Download, Eye, Trash2, X, AlertTriangle, FileText, CheckCircle, Info, RotateCcw, Receipt } from 'lucide-react';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
+import CibilInvoiceModal from '../components/CibilInvoiceModal';
 
 const StatusBadge = ({ status }) => {
   const styles = {
     success: "text-green-600 bg-green-50 border border-green-100",
     failed: "text-red-500 bg-red-50 border border-red-100",
     notFound: "text-orange-500 bg-orange-50 border border-orange-100",
+    refunded: "text-purple-700 bg-purple-50 border border-purple-200",
   };
   const dotColor = {
     success: "bg-green-500",
     failed: "bg-red-500",
-    notFound: "bg-orange-500"
+    notFound: "bg-orange-500",
+    refunded: "bg-purple-600"
   };
 
   return (
     <span className={`${styles[status] || 'text-gray-600 bg-gray-50'} px-2.5 py-1 rounded-md font-bold flex items-center justify-center gap-1.5 w-fit text-[11px]`}>
       {dotColor[status] && <span className={`w-1.5 h-1.5 rounded-full ${dotColor[status]}`}></span>}
-      {status === 'notFound' ? 'Not Found' : status.charAt(0).toUpperCase() + status.slice(1)}
+      {status === 'notFound' ? 'Not Found' : status === 'refunded' ? 'Auto-Refunded' : status.charAt(0).toUpperCase() + status.slice(1)}
     </span>
   );
 };
@@ -31,6 +34,8 @@ const Cibil = () => {
   const [selectedReport, setSelectedReport] = useState(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [reportToDelete, setReportToDelete] = useState(null);
+  const [showInvoiceModal, setShowInvoiceModal] = useState(false);
+  const [invoiceReport, setInvoiceReport] = useState(null);
 
   const fetchReports = async () => {
     try {
@@ -157,13 +162,20 @@ const Cibil = () => {
                       {report.paymentId}
                     </td>
                     <td className="px-5 py-4 whitespace-nowrap text-center">
-                      <div className="flex justify-center items-center gap-2">
+                      <div className="flex justify-center items-center gap-1.5">
                         <button 
                           onClick={() => openPreview(report)}
                           className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white flex items-center justify-center transition-all shadow-sm"
                           title="View Full Report Details"
                         >
                           <Eye className="w-4 h-4 stroke-[2.5]" />
+                        </button>
+                        <button 
+                          onClick={() => { setInvoiceReport(report); setShowInvoiceModal(true); }}
+                          className="w-8 h-8 rounded-lg bg-amber-50 text-[#f59e0b] hover:bg-[#f59e0b] hover:text-white flex items-center justify-center transition-all shadow-sm"
+                          title="View / Print Tax Invoice"
+                        >
+                          <Receipt className="w-4 h-4 stroke-[2.5]" />
                         </button>
                         {role === 'admin' && (
                           <button 
@@ -200,12 +212,21 @@ const Cibil = () => {
               <h2 className="text-lg font-black text-[#081326] flex items-center gap-2">
                 <FileText className="w-5 h-5 text-[#f59e0b] stroke-[2.5]" /> CIBIL Report Details
               </h2>
-              <button 
-                onClick={closePreview} 
-                className="w-8 h-8 flex items-center justify-center bg-white border border-gray-200 text-gray-500 hover:text-red-500 hover:border-red-200 rounded-lg shadow-sm transition-colors"
-              >
-                <X className="w-4 h-4 stroke-[2.5]" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => { setInvoiceReport(selectedReport); setShowInvoiceModal(true); }}
+                  className="px-3 py-1.5 bg-amber-50 hover:bg-[#f59e0b] text-[#f59e0b] hover:text-white font-bold rounded-lg text-xs flex items-center gap-1 transition-colors border border-amber-200"
+                >
+                  <Receipt className="w-3.5 h-3.5" />
+                  <span>Invoice</span>
+                </button>
+                <button 
+                  onClick={closePreview} 
+                  className="w-8 h-8 flex items-center justify-center bg-white border border-gray-200 text-gray-500 hover:text-red-500 hover:border-red-200 rounded-lg shadow-sm transition-colors"
+                >
+                  <X className="w-4 h-4 stroke-[2.5]" />
+                </button>
+              </div>
             </div>
 
             {/* Scrollable Content */}
@@ -242,6 +263,35 @@ const Cibil = () => {
                 </div>
               </div>
 
+              {/* Auto-Refund Details Card (if refunded) */}
+              {selectedReport.status === 'refunded' && (
+                <div className="bg-purple-50/60 rounded-2xl p-5 border border-purple-200">
+                  <h4 className="text-sm font-bold text-purple-900 mb-3 flex items-center gap-2">
+                    <RotateCcw className="w-4 h-4 text-purple-700" /> Payment Auto-Refunded
+                  </h4>
+                  <div className="space-y-2 text-xs">
+                    <div className="flex justify-between">
+                      <span className="text-purple-700">Refund ID:</span>
+                      <span className="font-mono font-bold text-purple-950">{selectedReport.refundDetails?.refundId || 'N/A'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-purple-700">Refund Amount:</span>
+                      <span className="font-bold text-purple-950">₹{selectedReport.refundDetails?.amount || selectedReport.pricing?.totalAmount || 'N/A'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-purple-700">Refunded At:</span>
+                      <span className="font-medium text-purple-900">{selectedReport.refundDetails?.refundedAt ? new Date(selectedReport.refundDetails.refundedAt).toLocaleString() : 'N/A'}</span>
+                    </div>
+                    {selectedReport.refundDetails?.reason && (
+                      <div className="pt-1.5 border-t border-purple-200/60 text-purple-800">
+                        <span className="font-semibold block">Refund Reason:</span>
+                        <p className="mt-0.5">{selectedReport.refundDetails.reason}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
                 <h4 className="text-sm font-bold text-[#081326] mb-4 flex items-center gap-2">
                   <Info className="w-4 h-4 text-blue-500" /> Transaction & Status
@@ -255,6 +305,12 @@ const Cibil = () => {
                     <span className="text-xs text-gray-500">Payment ID</span>
                     <span className="text-xs font-mono font-bold text-[#081326] bg-gray-100 px-2 py-1 rounded">{selectedReport.paymentId}</span>
                   </div>
+                  {selectedReport.invoiceNumber && (
+                    <div className="flex justify-between items-center py-2 border-b border-gray-50">
+                      <span className="text-xs text-gray-500">Invoice Number</span>
+                      <span className="text-xs font-mono font-bold text-[#f59e0b] bg-amber-50 px-2 py-1 rounded border border-amber-100">{selectedReport.invoiceNumber}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between items-center py-2 border-b border-gray-50">
                     <span className="text-xs text-gray-500">Date Checked</span>
                     <span className="text-xs font-bold text-gray-700">{new Date(selectedReport.createdAt).toLocaleString()}</span>
@@ -308,6 +364,13 @@ const Cibil = () => {
           </div>
         </div>
       )}
+
+      {/* Tax Invoice Modal */}
+      <CibilInvoiceModal
+        isOpen={showInvoiceModal}
+        onClose={() => setShowInvoiceModal(false)}
+        reportData={invoiceReport}
+      />
 
       {/* Delete Confirmation Modal */}
       {showDeleteModal && (
