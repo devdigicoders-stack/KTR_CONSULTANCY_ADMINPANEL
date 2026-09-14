@@ -9,7 +9,7 @@ const EligibilityChecks = () => {
   const [editingRemark, setEditingRemark] = useState(null);
   const [remarkText, setRemarkText] = useState('');
 
-  const BACKEND_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+  const BACKEND_URL = import.meta.env.VITE_API_BASE_URL || (typeof window !== 'undefined' && window.location.hostname !== 'localhost' ? `${window.location.origin}/api` : 'http://localhost:5000/api');
 
   useEffect(() => {
     fetchChecks();

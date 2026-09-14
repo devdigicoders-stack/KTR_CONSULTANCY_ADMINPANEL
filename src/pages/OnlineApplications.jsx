@@ -5,8 +5,11 @@ import {
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import toast, { Toaster } from 'react-hot-toast';
+import { getAssetUrl } from '../utils/url';
 
-const BACKEND_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api').replace('/api', '');
+const BACKEND_URL = import.meta.env.VITE_API_BASE_URL 
+  ? import.meta.env.VITE_API_BASE_URL.replace('/api', '') 
+  : (typeof window !== 'undefined' && window.location.hostname !== 'localhost' ? window.location.origin : 'http://localhost:5000');
 
 const StatusBadge = ({ status }) => {
   const styles = {
@@ -493,7 +496,7 @@ const OnlineApplications = () => {
                           </div>
                         </div>
                         <a
-                          href={`${BACKEND_URL}${doc.url}`}
+                          href={getAssetUrl(doc.url)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="shrink-0 px-2.5 py-1.5 bg-white border border-gray-200 hover:border-blue-300 text-blue-600 hover:bg-blue-50 rounded-lg text-xs font-bold transition-colors flex items-center gap-1 shadow-xs"

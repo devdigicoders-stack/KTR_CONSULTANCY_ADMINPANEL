@@ -3,6 +3,7 @@ import { RefreshCcw, Eye, Trash2, X, CheckCircle, Clock, AlertTriangle, FileText
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import toast, { Toaster } from 'react-hot-toast';
+import { getAssetUrl } from '../utils/url';
 
 const StatusBadge = ({ status }) => {
   const styles = {
@@ -134,7 +135,7 @@ const ChainDeeds = () => {
 
   if (role !== 'admin') return <div className="p-8 text-center text-red-500 font-bold">Access Denied</div>;
 
-  const BACKEND_URL = 'http://localhost:5000';
+  const BACKEND_URL = import.meta.env.VITE_API_BASE_URL ? import.meta.env.VITE_API_BASE_URL.replace('/api', '') : window.location.origin;
 
   return (
     <div className="flex gap-6 relative items-start h-full pb-8">
@@ -346,7 +347,7 @@ const ChainDeeds = () => {
                       <p className="text-[12px] font-bold text-gray-700 truncate">{selectedApp.documentName}</p>
                     </div>
                     <a
-                      href={`${BACKEND_URL}${selectedApp.documentUrl}`}
+                      href={getAssetUrl(selectedApp.documentUrl)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-[11px] font-bold text-blue-600 hover:text-blue-700 bg-white px-3 py-1.5 rounded-lg border border-blue-200 flex-shrink-0 shadow-sm"

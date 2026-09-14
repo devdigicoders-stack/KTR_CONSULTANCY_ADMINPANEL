@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  Users, UserCheck, UserMinus, FileWarning, Search, Filter, Eye, X, RefreshCcw, Download, CheckCircle, Trash2, Edit, AlertTriangle
+  Users, UserCheck, UserMinus, FileWarning, Search, Filter, Eye, X, RefreshCcw, Download, CheckCircle, Trash2, Edit, AlertTriangle, History, Clock, Phone, Mail, FileText
 } from 'lucide-react';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
-import AddNewClient from './AddNewClient';
+import { getAssetUrl } from '../utils/url';
+import DocumentsTab from '../components/client/DocumentsTab';
 
 const StatusBadge = ({ status, isDoc }) => {
   const styles = {
@@ -40,6 +41,11 @@ const Clients = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [clientToDelete, setClientToDelete] = useState(null);
 
+  // Quick Edit Contact Info Modal State
+  const [showEditContactModal, setShowEditContactModal] = useState(false);
+  const [contactFormData, setContactFormData] = useState({ fullName: '', mobile: '', email: '' });
+  const [updatingContact, setUpdatingContact] = useState(false);
+
   const fetchClients = async () => {
     try {
       setLoading(true);
@@ -58,15 +64,38 @@ const Clients = () => {
     fetchClients();
   }, [role]);
 
-  const openPreview = (client) => {
-    setSelectedClient(client);
+  const openPreview = async (client) => {
+    try {
+      // Fetch fresh client data including editHistory and documentsList
+      const res = await api.get(`/clients/${client._id}`);
+      if (res.data.success) {
+        setSelectedClient(res.data.data);
+      } else {
+        setSelectedClient(client);
+      }
+    } catch (err) {
+      console.error('Error fetching single client detail:', err);
+      setSelectedClient(client);
+    }
     setPreviewTab('Overview');
     setShowPreview(true);
   };
 
+  const refreshSelectedClient = async () => {
+    if (!selectedClient?._id) return;
+    try {
+      const res = await api.get(`/clients/${selectedClient._id}`);
+      if (res.data.success) {
+        setSelectedClient(res.data.data);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const closePreview = () => {
     setShowPreview(false);
-    setTimeout(() => setSelectedClient(null), 300); // Wait for animation
+    setTimeout(() => setSelectedClient(null), 300);
   };
 
   const updateStatus = async (id, newStatus) => {
@@ -98,6 +127,36 @@ const Clients = () => {
     }
   };
 
+  const handleOpenEditContact = () => {
+    if (!selectedClient) return;
+    setContactFormData({
+      fullName: selectedClient.fullName || '',
+      mobile: selectedClient.mobile || '',
+      email: selectedClient.email || ''
+    });
+    setShowEditContactModal(true);
+  };
+
+  const handleSaveContactInfo = async (e) => {
+    e.preventDefault();
+    if (!selectedClient?._id) return;
+
+    try {
+      setUpdatingContact(true);
+      const res = await api.put(`/clients/${selectedClient._id}`, contactFormData);
+      if (res.data.success) {
+        setShowEditContactModal(false);
+        fetchClients();
+        refreshSelectedClient();
+      }
+    } catch (err) {
+      console.error('Error updating client info:', err);
+      alert('Failed to update contact info: ' + (err.response?.data?.message || err.message));
+    } finally {
+      setUpdatingContact(false);
+    }
+  };
+
   const tabs = ['All Clients', 'Approved Clients', 'Pending Clients', 'Rejected Clients'];
 
   // Filtering
@@ -107,11 +166,6 @@ const Clients = () => {
     if (activeTab === 'Rejected Clients') return c.status === 'Rejected';
     return true;
   });
-
-  const getFullUrl = (path) => {
-    if (!path) return null;
-    return `http://localhost:5000${path}`;
-  };
 
   return (
     <div className="flex gap-6 relative items-start h-full pb-8">
@@ -231,7 +285,7 @@ const Clients = () => {
                       <td className="px-5 py-3.5 whitespace-nowrap text-blue-600 font-bold">{client._id.substring(client._id.length - 6)}</td>
                       <td className="px-5 py-3.5 font-bold text-[#081326] whitespace-nowrap flex items-center gap-3">
                         {client.photoUrl ? (
-                          <img src={getFullUrl(client.photoUrl)} className="w-8 h-8 rounded-full object-cover shadow-sm" alt="" />
+                          <img src={getAssetUrl(client.photoUrl)} className="w-8 h-8 rounded-full object-cover shadow-sm" alt="" />
                         ) : (
                           <div className="w-8 h-8 rounded-full bg-[#081326] text-white flex items-center justify-center font-bold text-[10px]">
                             {client.fullName.substring(0,2).toUpperCase()}
@@ -241,8 +295,8 @@ const Clients = () => {
                       </td>
                       <td className="px-5 py-3.5 whitespace-nowrap">
                         <div className="flex flex-col gap-1">
-                          <span>{client.email}</span>
-                          <span className="text-gray-400 font-bold">{client.mobile}</span>
+                          <span>{client.email || 'N/A'}</span>
+                          <span className="text-gray-400 font-bold">{client.mobile || 'N/A'}</span>
                         </div>
                       </td>
                       <td className="px-5 py-3.5 whitespace-nowrap"><StatusBadge status={client.status} isDoc={false} /></td>
@@ -328,13 +382,13 @@ const Clients = () => {
               </div>
             </div>
 
-            {/* Profile Info Header */}
+            {/* Profile Info Header with Quick Edit Button */}
             <div className="p-6 border-b border-gray-100 flex items-center gap-5">
               {selectedClient.photoUrl ? (
-                 <img src={getFullUrl(selectedClient.photoUrl)} alt="Profile" className="w-24 h-24 rounded-full object-cover shadow-lg border-4 border-white" />
+                 <img src={getAssetUrl(selectedClient.photoUrl)} alt="Profile" className="w-24 h-24 rounded-full object-cover shadow-lg border-4 border-white" />
               ) : (
                  <div className="w-24 h-24 rounded-full bg-[#081326] text-white flex items-center justify-center text-3xl font-black shadow-lg border-4 border-white">
-                   {selectedClient.fullName.substring(0, 2).toUpperCase()}
+                   {selectedClient.fullName ? selectedClient.fullName.substring(0, 2).toUpperCase() : 'CL'}
                  </div>
               )}
               
@@ -343,21 +397,31 @@ const Clients = () => {
                   <h2 className="text-2xl font-black text-[#081326]">{selectedClient.fullName}</h2>
                   <StatusBadge status={selectedClient.status} isDoc={false} />
                 </div>
-                <div className="flex flex-wrap gap-4 text-xs font-bold text-gray-500">
-                   <span className="bg-gray-50 px-3 py-1 rounded border border-gray-100">Email: {selectedClient.email}</span>
-                   <span className="bg-gray-50 px-3 py-1 rounded border border-gray-100">Mobile: {selectedClient.mobile}</span>
-                   <span className="bg-gray-50 px-3 py-1 rounded border border-gray-100">Submitted: {new Date(selectedClient.createdAt).toLocaleDateString()}</span>
+                <div className="flex flex-wrap gap-2 text-xs font-bold text-gray-600 items-center">
+                   <span className="bg-gray-50 px-3 py-1 rounded border border-gray-100 flex items-center gap-1">
+                     <Mail className="w-3 h-3 text-gray-400" /> {selectedClient.email || 'No Email'}
+                   </span>
+                   <span className="bg-gray-50 px-3 py-1 rounded border border-gray-100 flex items-center gap-1">
+                     <Phone className="w-3 h-3 text-gray-400" /> {selectedClient.mobile || 'No Mobile'}
+                   </span>
+                   <button 
+                     onClick={handleOpenEditContact}
+                     className="bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200 px-3 py-1 rounded flex items-center gap-1 text-[11px] font-bold transition-colors cursor-pointer"
+                     title="Update Mobile No. / Email ID"
+                   >
+                     <Edit className="w-3 h-3" /> Edit Contact
+                   </button>
                 </div>
               </div>
             </div>
 
             {/* Tabs */}
             <div className="flex gap-1 px-6 pt-4 border-b border-gray-100 bg-white">
-               {['Overview', 'Documents'].map(tab => (
+               {['Overview', 'Documents', 'Manage Docs', 'Edit History'].map(tab => (
                   <button 
                     key={tab}
                     onClick={() => setPreviewTab(tab)}
-                    className={`px-5 py-2.5 text-xs font-black transition-all border-b-2 ${
+                    className={`px-4 py-2.5 text-xs font-black transition-all border-b-2 ${
                       previewTab === tab 
                       ? 'text-[#f59e0b] border-[#f59e0b] bg-[#f59e0b]/5 rounded-t-lg' 
                       : 'text-gray-400 border-transparent hover:text-[#081326]'
@@ -372,10 +436,17 @@ const Clients = () => {
             <div className="flex-1 overflow-y-auto p-6 bg-gray-50/30">
                {previewTab === 'Overview' && (
                   <div className="flex flex-col gap-6">
-                    
                     {/* Personal Info */}
                     <div className="bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
-                      <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-4 border-b border-gray-50 pb-2">Personal Information</h4>
+                      <div className="flex justify-between items-center mb-4 border-b border-gray-50 pb-2">
+                        <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider">Personal Information</h4>
+                        <button 
+                          onClick={handleOpenEditContact}
+                          className="text-[11px] font-bold text-amber-600 hover:underline flex items-center gap-1"
+                        >
+                          <Edit className="w-3 h-3" /> Edit Info
+                        </button>
+                      </div>
                       <div className="grid grid-cols-2 gap-y-5 gap-x-4">
                          <div>
                            <p className="text-[10px] text-gray-400 font-bold mb-1">Date of Birth</p>
@@ -439,23 +510,8 @@ const Clients = () => {
                            <p className="text-[10px] text-gray-400 font-bold mb-1">Business Type</p>
                            <p className="text-xs font-black text-[#081326]">{selectedClient.businessType || 'NA'}</p>
                          </div>
-                         <div>
-                           <p className="text-[10px] text-gray-400 font-bold mb-1">Years in Business</p>
-                           <p className="text-xs font-black text-[#081326]">{selectedClient.yearsInBusiness ? `${selectedClient.yearsInBusiness} Years` : 'NA'}</p>
-                         </div>
-                         <div>
-                           <p className="text-[10px] text-gray-400 font-bold mb-1">Website</p>
-                           {selectedClient.website ? (
-                             <a href={selectedClient.website.startsWith('http') ? selectedClient.website : `https://${selectedClient.website}`} target="_blank" rel="noreferrer" className="text-xs font-black text-blue-500 hover:underline">
-                               {selectedClient.website}
-                             </a>
-                           ) : (
-                             <p className="text-xs font-black text-[#081326]">NA</p>
-                           )}
-                         </div>
                       </div>
                     </div>
-
                   </div>
                )}
 
@@ -466,7 +522,7 @@ const Clients = () => {
                        <div className="px-5 py-3 bg-gray-50 border-b border-gray-100 flex justify-between items-center">
                           <span className="text-xs font-black text-[#081326]">PAN Card</span>
                           {selectedClient.panCardUrl && (
-                             <a href={getFullUrl(selectedClient.panCardUrl)} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-[10px] font-bold bg-white border border-gray-200 px-3 py-1.5 rounded hover:bg-gray-50 transition-colors">
+                             <a href={getAssetUrl(selectedClient.panCardUrl)} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-[10px] font-bold bg-white border border-gray-200 px-3 py-1.5 rounded hover:bg-gray-50 transition-colors">
                                 <Download className="w-3 h-3" /> Download
                              </a>
                           )}
@@ -474,9 +530,9 @@ const Clients = () => {
                        <div className="p-5 flex justify-center bg-gray-50/30">
                           {selectedClient.panCardUrl ? (
                              selectedClient.panCardUrl.toLowerCase().endsWith('.pdf') ? (
-                                <iframe src={`${getFullUrl(selectedClient.panCardUrl)}#toolbar=0`} title="PAN Card" className="w-full h-60 rounded border border-gray-200 shadow-sm" />
+                                <iframe src={`${getAssetUrl(selectedClient.panCardUrl)}#toolbar=0`} title="PAN Card" className="w-full h-60 rounded border border-gray-200 shadow-sm" />
                              ) : (
-                                <img src={getFullUrl(selectedClient.panCardUrl)} alt="PAN Card" className="max-h-60 rounded border border-gray-200 shadow-sm" />
+                                <img src={getAssetUrl(selectedClient.panCardUrl)} alt="PAN Card" className="max-h-60 rounded border border-gray-200 shadow-sm" />
                              )
                           ) : (
                              <p className="text-xs text-gray-400 font-bold py-10">Not uploaded</p>
@@ -489,7 +545,7 @@ const Clients = () => {
                        <div className="px-5 py-3 bg-gray-50 border-b border-gray-100 flex justify-between items-center">
                           <span className="text-xs font-black text-[#081326]">ID Proof <span className="text-gray-400 font-bold">({selectedClient.idProofType})</span></span>
                           {selectedClient.idProofUrl && (
-                             <a href={getFullUrl(selectedClient.idProofUrl)} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-[10px] font-bold bg-white border border-gray-200 px-3 py-1.5 rounded hover:bg-gray-50 transition-colors">
+                             <a href={getAssetUrl(selectedClient.idProofUrl)} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-[10px] font-bold bg-white border border-gray-200 px-3 py-1.5 rounded hover:bg-gray-50 transition-colors">
                                 <Download className="w-3 h-3" /> Download
                              </a>
                           )}
@@ -497,9 +553,9 @@ const Clients = () => {
                        <div className="p-5 flex justify-center bg-gray-50/30">
                           {selectedClient.idProofUrl ? (
                              selectedClient.idProofUrl.toLowerCase().endsWith('.pdf') ? (
-                                <iframe src={`${getFullUrl(selectedClient.idProofUrl)}#toolbar=0`} title="ID Proof" className="w-full h-60 rounded border border-gray-200 shadow-sm" />
+                                <iframe src={`${getAssetUrl(selectedClient.idProofUrl)}#toolbar=0`} title="ID Proof" className="w-full h-60 rounded border border-gray-200 shadow-sm" />
                              ) : (
-                                <img src={getFullUrl(selectedClient.idProofUrl)} alt="ID Proof" className="max-h-60 rounded border border-gray-200 shadow-sm" />
+                                <img src={getAssetUrl(selectedClient.idProofUrl)} alt="ID Proof" className="max-h-60 rounded border border-gray-200 shadow-sm" />
                              )
                           ) : (
                              <p className="text-xs text-gray-400 font-bold py-10">Not uploaded</p>
@@ -512,7 +568,7 @@ const Clients = () => {
                        <div className="px-5 py-3 bg-gray-50 border-b border-gray-100 flex justify-between items-center">
                           <span className="text-xs font-black text-[#081326]">Address Proof</span>
                           {selectedClient.addressProofUrl && (
-                             <a href={getFullUrl(selectedClient.addressProofUrl)} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-[10px] font-bold bg-white border border-gray-200 px-3 py-1.5 rounded hover:bg-gray-50 transition-colors">
+                             <a href={getAssetUrl(selectedClient.addressProofUrl)} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-[10px] font-bold bg-white border border-gray-200 px-3 py-1.5 rounded hover:bg-gray-50 transition-colors">
                                 <Download className="w-3 h-3" /> Download
                              </a>
                           )}
@@ -520,16 +576,52 @@ const Clients = () => {
                        <div className="p-5 flex justify-center bg-gray-50/30">
                           {selectedClient.addressProofUrl ? (
                              selectedClient.addressProofUrl.toLowerCase().endsWith('.pdf') ? (
-                                <iframe src={`${getFullUrl(selectedClient.addressProofUrl)}#toolbar=0`} title="Address Proof" className="w-full h-60 rounded border border-gray-200 shadow-sm" />
+                                <iframe src={`${getAssetUrl(selectedClient.addressProofUrl)}#toolbar=0`} title="Address Proof" className="w-full h-60 rounded border border-gray-200 shadow-sm" />
                              ) : (
-                                <img src={getFullUrl(selectedClient.addressProofUrl)} alt="Address Proof" className="max-h-60 rounded border border-gray-200 shadow-sm" />
+                                <img src={getAssetUrl(selectedClient.addressProofUrl)} alt="Address Proof" className="max-h-60 rounded border border-gray-200 shadow-sm" />
                              )
                           ) : (
                              <p className="text-xs text-gray-400 font-bold py-10">Not uploaded</p>
                           )}
                        </div>
                     </div>
+                  </div>
+               )}
 
+               {previewTab === 'Manage Docs' && (
+                  <DocumentsTab client={selectedClient} onRefresh={refreshSelectedClient} />
+               )}
+
+               {previewTab === 'Edit History' && (
+                  <div className="bg-white border border-gray-100 rounded-xl p-5 shadow-sm space-y-4">
+                     <h4 className="text-xs font-black text-[#081326] uppercase tracking-wider border-b border-gray-50 pb-2 flex items-center gap-2">
+                       <History className="w-4 h-4 text-blue-600" /> Edit Audit History Log
+                     </h4>
+                     {selectedClient.editHistory && selectedClient.editHistory.length > 0 ? (
+                       <div className="relative pl-6 border-l-2 border-gray-200 space-y-6">
+                         {selectedClient.editHistory.slice().reverse().map((item, idx) => (
+                           <div key={idx} className="relative group">
+                             <div className="absolute -left-[31px] top-1.5 w-4 h-4 rounded-full bg-blue-600 border-2 border-white shadow-sm"></div>
+                             <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                               <div className="flex justify-between items-center mb-1">
+                                 <span className="text-xs font-bold text-[#081326]">{item.action}</span>
+                                 <span className="text-[10px] text-gray-400 font-medium flex items-center gap-1">
+                                   <Clock className="w-3 h-3" /> {new Date(item.timestamp).toLocaleString()}
+                                 </span>
+                               </div>
+                               <p className="text-[11px] text-gray-600 font-medium mb-1">{item.details}</p>
+                               <p className="text-[10px] text-gray-400 font-bold">
+                                 Edited By: <span className="text-gray-700">{item.editorName || 'Staff/Admin'}</span> ({item.editorRole || 'staff'})
+                               </p>
+                             </div>
+                           </div>
+                         ))}
+                       </div>
+                     ) : (
+                       <p className="text-xs text-gray-400 text-center py-8 font-medium">
+                         No edit history recorded yet for this client.
+                       </p>
+                     )}
                   </div>
                )}
             </div>
@@ -541,7 +633,7 @@ const Clients = () => {
                     <button 
                       onClick={() => updateStatus(selectedClient._id, 'Approved')} 
                       disabled={statusLoading}
-                      className="flex-1 py-3 bg-green-500 text-white rounded-xl text-sm font-black hover:bg-green-600 transition-colors shadow-sm disabled:opacity-50 flex items-center justify-center gap-2"
+                      className="flex-1 py-3 bg-green-500 text-white rounded-xl text-sm font-black hover:bg-green-600 transition-colors shadow-sm disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
                     >
                       <CheckCircle className="w-4 h-4 stroke-[2.5]" /> Approve Application
                     </button>
@@ -550,7 +642,7 @@ const Clients = () => {
                     <button 
                       onClick={() => updateStatus(selectedClient._id, 'Rejected')} 
                       disabled={statusLoading}
-                      className="flex-1 py-3 border-2 border-red-200 text-red-600 bg-red-50 rounded-xl text-sm font-black hover:bg-red-100 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                      className="flex-1 py-3 border-2 border-red-200 text-red-600 bg-red-50 rounded-xl text-sm font-black hover:bg-red-100 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
                     >
                       <X className="w-4 h-4 stroke-[2.5]" /> Reject
                     </button>
@@ -560,6 +652,81 @@ const Clients = () => {
           </div>
         </div>
       )}
+
+      {/* Edit Contact Info Modal */}
+      {showEditContactModal && selectedClient && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-[#081326]/60 backdrop-blur-sm" onClick={() => setShowEditContactModal(false)}></div>
+          <div className="relative bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-base font-black text-[#081326] flex items-center gap-2">
+                <Edit className="w-5 h-5 text-[#f59e0b]" /> Edit Client Contact Info
+              </h3>
+              <button onClick={() => setShowEditContactModal(false)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveContactInfo} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">Full Name</label>
+                <input 
+                  type="text" 
+                  value={contactFormData.fullName}
+                  onChange={(e) => setContactFormData({ ...contactFormData, fullName: e.target.value })}
+                  required
+                  className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg outline-none focus:border-blue-500 font-medium"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">Mobile Number</label>
+                <input 
+                  type="tel" 
+                  value={contactFormData.mobile}
+                  onChange={(e) => setContactFormData({ ...contactFormData, mobile: e.target.value })}
+                  required
+                  placeholder="Enter 10 digit mobile number"
+                  className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg outline-none focus:border-blue-500 font-medium"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">Email Address</label>
+                <input 
+                  type="email" 
+                  value={contactFormData.email}
+                  onChange={(e) => setContactFormData({ ...contactFormData, email: e.target.value })}
+                  placeholder="Enter client email address"
+                  className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg outline-none focus:border-blue-500 font-medium"
+                />
+              </div>
+
+              <div className="p-3 bg-blue-50/70 border border-blue-100 rounded-xl text-[11px] text-blue-800">
+                ⚡ Any update to Mobile No. or Email ID will be logged into the client's <strong>Edit History Audit Log</strong>.
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button 
+                  type="button" 
+                  onClick={() => setShowEditContactModal(false)}
+                  className="flex-1 py-2.5 bg-gray-100 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-200 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  disabled={updatingContact}
+                  className="flex-1 py-2.5 bg-[#081326] text-white rounded-xl text-xs font-bold hover:bg-[#11203d] disabled:opacity-50 cursor-pointer"
+                >
+                  {updatingContact ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Delete Confirmation Modal */}
       {showDeleteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -575,13 +742,13 @@ const Clients = () => {
             <div className="flex gap-3">
               <button 
                 onClick={() => setShowDeleteModal(false)}
-                className="flex-1 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-sm font-bold transition-colors"
+                className="flex-1 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-sm font-bold transition-colors cursor-pointer"
               >
                 Cancel
               </button>
               <button 
                 onClick={handleDeleteClient}
-                className="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-bold transition-colors shadow-sm shadow-red-200"
+                className="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-bold transition-colors shadow-sm shadow-red-200 cursor-pointer"
               >
                 Yes, Delete
               </button>

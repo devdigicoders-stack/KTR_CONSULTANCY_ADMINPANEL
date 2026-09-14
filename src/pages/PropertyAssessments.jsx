@@ -3,6 +3,7 @@ import { RefreshCcw, Eye, Trash2, X, CheckCircle, Clock, AlertTriangle, FileText
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import toast, { Toaster } from 'react-hot-toast';
+import { getAssetUrl } from '../utils/url';
 
 const StatusBadge = ({ status }) => {
   const styles = {
@@ -148,7 +149,7 @@ const PropertyAssessments = () => {
 
   if (role !== 'admin') return <div className="p-8 text-center text-red-500 font-bold">Access Denied</div>;
 
-  const BACKEND_URL = 'http://localhost:5000';
+  const BACKEND_URL = import.meta.env.VITE_API_BASE_URL ? import.meta.env.VITE_API_BASE_URL.replace('/api', '') : window.location.origin;
 
   const DocumentBox = ({ title, doc, isImage }) => {
     if (!doc || (!doc.url && (!Array.isArray(doc) || doc.length === 0))) return null;
@@ -159,7 +160,7 @@ const PropertyAssessments = () => {
           <p className="text-[10px] text-blue-600 font-bold uppercase tracking-wider mb-2">{title} ({doc.length})</p>
           <div className="grid grid-cols-2 gap-2">
             {doc.map((f, i) => (
-              <a key={i} href={`${BACKEND_URL}${f.url}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 bg-white px-2 py-1.5 rounded border border-blue-100 hover:border-blue-300 transition-colors">
+              <a key={i} href={getAssetUrl(f.url)} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 bg-white px-2 py-1.5 rounded border border-blue-100 hover:border-blue-300 transition-colors">
                 <ImageIcon className="w-4 h-4 text-blue-400" />
                 <span className="text-[10px] text-gray-700 truncate font-semibold">Photo {i+1}</span>
               </a>
@@ -175,7 +176,7 @@ const PropertyAssessments = () => {
           <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mb-0.5">{title}</p>
           <p className="text-[11px] font-semibold text-gray-700 truncate">{doc.name}</p>
         </div>
-        <a href={`${BACKEND_URL}${doc.url}`} target="_blank" rel="noopener noreferrer" className="shrink-0 w-8 h-8 rounded-lg bg-white border border-gray-200 flex items-center justify-center text-blue-500 hover:bg-blue-50 hover:border-blue-200 transition-colors shadow-sm">
+        <a href={getAssetUrl(doc.url)} target="_blank" rel="noopener noreferrer" className="shrink-0 w-8 h-8 rounded-lg bg-white border border-gray-200 flex items-center justify-center text-blue-500 hover:bg-blue-50 hover:border-blue-200 transition-colors shadow-sm">
           <Eye className="w-4 h-4" />
         </a>
       </div>

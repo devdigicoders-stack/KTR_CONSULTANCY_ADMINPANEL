@@ -19,6 +19,7 @@ const emptyApplicant = {
   fullName: '',
   mobile: '',
   occupation: '',
+  loanAmount: '',
   panNumber: '',
   aadhaarNumber: '',
   motherName: '',
@@ -111,6 +112,19 @@ const ApplicantSection = ({ data, onChange, prefix, title, icon: Icon, isCoAppli
           className={inputCls}
         />
       </div>
+      {!isCoApplicant && (
+        <div className="flex flex-col gap-1.5">
+          <label className={labelCls}>Required Loan Amount (₹) <span className="text-gray-400 font-normal">(Optional)</span></label>
+          <input
+            type="number"
+            name={`${prefix}loanAmount`}
+            value={data.loanAmount || ''}
+            onChange={onChange}
+            placeholder="e.g. 500000"
+            className={inputCls}
+          />
+        </div>
+      )}
     </div>
 
     <div className="flex flex-col gap-1.5">

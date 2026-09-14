@@ -5,7 +5,7 @@ import {
   FolderOpen
 } from 'lucide-react';
 import api from '../api/axios';
-import { useAuth } from '../context/AuthContext';
+import { getAssetUrl } from '../utils/url';
 
 const StatusBadge = ({ status }) => {
   const styles = {
@@ -49,11 +49,8 @@ const Documents = () => {
     fetchDocs();
   }, [role]);
 
-  const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000";
-  
   const getFullUrl = (path) => {
-    if (!path) return null;
-    return `${BACKEND_URL}${path}`;
+    return getAssetUrl(path);
   };
 
   const handleDownload = async (url, filename) => {

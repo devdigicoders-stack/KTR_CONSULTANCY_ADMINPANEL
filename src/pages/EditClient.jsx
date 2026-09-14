@@ -38,6 +38,7 @@ const EditClient = () => {
     businessType: '',
     yearsInBusiness: '',
     website: '',
+    loanAmount: '',
     referredBy: '',
     referrerMobile: '',
     relationship: '',
@@ -91,6 +92,7 @@ const EditClient = () => {
             businessType: client.businessType || '',
             yearsInBusiness: client.yearsInBusiness || '',
             website: client.website || '',
+            loanAmount: client.loanAmount || '',
             referredBy: client.referredBy || '',
             referrerMobile: client.referrerMobile || '',
             relationship: client.relationship || '',
@@ -292,6 +294,11 @@ const EditClient = () => {
                 <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-medium text-gray-700 block">Annual Income (₹)</label>
                   <input type="number" name="annualIncome" value={formData.annualIncome} onChange={handleChange} placeholder="Enter annual income" className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-normal outline-none text-gray-800 hover:border-gray-300 focus:border-[#f59e0b] focus:bg-white transition-colors" />
+                </div>
+                
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-bold text-green-700 block">Required Loan Amount (₹)</label>
+                  <input type="number" name="loanAmount" value={formData.loanAmount} onChange={handleChange} placeholder="Enter required loan amount" className="w-full px-3.5 py-2.5 bg-green-50/50 border border-green-200 rounded-lg text-sm font-bold outline-none text-green-900 focus:border-green-500 focus:bg-white transition-colors" />
                 </div>
                 
                 <div className="flex flex-col gap-1.5">
