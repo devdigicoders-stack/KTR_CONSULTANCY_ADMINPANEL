@@ -36,6 +36,7 @@ const Cibil = () => {
   const [reportToDelete, setReportToDelete] = useState(null);
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [invoiceReport, setInvoiceReport] = useState(null);
+  const [selectedReportFilter, setSelectedReportFilter] = useState('ALL');
 
   const fetchReports = async () => {
     try {
@@ -97,99 +98,140 @@ const Cibil = () => {
 
       {/* Reports Section */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 flex flex-col overflow-hidden">
-        {/* Top Header */}
-        <div className="border-b border-gray-50 flex justify-between items-center px-4 py-3 bg-gray-50/30">
-          <h3 className="text-sm font-bold text-[#081326]">All Generated Reports</h3>
+        {/* Top Header & Filters */}
+        <div className="border-b border-gray-100 flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 bg-gray-50/40 gap-3">
+          <h3 className="text-sm font-bold text-[#081326]">All Generated Reports & Refund Logs</h3>
+          
+          <div className="flex items-center gap-1.5 bg-white p-1 rounded-xl border border-gray-200 text-xs">
+            <button
+              onClick={() => setSelectedReportFilter('ALL')}
+              className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+                (!selectedReportFilter || selectedReportFilter === 'ALL') ? 'bg-[#081326] text-white' : 'text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              All
+            </button>
+            <button
+              onClick={() => setSelectedReportFilter('success')}
+              className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+                selectedReportFilter === 'success' ? 'bg-emerald-600 text-white' : 'text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              Verified
+            </button>
+            <button
+              onClick={() => setSelectedReportFilter('refunded')}
+              className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+                selectedReportFilter === 'refunded' ? 'bg-purple-700 text-white' : 'text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              Auto-Refunded
+            </button>
+          </div>
         </div>
 
         {/* Table */}
         <div className="overflow-x-auto scrollbar-hide">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-gray-50/50 text-[11px] font-black text-gray-500 border-b border-gray-100 tracking-wider">
-                <th className="px-5 py-4 whitespace-nowrap">Date</th>
-                <th className="px-5 py-4 whitespace-nowrap">Applicant Details</th>
-                <th className="px-5 py-4 whitespace-nowrap">Bureau</th>
-                <th className="px-5 py-4 whitespace-nowrap">Score</th>
-                <th className="px-5 py-4 whitespace-nowrap">Status</th>
-                <th className="px-5 py-4 whitespace-nowrap">Payment ID</th>
-                <th className="px-5 py-4 whitespace-nowrap text-center">Actions</th>
+              <tr className="bg-gray-50/80 text-[11px] font-black text-gray-500 border-b border-gray-100 tracking-wider">
+                <th className="px-4 py-3.5 whitespace-nowrap">Date</th>
+                <th className="px-4 py-3.5 whitespace-nowrap">Applicant Details</th>
+                <th className="px-4 py-3.5 whitespace-nowrap">Bureau</th>
+                <th className="px-4 py-3.5 whitespace-nowrap">Amount Paid</th>
+                <th className="px-4 py-3.5 whitespace-nowrap">Report Status</th>
+                <th className="px-4 py-3.5 whitespace-nowrap">Refund Status</th>
+                <th className="px-4 py-3.5 whitespace-nowrap">Payment ID</th>
+                <th className="px-4 py-3.5 whitespace-nowrap text-center">Actions</th>
               </tr>
             </thead>
             <tbody className="text-xs">
               {loading ? (
                 <tr>
-                  <td colSpan="7" className="px-5 py-12 text-center text-gray-500">
+                  <td colSpan="8" className="px-5 py-12 text-center text-gray-500">
                     <div className="flex justify-center mb-2">
                       <div className="w-6 h-6 border-2 border-[#f59e0b] border-t-transparent rounded-full animate-spin"></div>
                     </div>
                     Loading reports...
                   </td>
                 </tr>
-              ) : reports.length === 0 ? (
+              ) : reports.filter(r => (!selectedReportFilter || selectedReportFilter === 'ALL' || r.status === selectedReportFilter)).length === 0 ? (
                 <tr>
-                  <td colSpan="7" className="px-5 py-12 text-center text-gray-500 font-medium">
+                  <td colSpan="8" className="px-5 py-12 text-center text-gray-500 font-medium">
                     No CIBIL reports found
                   </td>
                 </tr>
               ) : (
-                reports.map((report) => (
-                  <tr key={report._id} className="border-b border-gray-50 hover:bg-orange-50/20 transition-colors">
-                    <td className="px-5 py-4 whitespace-nowrap text-gray-600 font-medium">
-                      {new Date(report.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
-                    </td>
-                    <td className="px-5 py-4">
-                      <div className="font-bold text-[#081326]">{report.name}</div>
-                      <div className="text-[11px] text-gray-500 mt-0.5">PAN: <span className="font-mono">{report.pan}</span></div>
-                      <div className="text-[11px] text-gray-500">Mob: {report.mobile}</div>
-                    </td>
-                    <td className="px-5 py-4 whitespace-nowrap font-bold text-gray-700">
-                      {report.bureau}
-                    </td>
-                    <td className="px-5 py-4 whitespace-nowrap">
-                      {report.score ? (
-                        <span className="font-black text-[#081326] bg-gray-100 px-2 py-1 rounded">
-                          {report.score}
-                        </span>
-                      ) : (
-                        <span className="text-gray-400 font-medium">-</span>
-                      )}
-                    </td>
-                    <td className="px-5 py-4 whitespace-nowrap">
-                      <StatusBadge status={report.status} />
-                    </td>
-                    <td className="px-5 py-4 whitespace-nowrap font-mono text-[11px] text-gray-500">
-                      {report.paymentId}
-                    </td>
-                    <td className="px-5 py-4 whitespace-nowrap text-center">
-                      <div className="flex justify-center items-center gap-1.5">
-                        <button 
-                          onClick={() => openPreview(report)}
-                          className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white flex items-center justify-center transition-all shadow-sm"
-                          title="View Full Report Details"
-                        >
-                          <Eye className="w-4 h-4 stroke-[2.5]" />
-                        </button>
-                        <button 
-                          onClick={() => { setInvoiceReport(report); setShowInvoiceModal(true); }}
-                          className="w-8 h-8 rounded-lg bg-amber-50 text-[#f59e0b] hover:bg-[#f59e0b] hover:text-white flex items-center justify-center transition-all shadow-sm"
-                          title="View / Print Tax Invoice"
-                        >
-                          <Receipt className="w-4 h-4 stroke-[2.5]" />
-                        </button>
-                        {role === 'admin' && (
-                          <button 
-                            onClick={() => { setReportToDelete(report._id); setShowDeleteModal(true); }}
-                            className="w-8 h-8 rounded-lg bg-red-50 text-red-600 hover:bg-red-600 hover:text-white flex items-center justify-center transition-all shadow-sm"
-                            title="Delete Report"
-                          >
-                            <Trash2 className="w-4 h-4 stroke-[2.5]" />
-                          </button>
+                reports.filter(r => (!selectedReportFilter || selectedReportFilter === 'ALL' || r.status === selectedReportFilter)).map((report) => {
+                  const isRefunded = report.status === 'refunded';
+                  const amountPaid = report.pricing?.totalAmount || report.refundDetails?.amount || (report.bureau?.includes('CRIF') ? 450 : 500);
+
+                  return (
+                    <tr key={report._id} className="border-b border-gray-50 hover:bg-orange-50/20 transition-colors">
+                      <td className="px-4 py-3.5 whitespace-nowrap text-gray-600 font-medium">
+                        {new Date(report.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <div className="font-bold text-[#081326]">{report.name}</div>
+                        <div className="text-[11px] text-gray-500 mt-0.5">PAN: <span className="font-mono font-bold text-gray-800">{report.pan}</span></div>
+                        <div className="text-[11px] text-gray-500">Mob: +91 {report.mobile}</div>
+                      </td>
+                      <td className="px-4 py-3.5 whitespace-nowrap font-bold text-gray-700">
+                        {report.bureau}
+                      </td>
+                      <td className="px-4 py-3.5 whitespace-nowrap font-mono font-extrabold text-gray-900">
+                        ₹{amountPaid}
+                      </td>
+                      <td className="px-4 py-3.5 whitespace-nowrap">
+                        <StatusBadge status={report.status} />
+                      </td>
+                      <td className="px-4 py-3.5 whitespace-nowrap">
+                        {isRefunded ? (
+                          <div className="flex flex-col gap-0.5">
+                            <span className="inline-flex items-center gap-1 bg-purple-100 text-purple-900 px-2 py-0.5 rounded text-[11px] font-bold border border-purple-200 w-fit">
+                              ✓ {report.refundDetails?.status || 'Initiated'}
+                            </span>
+                            <span className="font-mono text-[10.5px] text-purple-700">
+                              {report.refundDetails?.refundId || 'RFND_AUTO'}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-gray-400 font-medium">—</span>
                         )}
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                      </td>
+                      <td className="px-4 py-3.5 whitespace-nowrap font-mono text-[11px] text-gray-500">
+                        {report.paymentId}
+                      </td>
+                      <td className="px-4 py-3.5 whitespace-nowrap text-center">
+                        <div className="flex justify-center items-center gap-1.5">
+                          <button 
+                            onClick={() => openPreview(report)}
+                            className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white flex items-center justify-center transition-all shadow-sm cursor-pointer"
+                            title="View Full Report Details"
+                          >
+                            <Eye className="w-4 h-4 stroke-[2.5]" />
+                          </button>
+                          <button 
+                            onClick={() => { setInvoiceReport(report); setShowInvoiceModal(true); }}
+                            className="w-8 h-8 rounded-lg bg-amber-50 text-[#f59e0b] hover:bg-[#f59e0b] hover:text-white flex items-center justify-center transition-all shadow-sm cursor-pointer"
+                            title="View / Print Tax Invoice"
+                          >
+                            <Receipt className="w-4 h-4 stroke-[2.5]" />
+                          </button>
+                          {role === 'admin' && (
+                            <button 
+                              onClick={() => { setReportToDelete(report._id); setShowDeleteModal(true); }}
+                              className="w-8 h-8 rounded-lg bg-red-50 text-red-600 hover:bg-red-600 hover:text-white flex items-center justify-center transition-all shadow-sm cursor-pointer"
+                              title="Delete Report"
+                            >
+                              <Trash2 className="w-4 h-4 stroke-[2.5]" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>

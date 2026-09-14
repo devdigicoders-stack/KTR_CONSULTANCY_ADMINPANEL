@@ -25,6 +25,8 @@ import EligibilityChecks from './pages/EligibilityChecks';
 import Reports from './pages/Reports';
 import Profile from './pages/Profile';
 import Users from './pages/Users';
+import CreatePaymentLink from './pages/CreatePaymentLink';
+import Invoices from './pages/Invoices';
 
 // ProtectedRoute component
 const ProtectedRoute = ({ children }) => {
@@ -72,6 +74,9 @@ function App() {
             <Route path="chain-deeds" element={<AdminRoute><ChainDeeds /></AdminRoute>} />
             <Route path="property-assessments" element={<AdminRoute><PropertyAssessments /></AdminRoute>} />
             <Route path="eligibility-checks" element={<AdminRoute><EligibilityChecks /></AdminRoute>} />
+            <Route path="payments" element={<AdminRoute><Invoices /></AdminRoute>} />
+            <Route path="payments/create" element={<AdminRoute><CreatePaymentLink /></AdminRoute>} />
+            <Route path="payments/invoices" element={<AdminRoute><Invoices /></AdminRoute>} />
             <Route path="reports" element={<AdminRoute><Reports /></AdminRoute>} />
             <Route path="profile" element={<Profile />} />
             <Route path="users" element={<Users />} />

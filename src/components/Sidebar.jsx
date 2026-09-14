@@ -14,6 +14,8 @@ import {
   BarChart2,
   Settings,
   MapPin,
+  CreditCard,
+  Receipt,
   X
 } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
@@ -150,6 +152,14 @@ const Sidebar = ({ isMobileOpen, onClose }) => {
         { name: 'Add / Edit Services', icon: PlusSquare, path: '/add-service' },
         { name: 'Property Assessments & Maps', icon: MapPin, path: '/property-assessments' },
         { name: 'Property Legal (Chain Deed)', icon: FileText, path: '/chain-deeds' },
+      ],
+      roles: ['admin']
+    },
+    {
+      title: 'PAYMENTS & INVOICES',
+      items: [
+        { name: 'Create Payment Link', icon: CreditCard, path: '/payments/create' },
+        { name: 'Invoices & Payments', icon: Receipt, path: '/payments/invoices' },
       ],
       roles: ['admin']
     },
