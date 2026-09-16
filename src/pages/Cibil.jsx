@@ -35,6 +35,7 @@ const Cibil = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [reportToDelete, setReportToDelete] = useState(null);
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
+  const [autoDownloadInvoice, setAutoDownloadInvoice] = useState(false);
   const [invoiceReport, setInvoiceReport] = useState(null);
   const [selectedReportFilter, setSelectedReportFilter] = useState('ALL');
 
@@ -212,11 +213,18 @@ const Cibil = () => {
                             <Eye className="w-4 h-4 stroke-[2.5]" />
                           </button>
                           <button 
-                            onClick={() => { setInvoiceReport(report); setShowInvoiceModal(true); }}
+                            onClick={() => { setInvoiceReport(report); setAutoDownloadInvoice(false); setShowInvoiceModal(true); }}
                             className="w-8 h-8 rounded-lg bg-amber-50 text-[#f59e0b] hover:bg-[#f59e0b] hover:text-white flex items-center justify-center transition-all shadow-sm cursor-pointer"
                             title="View / Print Tax Invoice"
                           >
                             <Receipt className="w-4 h-4 stroke-[2.5]" />
+                          </button>
+                          <button 
+                            onClick={() => { setInvoiceReport(report); setAutoDownloadInvoice(true); setShowInvoiceModal(true); }}
+                            className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white flex items-center justify-center transition-all shadow-sm cursor-pointer"
+                            title="Direct Download Invoice PDF"
+                          >
+                            <Download className="w-4 h-4 stroke-[2.5]" />
                           </button>
                           {role === 'admin' && (
                             <button 
@@ -256,11 +264,19 @@ const Cibil = () => {
               </h2>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => { setInvoiceReport(selectedReport); setShowInvoiceModal(true); }}
-                  className="px-3 py-1.5 bg-amber-50 hover:bg-[#f59e0b] text-[#f59e0b] hover:text-white font-bold rounded-lg text-xs flex items-center gap-1 transition-colors border border-amber-200"
+                  onClick={() => { setInvoiceReport(selectedReport); setAutoDownloadInvoice(false); setShowInvoiceModal(true); }}
+                  className="px-2.5 py-1.5 bg-amber-50 hover:bg-[#f59e0b] text-[#f59e0b] hover:text-white font-bold rounded-lg text-xs flex items-center gap-1 transition-colors border border-amber-200"
                 >
                   <Receipt className="w-3.5 h-3.5" />
                   <span>Invoice</span>
+                </button>
+                <button
+                  onClick={() => { setInvoiceReport(selectedReport); setAutoDownloadInvoice(true); setShowInvoiceModal(true); }}
+                  className="px-2.5 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-lg text-xs flex items-center gap-1 transition-colors shadow-xs"
+                  title="Download Invoice PDF"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Download</span>
                 </button>
                 <button 
                   onClick={closePreview} 
@@ -410,8 +426,9 @@ const Cibil = () => {
       {/* Tax Invoice Modal */}
       <CibilInvoiceModal
         isOpen={showInvoiceModal}
-        onClose={() => setShowInvoiceModal(false)}
+        onClose={() => { setShowInvoiceModal(false); setAutoDownloadInvoice(false); }}
         reportData={invoiceReport}
+        autoDownload={autoDownloadInvoice}
       />
 
       {/* Delete Confirmation Modal */}

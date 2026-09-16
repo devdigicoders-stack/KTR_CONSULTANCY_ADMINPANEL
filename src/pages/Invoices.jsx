@@ -21,6 +21,7 @@ const Invoices = () => {
   
   const [selectedInvoice, setSelectedInvoice] = useState(null);
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
+  const [autoDownload, setAutoDownload] = useState(false);
   const [copiedId, setCopiedId] = useState(null);
 
   const fetchInvoices = async () => {
@@ -60,6 +61,13 @@ const Invoices = () => {
 
   const handleViewInvoice = (inv) => {
     setSelectedInvoice(inv);
+    setAutoDownload(false);
+    setIsInvoiceModalOpen(true);
+  };
+
+  const handleDownloadInvoice = (inv) => {
+    setSelectedInvoice(inv);
+    setAutoDownload(true);
     setIsInvoiceModalOpen(true);
   };
 
@@ -269,11 +277,21 @@ const Invoices = () => {
                           {/* View Invoice */}
                           <button
                             onClick={() => handleViewInvoice(item)}
-                            title="View / Download Invoice"
-                            className="px-2.5 py-1.5 bg-[#081326] text-white hover:bg-black text-[11px] font-bold rounded-lg transition-all flex items-center gap-1 cursor-pointer"
+                            title="View Invoice Preview"
+                            className="px-2 py-1.5 bg-[#081326] text-white hover:bg-black text-[11px] font-bold rounded-lg transition-all flex items-center gap-1 cursor-pointer"
                           >
                             <Eye className="w-3.5 h-3.5 text-[#f59e0b]" />
-                            <span>Invoice</span>
+                            <span className="hidden sm:inline">View</span>
+                          </button>
+
+                          {/* Download Invoice PDF */}
+                          <button
+                            onClick={() => handleDownloadInvoice(item)}
+                            title="Download Invoice PDF"
+                            className="px-2.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-bold rounded-lg transition-all flex items-center gap-1 shadow-xs cursor-pointer active:scale-95"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                            <span>Download</span>
                           </button>
 
                           {/* Copy Link (if PaymentLink and pending) */}
@@ -312,8 +330,9 @@ const Invoices = () => {
       {/* Invoice Modal */}
       <PaymentInvoiceModal
         isOpen={isInvoiceModalOpen}
-        onClose={() => setIsInvoiceModalOpen(false)}
+        onClose={() => { setIsInvoiceModalOpen(false); setAutoDownload(false); }}
         invoiceData={selectedInvoice}
+        autoDownload={autoDownload}
       />
 
     </div>

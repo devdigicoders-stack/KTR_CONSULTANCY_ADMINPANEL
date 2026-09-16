@@ -1,10 +1,11 @@
-import React, { useRef } from 'react';
-import { X, Printer, CheckCircle, ShieldCheck } from 'lucide-react';
+import React, { useRef, useState, useEffect } from 'react';
+import { X, Printer, Download, CheckCircle, ShieldCheck, Loader2 } from 'lucide-react';
+import html2pdf from 'html2pdf.js';
+import toast from 'react-hot-toast';
 
-const PaymentInvoiceModal = ({ isOpen, onClose, invoiceData }) => {
+const PaymentInvoiceModal = ({ isOpen, onClose, invoiceData, autoDownload = false }) => {
   const printRef = useRef(null);
-
-  if (!isOpen || !invoiceData) return null;
+  const [downloading, setDownloading] = useState(false);
 
   const {
     invoiceNumber = 'KTR/INV/' + new Date().getFullYear() + '/' + Math.floor(10000 + Math.random() * 90000),
@@ -21,9 +22,47 @@ const PaymentInvoiceModal = ({ isOpen, onClose, invoiceData }) => {
     paidAt = new Date(),
     status = 'Paid',
     type = 'PaymentLink'
-  } = invoiceData;
+  } = invoiceData || {};
 
-  const date = new Date(paidAt || invoiceData.createdAt || Date.now()).toLocaleDateString('en-IN', {
+  const handlePrint = () => {
+    window.print();
+  };
+
+  const handleDownloadPdf = async () => {
+    if (!printRef.current) return;
+    setDownloading(true);
+    const element = printRef.current;
+    const invNoClean = (invoiceNumber || 'KTR_INVOICE').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const opt = {
+      margin: [6, 6, 6, 6],
+      filename: `Invoice_${invNoClean}.pdf`,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true, logging: false },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+
+    try {
+      await html2pdf().set(opt).from(element).save();
+      toast.success('Invoice downloaded successfully!');
+    } catch (err) {
+      console.error('PDF generation error:', err);
+      toast.error('Direct download failed, opening browser print...');
+      window.print();
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen && autoDownload && invoiceData) {
+      const timer = setTimeout(() => {
+        handleDownloadPdf();
+      }, 350);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen, autoDownload, invoiceData]);
+
+  const date = new Date(paidAt || invoiceData?.createdAt || Date.now()).toLocaleDateString('en-IN', {
     day: '2-digit',
     month: 'short',
     year: 'numeric'
@@ -36,9 +75,7 @@ const PaymentInvoiceModal = ({ isOpen, onClose, invoiceData }) => {
   const sgst = (gstVal / 2).toFixed(2);
   const finalTotal = totalAmount || (taxableValue + gstVal);
 
-  const handlePrint = () => {
-    window.print();
-  };
+  if (!isOpen || !invoiceData) return null;
 
   return (
     <div className="invoice-modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 md:p-6 bg-[#081326]/80 backdrop-blur-sm overflow-y-auto">
@@ -101,11 +138,19 @@ const PaymentInvoiceModal = ({ isOpen, onClose, invoiceData }) => {
           </div>
           <div className="flex items-center gap-2">
             <button
+              onClick={handleDownloadPdf}
+              disabled={downloading}
+              className="px-3 py-1.5 bg-[#f59e0b] hover:bg-orange-500 disabled:opacity-50 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer"
+            >
+              {downloading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+              <span>{downloading ? 'Downloading...' : 'Download PDF'}</span>
+            </button>
+            <button
               onClick={handlePrint}
-              className="px-3 py-1.5 bg-[#f59e0b] hover:bg-orange-500 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer"
+              className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-200 hover:text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer border border-gray-700"
             >
               <Printer className="w-3.5 h-3.5" />
-              <span>Print / Download PDF</span>
+              <span>Print</span>
             </button>
             <button
               onClick={onClose}

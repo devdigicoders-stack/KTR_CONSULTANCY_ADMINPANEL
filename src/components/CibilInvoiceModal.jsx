@@ -1,10 +1,11 @@
-import React, { useRef } from 'react';
-import { X, Printer, Download, CheckCircle, ShieldCheck } from 'lucide-react';
+import React, { useRef, useState, useEffect } from 'react';
+import { X, Printer, Download, CheckCircle, ShieldCheck, Loader2 } from 'lucide-react';
+import html2pdf from 'html2pdf.js';
+import toast from 'react-hot-toast';
 
-const CibilInvoiceModal = ({ isOpen, onClose, reportData }) => {
+const CibilInvoiceModal = ({ isOpen, onClose, reportData, autoDownload = false }) => {
   const printRef = useRef(null);
-
-  if (!isOpen || !reportData) return null;
+  const [downloading, setDownloading] = useState(false);
 
   const {
     name = 'Customer',
@@ -12,10 +13,10 @@ const CibilInvoiceModal = ({ isOpen, onClose, reportData }) => {
     mobile = 'N/A',
     bureau = 'TransUnion CIBIL',
     paymentId = 'N/A',
-    invoiceNumber = reportData.invoiceNumber || ('KTR/INV/' + new Date().getFullYear() + '/' + Math.floor(10000 + Math.random() * 90000)),
+    invoiceNumber = reportData?.invoiceNumber || ('KTR/INV/' + new Date().getFullYear() + '/' + Math.floor(10000 + Math.random() * 90000)),
     createdAt = new Date(),
     pricing = {}
-  } = reportData;
+  } = reportData || {};
 
   const date = new Date(createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 
@@ -31,6 +32,42 @@ const CibilInvoiceModal = ({ isOpen, onClose, reportData }) => {
   const handlePrint = () => {
     window.print();
   };
+
+  const handleDownloadPdf = async () => {
+    if (!printRef.current) return;
+    setDownloading(true);
+    const element = printRef.current;
+    const invNoClean = (invoiceNumber || 'KTR_CIBIL_INVOICE').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const opt = {
+      margin: [6, 6, 6, 6],
+      filename: `Invoice_${invNoClean}.pdf`,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true, logging: false },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+
+    try {
+      await html2pdf().set(opt).from(element).save();
+      toast.success('Invoice downloaded successfully!');
+    } catch (err) {
+      console.error('PDF generation error:', err);
+      toast.error('Direct download failed, opening browser print...');
+      window.print();
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen && autoDownload && reportData) {
+      const timer = setTimeout(() => {
+        handleDownloadPdf();
+      }, 350);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen, autoDownload, reportData]);
+
+  if (!isOpen || !reportData) return null;
 
   return (
     <div className="invoice-modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 md:p-6 bg-[#081326]/80 backdrop-blur-sm overflow-y-auto">
@@ -93,15 +130,23 @@ const CibilInvoiceModal = ({ isOpen, onClose, reportData }) => {
           </div>
           <div className="flex items-center gap-2">
             <button
+              onClick={handleDownloadPdf}
+              disabled={downloading}
+              className="px-3 py-1.5 bg-[#f59e0b] hover:bg-orange-500 disabled:opacity-50 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer"
+            >
+              {downloading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+              <span>{downloading ? 'Downloading...' : 'Download PDF'}</span>
+            </button>
+            <button
               onClick={handlePrint}
-              className="px-3 py-1.5 bg-[#f59e0b] hover:bg-orange-500 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm active:scale-95"
+              className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-200 hover:text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer border border-gray-700"
             >
               <Printer className="w-3.5 h-3.5" />
-              <span>Print / Save PDF</span>
+              <span>Print</span>
             </button>
             <button
               onClick={onClose}
-              className="w-8 h-8 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white flex items-center justify-center transition-colors"
+              className="w-8 h-8 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
             >
               <X className="w-4 h-4" />
             </button>
