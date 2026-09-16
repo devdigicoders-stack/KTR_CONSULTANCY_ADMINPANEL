@@ -11,18 +11,20 @@ const StatusBadge = ({ status }) => {
     failed: "text-red-500 bg-red-50 border border-red-100",
     notFound: "text-orange-500 bg-orange-50 border border-orange-100",
     refunded: "text-purple-700 bg-purple-50 border border-purple-200",
+    pending_fulfillment: "text-amber-800 bg-amber-50 border border-amber-200"
   };
   const dotColor = {
     success: "bg-green-500",
     failed: "bg-red-500",
     notFound: "bg-orange-500",
-    refunded: "bg-purple-600"
+    refunded: "bg-purple-600",
+    pending_fulfillment: "bg-amber-500"
   };
 
   return (
     <span className={`${styles[status] || 'text-gray-600 bg-gray-50'} px-2.5 py-1 rounded-md font-bold flex items-center justify-center gap-1.5 w-fit text-[11px]`}>
       {dotColor[status] && <span className={`w-1.5 h-1.5 rounded-full ${dotColor[status]}`}></span>}
-      {status === 'notFound' ? 'Not Found' : status === 'refunded' ? 'Auto-Refunded' : status.charAt(0).toUpperCase() + status.slice(1)}
+      {status === 'notFound' ? 'Not Found' : status === 'refunded' ? 'Auto-Refunded' : status === 'pending_fulfillment' ? 'Pending Dispatch (45-90m)' : status.charAt(0).toUpperCase() + status.slice(1)}
     </span>
   );
 };
@@ -165,7 +167,7 @@ const Cibil = () => {
               ) : (
                 reports.filter(r => (!selectedReportFilter || selectedReportFilter === 'ALL' || r.status === selectedReportFilter)).map((report) => {
                   const isRefunded = report.status === 'refunded';
-                  const amountPaid = report.pricing?.totalAmount || report.refundDetails?.amount || (report.bureau?.includes('CRIF') ? 450 : 500);
+                  const amountPaid = report.pricing?.totalAmount || report.pricing?.totalPayable || report.refundDetails?.amount || (report.reportType === 'company_cmr' ? 1770 : report.bureau?.includes('CRIF') ? 450 : 500);
 
                   return (
                     <tr key={report._id} className="border-b border-gray-50 hover:bg-orange-50/20 transition-colors">
@@ -173,9 +175,17 @@ const Cibil = () => {
                         {new Date(report.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
                       </td>
                       <td className="px-4 py-3.5">
-                        <div className="font-bold text-[#081326]">{report.name}</div>
-                        <div className="text-[11px] text-gray-500 mt-0.5">PAN: <span className="font-mono font-bold text-gray-800">{report.pan}</span></div>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-bold text-[#081326]">{report.companyName || report.name}</span>
+                          {report.reportType === 'company_cmr' && (
+                            <span className="bg-blue-100 text-blue-800 text-[9.5px] font-black px-1.5 py-0.5 rounded border border-blue-200 uppercase">
+                              Company CMR
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[11px] text-gray-500 mt-0.5">PAN: <span className="font-mono font-bold text-gray-800">{report.companyPan || report.pan}</span></div>
                         <div className="text-[11px] text-gray-500">Mob: +91 {report.mobile}</div>
+                        {report.email && <div className="text-[10px] text-gray-400">Email: {report.email}</div>}
                       </td>
                       <td className="px-4 py-3.5 whitespace-nowrap font-bold text-gray-700">
                         {report.bureau}
@@ -301,24 +311,79 @@ const Cibil = () => {
                    </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-y-6 gap-x-4">
-                  <div>
-                    <p className="text-[10px] font-medium text-gray-400 mb-1 uppercase tracking-wider">Mobile Number</p>
-                    <p className="text-sm font-bold text-[#081326]">{selectedReport.mobile}</p>
+                {selectedReport.reportType === 'company_cmr' ? (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-y-4 gap-x-4">
+                      <div>
+                        <p className="text-[10px] font-medium text-gray-400 mb-1 uppercase tracking-wider">Company Type</p>
+                        <p className="text-sm font-bold text-[#081326]">{selectedReport.companyType || 'N/A'}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-medium text-gray-400 mb-1 uppercase tracking-wider">Date of Incorporation</p>
+                        <p className="text-sm font-bold text-[#081326]">{selectedReport.doi || 'N/A'}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-medium text-gray-400 mb-1 uppercase tracking-wider">WhatsApp Mobile</p>
+                        <p className="text-sm font-bold text-[#081326]">+91 {selectedReport.mobile}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-medium text-gray-400 mb-1 uppercase tracking-wider">Official Email</p>
+                        <p className="text-sm font-bold text-[#081326]">{selectedReport.email || 'N/A'}</p>
+                      </div>
+                      <div className="col-span-2">
+                        <p className="text-[10px] font-medium text-gray-400 mb-1 uppercase tracking-wider">Registered Address</p>
+                        <p className="text-xs font-semibold text-gray-700 bg-gray-50 p-2.5 rounded-lg border border-gray-100">
+                          {selectedReport.companyAddress || 'N/A'} {selectedReport.pinCode ? `- ${selectedReport.pinCode}` : ''}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Directors List */}
+                    {selectedReport.directors && selectedReport.directors.length > 0 && (
+                      <div className="pt-3 border-t border-gray-100">
+                        <p className="text-[10px] font-bold text-gray-400 mb-2 uppercase tracking-wider">
+                          Directors / Partners ({selectedReport.directors.length}):
+                        </p>
+                        <div className="space-y-2">
+                          {selectedReport.directors.map((d, dIdx) => (
+                            <div key={dIdx} className="bg-amber-50/60 p-2.5 rounded-xl border border-amber-200/80 flex justify-between items-center text-xs">
+                              <div>
+                                <span className="font-bold text-amber-950">{dIdx + 1}. {d.name}</span>
+                                {d.dob && <span className="text-gray-500 ml-2">DOB: {d.dob}</span>}
+                              </div>
+                              <span className="font-mono font-bold text-[#081326] bg-white px-2 py-0.5 rounded border border-gray-200">
+                                {d.pan}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-900 leading-relaxed">
+                      ⏳ <strong>Fulfillment Timeline:</strong> Company CIBIL CMR must be dispatched to WhatsApp (<strong>+91 {selectedReport.mobile}</strong>) and Email (<strong>{selectedReport.email}</strong>) within <strong>45 to 90 minutes</strong>.
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-[10px] font-medium text-gray-400 mb-1 uppercase tracking-wider">Gender</p>
-                    <p className="text-sm font-bold text-[#081326]">{selectedReport.gender}</p>
+                ) : (
+                  <div className="grid grid-cols-2 gap-y-6 gap-x-4">
+                    <div>
+                      <p className="text-[10px] font-medium text-gray-400 mb-1 uppercase tracking-wider">Mobile Number</p>
+                      <p className="text-sm font-bold text-[#081326]">{selectedReport.mobile}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-medium text-gray-400 mb-1 uppercase tracking-wider">Gender</p>
+                      <p className="text-sm font-bold text-[#081326]">{selectedReport.gender}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-medium text-gray-400 mb-1 uppercase tracking-wider">Credit Bureau</p>
+                      <p className="text-sm font-bold text-[#081326]">{selectedReport.bureau}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-medium text-gray-400 mb-1 uppercase tracking-wider">Credit Score</p>
+                      <p className="text-sm font-black text-[#f59e0b] bg-[#f59e0b]/10 px-2 py-0.5 rounded w-fit">{selectedReport.score || 'N/A'}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-[10px] font-medium text-gray-400 mb-1 uppercase tracking-wider">Credit Bureau</p>
-                    <p className="text-sm font-bold text-[#081326]">{selectedReport.bureau}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-medium text-gray-400 mb-1 uppercase tracking-wider">Credit Score</p>
-                    <p className="text-sm font-black text-[#f59e0b] bg-[#f59e0b]/10 px-2 py-0.5 rounded w-fit">{selectedReport.score || 'N/A'}</p>
-                  </div>
-                </div>
+                )}
               </div>
 
               {/* Auto-Refund Details Card (if refunded) */}
