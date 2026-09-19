@@ -35,38 +35,66 @@ const CibilInvoiceModal = ({ isOpen, onClose, reportData }) => {
   };
 
   const handleDownloadPdf = async () => {
+    if (downloading) return;
     setDownloading(true);
-    const targetId = reportData?._id || reportData?.paymentId;
+    const toastId = toast.loading('Generating official tax invoice PDF...');
     const invNoClean = (invoiceNumber || 'KTR_CIBIL_INVOICE').replace(/[^a-zA-Z0-9_-]/g, '_');
 
     try {
-      if (targetId) {
-        try {
-          // Direct Server-Side Clean PDF generation via Axios
-          const response = await api.get(`/cibil-reports/invoice-pdf/${targetId}`, {
-            responseType: 'blob'
-          });
-          
-          if (response.data && response.status === 200) {
-            const blob = new Blob([response.data], { type: 'application/pdf' });
-            const downloadUrl = window.URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = downloadUrl;
-            link.download = `Invoice_${invNoClean}.pdf`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            window.URL.revokeObjectURL(downloadUrl);
-            toast.success('Official Tax Invoice PDF downloaded!');
-            setDownloading(false);
-            return;
+      let blobData = null;
+
+      // Method 1: On-the-fly server generation with full data
+      try {
+        const postRes = await api.post('/cibil-reports/generate-invoice-pdf', {
+          ...reportData,
+          invoiceNumber,
+          date
+        }, {
+          responseType: 'blob',
+          timeout: 10000
+        });
+        if (postRes.status === 200 && postRes.data) {
+          blobData = postRes.data;
+        }
+      } catch (postErr) {
+        console.warn('POST /generate-invoice-pdf failed, attempting GET by ID...', postErr);
+      }
+
+      // Method 2: GET by ID
+      if (!blobData) {
+        const targetId = reportData?._id || reportData?.paymentId;
+        if (targetId) {
+          try {
+            const getRes = await api.get(`/cibil-reports/invoice-pdf/${targetId}`, {
+              responseType: 'blob',
+              timeout: 10000
+            });
+            if (getRes.status === 200 && getRes.data) {
+              blobData = getRes.data;
+            }
+          } catch (getErr) {
+            console.warn('GET /invoice-pdf/:id failed:', getErr);
           }
-        } catch (serverErr) {
-          console.warn('Server PDF generation failed, falling back to client PDF generation:', serverErr);
         }
       }
 
-      // Client-Side Fallback if server call not available
+      if (blobData) {
+        const blob = new Blob([blobData], { type: 'application/pdf' });
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = `Invoice_${invNoClean}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        setTimeout(() => {
+          document.body.removeChild(link);
+          window.URL.revokeObjectURL(downloadUrl);
+        }, 200);
+        toast.success('Official Tax Invoice PDF downloaded!', { id: toastId });
+        return;
+      }
+
+      // Method 3: Client-side html2pdf fallback
       if (printRef.current) {
         const element = printRef.current;
         const opt = {
@@ -77,13 +105,14 @@ const CibilInvoiceModal = ({ isOpen, onClose, reportData }) => {
           jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
         };
         await html2pdf().set(opt).from(element).save();
-        toast.success('Invoice downloaded successfully!');
-      } else {
-        throw new Error('Invoice container not found for PDF generation');
+        toast.success('Invoice downloaded successfully!', { id: toastId });
+        return;
       }
+
+      throw new Error('Could not generate PDF buffer');
     } catch (err) {
       console.error('PDF generation error:', err);
-      toast.error('Failed to download invoice PDF. You can also use Print.');
+      toast.error('Direct PDF download failed. Please use Print button to save as PDF.', { id: toastId });
     } finally {
       setDownloading(false);
     }
