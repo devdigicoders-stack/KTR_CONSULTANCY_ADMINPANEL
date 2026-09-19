@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronRight, Download, Eye, Trash2, X, AlertTriangle, FileText, CheckCircle, Info, RotateCcw, Receipt } from 'lucide-react';
+import toast from 'react-hot-toast';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import CibilInvoiceModal from '../components/CibilInvoiceModal';
@@ -37,9 +38,44 @@ const Cibil = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [reportToDelete, setReportToDelete] = useState(null);
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
-  const [autoDownloadInvoice, setAutoDownloadInvoice] = useState(false);
   const [invoiceReport, setInvoiceReport] = useState(null);
   const [selectedReportFilter, setSelectedReportFilter] = useState('ALL');
+
+  const handleDirectDownloadInvoice = async (report) => {
+    const targetId = report?._id || report?.paymentId;
+    const invNoClean = (report?.invoiceNumber || 'KTR_CIBIL_INVOICE').replace(/[^a-zA-Z0-9_-]/g, '_');
+    if (!targetId) {
+      setInvoiceReport(report);
+      setShowInvoiceModal(true);
+      return;
+    }
+    const toastId = toast.loading('Preparing invoice PDF...');
+    try {
+      const response = await api.get(`/cibil-reports/invoice-pdf/${targetId}`, {
+        responseType: 'blob'
+      });
+      if (response.data && response.status === 200) {
+        const blob = new Blob([response.data], { type: 'application/pdf' });
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = `Invoice_${invNoClean}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(downloadUrl);
+        toast.success('Tax invoice downloaded successfully!', { id: toastId });
+        return;
+      }
+      throw new Error('Server download failed');
+    } catch (err) {
+      console.warn('Direct server invoice download failed:', err);
+      toast.dismiss(toastId);
+      // Fallback: open invoice modal for client preview/download
+      setInvoiceReport(report);
+      setShowInvoiceModal(true);
+    }
+  };
 
   const fetchReports = async () => {
     try {
@@ -223,16 +259,16 @@ const Cibil = () => {
                             <Eye className="w-4 h-4 stroke-[2.5]" />
                           </button>
                           <button 
-                            onClick={() => { setInvoiceReport(report); setAutoDownloadInvoice(false); setShowInvoiceModal(true); }}
+                            onClick={() => { setInvoiceReport(report); setShowInvoiceModal(true); }}
                             className="w-8 h-8 rounded-lg bg-amber-50 text-[#f59e0b] hover:bg-[#f59e0b] hover:text-white flex items-center justify-center transition-all shadow-sm cursor-pointer"
                             title="View / Print Tax Invoice"
                           >
                             <Receipt className="w-4 h-4 stroke-[2.5]" />
                           </button>
                           <button 
-                            onClick={() => { setInvoiceReport(report); setAutoDownloadInvoice(true); setShowInvoiceModal(true); }}
+                            onClick={() => handleDirectDownloadInvoice(report)}
                             className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white flex items-center justify-center transition-all shadow-sm cursor-pointer"
-                            title="Direct Download Invoice PDF"
+                            title="Download Invoice PDF"
                           >
                             <Download className="w-4 h-4 stroke-[2.5]" />
                           </button>
@@ -274,15 +310,16 @@ const Cibil = () => {
               </h2>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => { setInvoiceReport(selectedReport); setAutoDownloadInvoice(false); setShowInvoiceModal(true); }}
-                  className="px-2.5 py-1.5 bg-amber-50 hover:bg-[#f59e0b] text-[#f59e0b] hover:text-white font-bold rounded-lg text-xs flex items-center gap-1 transition-colors border border-amber-200"
+                  onClick={() => { setInvoiceReport(selectedReport); setShowInvoiceModal(true); }}
+                  className="px-2.5 py-1.5 bg-amber-50 hover:bg-[#f59e0b] text-[#f59e0b] hover:text-white font-bold rounded-lg text-xs flex items-center gap-1 transition-colors border border-amber-200 cursor-pointer"
+                  title="View Tax Invoice"
                 >
                   <Receipt className="w-3.5 h-3.5" />
                   <span>Invoice</span>
                 </button>
                 <button
-                  onClick={() => { setInvoiceReport(selectedReport); setAutoDownloadInvoice(true); setShowInvoiceModal(true); }}
-                  className="px-2.5 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-lg text-xs flex items-center gap-1 transition-colors shadow-xs"
+                  onClick={() => handleDirectDownloadInvoice(selectedReport)}
+                  className="px-2.5 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-lg text-xs flex items-center gap-1 transition-colors shadow-xs cursor-pointer"
                   title="Download Invoice PDF"
                 >
                   <Download className="w-3.5 h-3.5" />
@@ -491,9 +528,8 @@ const Cibil = () => {
       {/* Tax Invoice Modal */}
       <CibilInvoiceModal
         isOpen={showInvoiceModal}
-        onClose={() => { setShowInvoiceModal(false); setAutoDownloadInvoice(false); }}
+        onClose={() => { setShowInvoiceModal(false); setInvoiceReport(null); }}
         reportData={invoiceReport}
-        autoDownload={autoDownloadInvoice}
       />
 
       {/* Delete Confirmation Modal */}

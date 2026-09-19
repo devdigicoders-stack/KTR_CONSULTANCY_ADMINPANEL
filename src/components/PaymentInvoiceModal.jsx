@@ -1,9 +1,10 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState } from 'react';
 import { X, Printer, Download, CheckCircle, ShieldCheck, Loader2 } from 'lucide-react';
 import html2pdf from 'html2pdf.js';
 import toast from 'react-hot-toast';
+import api from '../api/axios';
 
-const PaymentInvoiceModal = ({ isOpen, onClose, invoiceData, autoDownload = false }) => {
+const PaymentInvoiceModal = ({ isOpen, onClose, invoiceData }) => {
   const printRef = useRef(null);
   const [downloading, setDownloading] = useState(false);
 
@@ -35,27 +36,32 @@ const PaymentInvoiceModal = ({ isOpen, onClose, invoiceData, autoDownload = fals
 
     try {
       if (targetId) {
-        // Direct Server-Side Clean PDF generation
-        const backendBase = import.meta.env.VITE_API_URL || 'https://api.ktrconsultants.in/api';
-        const isCibil = invoiceData.type === 'CIBIL';
-        const endpoint = isCibil 
-          ? `${backendBase.replace(/\/+$/, '')}/cibil-reports/invoice-pdf/${targetId}`
-          : `${backendBase.replace(/\/+$/, '')}/payments/invoice-pdf/${targetId}`;
+        try {
+          const isCibil = invoiceData.type === 'CIBIL';
+          const endpoint = isCibil 
+            ? `/cibil-reports/invoice-pdf/${targetId}`
+            : `/payments/invoice-pdf/${targetId}`;
 
-        const response = await fetch(endpoint);
-        if (response.ok) {
-          const blob = await response.blob();
-          const downloadUrl = window.URL.createObjectURL(blob);
-          const link = document.createElement('a');
-          link.href = downloadUrl;
-          link.download = `Invoice_${invNoClean}.pdf`;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          window.URL.revokeObjectURL(downloadUrl);
-          toast.success('Official Tax Invoice PDF downloaded!');
-          setDownloading(false);
-          return;
+          const response = await api.get(endpoint, {
+            responseType: 'blob'
+          });
+          
+          if (response.data && response.status === 200) {
+            const blob = new Blob([response.data], { type: 'application/pdf' });
+            const downloadUrl = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = downloadUrl;
+            link.download = `Invoice_${invNoClean}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(downloadUrl);
+            toast.success('Official Tax Invoice PDF downloaded!');
+            setDownloading(false);
+            return;
+          }
+        } catch (serverErr) {
+          console.warn('Server PDF generation failed, falling back to client PDF:', serverErr);
         }
       }
 
@@ -71,24 +77,16 @@ const PaymentInvoiceModal = ({ isOpen, onClose, invoiceData, autoDownload = fals
         };
         await html2pdf().set(opt).from(element).save();
         toast.success('Invoice downloaded successfully!');
+      } else {
+        throw new Error('Invoice element missing');
       }
     } catch (err) {
       console.error('PDF generation error:', err);
-      toast.error('Direct download failed, opening browser print...');
-      window.print();
+      toast.error('Failed to download invoice PDF. You can also use Print.');
     } finally {
       setDownloading(false);
     }
   };
-
-  useEffect(() => {
-    if (isOpen && autoDownload && invoiceData) {
-      const timer = setTimeout(() => {
-        handleDownloadPdf();
-      }, 350);
-      return () => clearTimeout(timer);
-    }
-  }, [isOpen, autoDownload, invoiceData]);
 
   const date = new Date(paidAt || invoiceData?.createdAt || Date.now()).toLocaleDateString('en-IN', {
     day: '2-digit',

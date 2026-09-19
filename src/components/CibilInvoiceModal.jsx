@@ -1,9 +1,10 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState } from 'react';
 import { X, Printer, Download, CheckCircle, ShieldCheck, Loader2 } from 'lucide-react';
 import html2pdf from 'html2pdf.js';
 import toast from 'react-hot-toast';
+import api from '../api/axios';
 
-const CibilInvoiceModal = ({ isOpen, onClose, reportData, autoDownload = false }) => {
+const CibilInvoiceModal = ({ isOpen, onClose, reportData }) => {
   const printRef = useRef(null);
   const [downloading, setDownloading] = useState(false);
 
@@ -40,24 +41,28 @@ const CibilInvoiceModal = ({ isOpen, onClose, reportData, autoDownload = false }
 
     try {
       if (targetId) {
-        // Direct Server-Side Clean PDF generation
-        const backendBase = import.meta.env.VITE_API_URL || 'https://api.ktrconsultants.in/api';
-        const url = `${backendBase.replace(/\/+$/, '')}/cibil-reports/invoice-pdf/${targetId}`;
-        
-        const response = await fetch(url);
-        if (response.ok) {
-          const blob = await response.blob();
-          const downloadUrl = window.URL.createObjectURL(blob);
-          const link = document.createElement('a');
-          link.href = downloadUrl;
-          link.download = `Invoice_${invNoClean}.pdf`;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          window.URL.revokeObjectURL(downloadUrl);
-          toast.success('Official Tax Invoice PDF downloaded!');
-          setDownloading(false);
-          return;
+        try {
+          // Direct Server-Side Clean PDF generation via Axios
+          const response = await api.get(`/cibil-reports/invoice-pdf/${targetId}`, {
+            responseType: 'blob'
+          });
+          
+          if (response.data && response.status === 200) {
+            const blob = new Blob([response.data], { type: 'application/pdf' });
+            const downloadUrl = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = downloadUrl;
+            link.download = `Invoice_${invNoClean}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(downloadUrl);
+            toast.success('Official Tax Invoice PDF downloaded!');
+            setDownloading(false);
+            return;
+          }
+        } catch (serverErr) {
+          console.warn('Server PDF generation failed, falling back to client PDF generation:', serverErr);
         }
       }
 
@@ -73,24 +78,16 @@ const CibilInvoiceModal = ({ isOpen, onClose, reportData, autoDownload = false }
         };
         await html2pdf().set(opt).from(element).save();
         toast.success('Invoice downloaded successfully!');
+      } else {
+        throw new Error('Invoice container not found for PDF generation');
       }
     } catch (err) {
       console.error('PDF generation error:', err);
-      toast.error('Direct download failed, opening browser print...');
-      window.print();
+      toast.error('Failed to download invoice PDF. You can also use Print.');
     } finally {
       setDownloading(false);
     }
   };
-
-  useEffect(() => {
-    if (isOpen && autoDownload && reportData) {
-      const timer = setTimeout(() => {
-        handleDownloadPdf();
-      }, 350);
-      return () => clearTimeout(timer);
-    }
-  }, [isOpen, autoDownload, reportData]);
 
   if (!isOpen || !reportData) return null;
 
@@ -352,19 +349,27 @@ const CibilInvoiceModal = ({ isOpen, onClose, reportData, autoDownload = false }
         {/* Modal Bottom Actions */}
         <div className="no-print bg-gray-50 px-6 py-4 flex flex-col sm:flex-row justify-between items-center gap-3 border-t border-gray-100">
           <p className="text-[11px] text-gray-500">
-            Click Print to download as PDF or send to printer.
+            Download the official tax invoice PDF or print directly.
           </p>
           <div className="flex items-center gap-2.5 w-full sm:w-auto">
             <button
-              onClick={handlePrint}
-              className="flex-1 sm:flex-none px-4 py-2 bg-[#f59e0b] hover:bg-orange-500 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow transition-all"
+              onClick={handleDownloadPdf}
+              disabled={downloading}
+              className="flex-1 sm:flex-none px-4 py-2 bg-[#f59e0b] hover:bg-orange-500 disabled:opacity-50 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow transition-all cursor-pointer"
             >
-              <Download className="w-3.5 h-3.5" />
-              Download / Print Invoice
+              {downloading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+              <span>{downloading ? 'Downloading...' : 'Download PDF'}</span>
+            </button>
+            <button
+              onClick={handlePrint}
+              className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white font-semibold rounded-xl text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              <span>Print</span>
             </button>
             <button
               onClick={onClose}
-              className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold rounded-xl text-xs transition-colors"
+              className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold rounded-xl text-xs transition-colors cursor-pointer"
             >
               Close
             </button>
