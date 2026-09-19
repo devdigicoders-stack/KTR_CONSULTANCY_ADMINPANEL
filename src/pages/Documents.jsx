@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import api from '../api/axios';
 import { getAssetUrl } from '../utils/url';
+import { useAuth } from '../context/AuthContext';
 
 const StatusBadge = ({ status }) => {
   const styles = {
