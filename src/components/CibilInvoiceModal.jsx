@@ -34,21 +34,46 @@ const CibilInvoiceModal = ({ isOpen, onClose, reportData, autoDownload = false }
   };
 
   const handleDownloadPdf = async () => {
-    if (!printRef.current) return;
     setDownloading(true);
-    const element = printRef.current;
+    const targetId = reportData?._id || reportData?.paymentId;
     const invNoClean = (invoiceNumber || 'KTR_CIBIL_INVOICE').replace(/[^a-zA-Z0-9_-]/g, '_');
-    const opt = {
-      margin: [6, 6, 6, 6],
-      filename: `Invoice_${invNoClean}.pdf`,
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true, logging: false },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-    };
 
     try {
-      await html2pdf().set(opt).from(element).save();
-      toast.success('Invoice downloaded successfully!');
+      if (targetId) {
+        // Direct Server-Side Clean PDF generation
+        const backendBase = import.meta.env.VITE_API_URL || 'https://api.ktrconsultants.in/api';
+        const url = `${backendBase.replace(/\/+$/, '')}/cibil-reports/invoice-pdf/${targetId}`;
+        
+        const response = await fetch(url);
+        if (response.ok) {
+          const blob = await response.blob();
+          const downloadUrl = window.URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = downloadUrl;
+          link.download = `Invoice_${invNoClean}.pdf`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          window.URL.revokeObjectURL(downloadUrl);
+          toast.success('Official Tax Invoice PDF downloaded!');
+          setDownloading(false);
+          return;
+        }
+      }
+
+      // Client-Side Fallback if server call not available
+      if (printRef.current) {
+        const element = printRef.current;
+        const opt = {
+          margin: [6, 6, 6, 6],
+          filename: `Invoice_${invNoClean}.pdf`,
+          image: { type: 'jpeg', quality: 0.98 },
+          html2canvas: { scale: 2, useCORS: true, logging: false },
+          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        };
+        await html2pdf().set(opt).from(element).save();
+        toast.success('Invoice downloaded successfully!');
+      }
     } catch (err) {
       console.error('PDF generation error:', err);
       toast.error('Direct download failed, opening browser print...');

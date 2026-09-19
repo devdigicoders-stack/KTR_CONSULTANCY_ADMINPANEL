@@ -15,11 +15,15 @@ const EditClient = () => {
   
   const [formData, setFormData] = useState({
     fullName: '',
+    mobile: '',
+    occupation: '',
+    loanAmount: '',
+    caseType: '',
+    status: 'Pending',
     dob: '',
     gender: '',
     panNumber: '',
     aadhaarNumber: '',
-    mobile: '',
     email: '',
     alternativeEmail: '',
     idProofType: '',
@@ -30,7 +34,6 @@ const EditClient = () => {
     state: '',
     city: '',
     pincode: '',
-    occupation: '',
     companyName: '',
     designation: '',
     annualIncome: '',
@@ -38,7 +41,6 @@ const EditClient = () => {
     businessType: '',
     yearsInBusiness: '',
     website: '',
-    loanAmount: '',
     referredBy: '',
     referrerMobile: '',
     relationship: '',
@@ -51,7 +53,6 @@ const EditClient = () => {
     addressProofUrl: null,
     panCardUrl: null,
   });
-
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -69,11 +70,15 @@ const EditClient = () => {
           const client = res.data.data;
           setFormData({
             fullName: client.fullName || '',
+            mobile: client.mobile || '',
+            occupation: client.occupation || '',
+            loanAmount: client.loanAmount || '',
+            caseType: client.caseType || client.loanType || '',
+            status: client.status || 'Pending',
             dob: client.dob ? client.dob.split('T')[0] : '',
             gender: client.gender || '',
             panNumber: client.panNumber || '',
             aadhaarNumber: client.aadhaarNumber || '',
-            mobile: client.mobile || '',
             email: client.email || '',
             alternativeEmail: client.alternativeEmail || '',
             idProofType: client.idProofType || '',
@@ -84,7 +89,6 @@ const EditClient = () => {
             state: client.state || '',
             city: client.city || '',
             pincode: client.pincode || '',
-            occupation: client.occupation || '',
             companyName: client.companyName || '',
             designation: client.designation || '',
             annualIncome: client.annualIncome || '',
@@ -92,7 +96,6 @@ const EditClient = () => {
             businessType: client.businessType || '',
             yearsInBusiness: client.yearsInBusiness || '',
             website: client.website || '',
-            loanAmount: client.loanAmount || '',
             referredBy: client.referredBy || '',
             referrerMobile: client.referrerMobile || '',
             relationship: client.relationship || '',

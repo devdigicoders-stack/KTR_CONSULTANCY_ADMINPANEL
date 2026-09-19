@@ -1,16 +1,25 @@
 import { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { ChevronRight, Search, Bell, MoreHorizontal, Edit, Trash2, AlertTriangle } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { 
+  ChevronRight, Search, Bell, Edit, Trash2, AlertTriangle, 
+  History, Clock, Phone, Briefcase, IndianRupee, FileCheck, AlertCircle
+} from 'lucide-react';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 
 import OverviewTab from '../components/client/OverviewTab';
+import DocumentRepositoryTab from '../components/client/DocumentRepositoryTab';
+import PendencyTab from '../components/client/PendencyTab';
 import DocumentsTab from '../components/client/DocumentsTab';
-import RecordsTab from '../components/client/RecordsTab';
-import CibilScoreTab from '../components/client/CibilScoreTab';
-import CreditInfoTab from '../components/client/CreditInfoTab';
-import ClientDashboardTab from '../components/client/ClientDashboardTab';
+
+const formatCurrency = (amount) => {
+  if (!amount && amount !== 0) return '₹ 0';
+  return Number(amount).toLocaleString('en-IN', {
+    maximumFractionDigits: 0,
+    style: 'currency',
+    currency: 'INR'
+  });
+};
 
 const ClientDetails = () => {
   const { id } = useParams();
@@ -21,42 +30,38 @@ const ClientDetails = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    const fetchClient = async () => {
-      try {
-        const res = await api.get(`/clients/${id}`);
-        if (res.data.success) {
-          setClient(res.data.data);
-        }
-      } catch (err) {
-        console.error('Error fetching client details:', err);
-      } finally {
-        setLoading(false);
+  const fetchClient = async () => {
+    try {
+      const res = await api.get(`/clients/${id}`);
+      if (res.data.success) {
+        setClient(res.data.data);
       }
-    };
+    } catch (err) {
+      console.error('Error fetching client details:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchClient();
   }, [id]);
 
-  const tabs = user?.role === 'admin' ? [
+  const tabs = [
     'Overview',
     'Documents',
-    'Records',
-    'CIVIL Score',
-    'Credit Information',
-    'Client Dashboard'
-  ] : [
-    'Overview',
-    'Documents'
+    'Pendency',
+    'Manage Docs',
+    'Edit History'
   ];
 
   const getHeaderInfo = () => {
     switch(activeTab) {
-      case 'Overview': return { title: 'View Client-Wise Information', breadcrumb: 'Client Details' };
-      case 'Documents': return { title: 'View Uploaded Documents/Data', breadcrumb: 'Documents & Data' };
-      case 'Records': return { title: 'Track Client Records', breadcrumb: 'Track Records' };
-      case 'CIVIL Score': return { title: 'Check & Display CIVIL Score', breadcrumb: 'CIVIL Score' };
-      case 'Credit Information': return { title: 'View Basic Credit Information', breadcrumb: 'Credit Information' };
-      case 'Client Dashboard': return { title: 'Client Data Dashboard', breadcrumb: 'Client Dashboard' };
+      case 'Overview': return { title: 'Client Overview', breadcrumb: 'Overview' };
+      case 'Documents': return { title: 'Document Repository & Quick Index', breadcrumb: 'Documents' };
+      case 'Pendency': return { title: 'Continuous Pendency Tracking & History', breadcrumb: 'Pendency' };
+      case 'Manage Docs': return { title: 'Manage Custom Folders & Backups', breadcrumb: 'Manage Docs' };
+      case 'Edit History': return { title: 'Audit Trail & Edit History Log', breadcrumb: 'Edit History' };
       default: return { title: 'Client Details', breadcrumb: 'Client Details' };
     }
   };
@@ -83,19 +88,20 @@ const ClientDetails = () => {
     return <div className="p-8 text-center text-red-500 font-medium">Client not found.</div>;
   }
 
-  // Helper to get initials
   const getInitials = (name) => {
-    if (!name) return 'C';
+    if (!name) return 'CL';
     return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
   };
 
+  const activePendencies = (client.pendencies || []).filter(p => p.status !== 'Resolved');
+
   return (
-    <div className="flex flex-col space-y-6 max-w-[1600px] mx-auto">
+    <div className="flex flex-col space-y-6 max-w-[1600px] mx-auto pb-8">
       
       {/* Top Header Row with Breadcrumbs */}
       <div className="flex justify-between items-center bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
         <div>
-          <h2 className="text-xl font-bold text-[#081326] flex items-center gap-2">
+          <h2 className="text-xl font-black text-[#081326] flex items-center gap-2">
             {headerInfo.title}
           </h2>
           <div className="flex items-center gap-2 text-[11px] font-medium text-gray-500 mt-1">
@@ -103,7 +109,7 @@ const ClientDetails = () => {
             <ChevronRight className="w-3 h-3" />
             <Link to="/clients" className="hover:text-[#f59e0b] transition-colors">Clients</Link>
             <ChevronRight className="w-3 h-3" />
-            <span className="text-[#081326]">{headerInfo.breadcrumb}</span>
+            <span className="text-[#081326] font-bold">{headerInfo.breadcrumb}</span>
           </div>
         </div>
         
@@ -112,32 +118,24 @@ const ClientDetails = () => {
             <div className="flex items-center gap-2 pr-4 border-r border-gray-200 mr-2">
               <button 
                 onClick={() => navigate(`/clients/edit/${id}`)}
-                className="px-4 py-2 bg-orange-50 text-orange-600 rounded-lg text-xs font-bold hover:bg-orange-600 hover:text-white transition-colors shadow-sm flex items-center gap-2"
+                className="px-4 py-2 bg-orange-50 text-orange-600 rounded-lg text-xs font-bold hover:bg-orange-600 hover:text-white transition-colors shadow-sm flex items-center gap-2 cursor-pointer"
               >
                 <Edit className="w-4 h-4 stroke-[2.5]" /> Edit Client
               </button>
               <button 
                 onClick={() => setShowDeleteModal(true)}
-                className="px-4 py-2 bg-red-50 text-red-600 rounded-lg text-xs font-bold hover:bg-red-600 hover:text-white transition-colors shadow-sm flex items-center gap-2"
+                className="px-4 py-2 bg-red-50 text-red-600 rounded-lg text-xs font-bold hover:bg-red-600 hover:text-white transition-colors shadow-sm flex items-center gap-2 cursor-pointer"
               >
                 <Trash2 className="w-4 h-4 stroke-[2.5]" /> Delete
               </button>
             </div>
           )}
-          <div className="relative hidden md:block">
-            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input type="text" placeholder="Search anything..." className="w-64 pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-xs font-medium outline-none bg-gray-50/50 focus:bg-white transition-colors" />
-          </div>
-          <button className="relative w-10 h-10 rounded-full border border-gray-200 flex items-center justify-center hover:bg-gray-50 transition-colors">
-            <Bell className="w-4 h-4 text-gray-600" />
-            <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
-          </button>
           <div className="flex items-center gap-3 pl-4 border-l border-gray-200">
-            <div className="w-10 h-10 rounded-full bg-[#081326] text-white flex items-center justify-center font-bold text-sm uppercase">
+            <div className="w-9 h-9 rounded-full bg-[#081326] text-white flex items-center justify-center font-bold text-xs uppercase">
               {getInitials(user?.name) || 'AU'}
             </div>
             <div className="hidden sm:block">
-              <p className="text-[11px] font-bold text-[#081326] leading-tight">{user?.name || 'Admin User'}</p>
+              <p className="text-[11px] font-bold text-[#081326] leading-tight">{user?.name || 'Staff'}</p>
               <p className="text-[9px] font-medium text-gray-500 capitalize">{user?.role || 'Staff'}</p>
             </div>
           </div>
@@ -148,42 +146,56 @@ const ClientDetails = () => {
       <div className="bg-white rounded-2xl shadow-[0_0_20px_rgba(0,0,0,0.03)] border border-gray-100 flex flex-col">
         <div className="p-6 md:p-8 flex flex-col md:flex-row gap-6 md:items-center justify-between">
           <div className="flex items-center gap-6">
-            <div className="w-20 h-20 rounded-full bg-[#081326] flex items-center justify-center text-white text-3xl font-bold shadow-lg">
+            <div className="w-20 h-20 rounded-full bg-[#081326] flex items-center justify-center text-white text-3xl font-black shadow-lg">
               {getInitials(client.fullName)}
             </div>
             <div>
               <div className="flex items-center gap-3 mb-2">
-                <h2 className="text-2xl font-bold text-[#081326]">{client.fullName}</h2>
-                <span className={`${client.status === 'Approved' ? 'text-green-600 bg-green-50' : client.status === 'Rejected' ? 'text-red-500 bg-red-50' : 'text-orange-500 bg-orange-50'} px-2 py-1 rounded-md font-bold flex items-center gap-1.5 text-[10px]`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${client.status === 'Approved' ? 'bg-green-500' : client.status === 'Rejected' ? 'bg-red-500' : 'bg-orange-500'}`}></span>{client.status === 'Approved' ? 'Active' : client.status === 'Rejected' ? 'Inactive' : 'Pending'}
+                <h2 className="text-2xl font-black text-[#081326]">{client.fullName}</h2>
+                <span className={`${client.status === 'Approved' ? 'text-green-600 bg-green-50' : client.status === 'Rejected' ? 'text-red-500 bg-red-50' : 'text-orange-500 bg-orange-50'} px-2.5 py-1 rounded-md font-bold flex items-center gap-1.5 text-xs`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${client.status === 'Approved' ? 'bg-green-500' : client.status === 'Rejected' ? 'bg-red-500' : 'bg-orange-500'}`}></span>
+                  {client.status || 'Pending'}
                 </span>
+                {activePendencies.length > 0 && (
+                  <span className="bg-amber-50 text-amber-800 border border-amber-200 px-2.5 py-1 rounded-md font-bold text-xs flex items-center gap-1">
+                    <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
+                    {activePendencies.length} Active Pendency
+                  </span>
+                )}
               </div>
-              <div className="flex gap-8 text-[11px] font-medium text-gray-500">
+              <div className="flex flex-wrap gap-6 text-xs font-medium text-gray-500 mt-2">
                 <div>
-                  <p className="text-gray-400 mb-0.5">Client ID</p>
-                  <p className="text-[#081326] font-bold">{id || 'CLT-00125'}</p>
+                  <p className="text-[10px] text-gray-400 font-bold uppercase mb-0.5">Mobile</p>
+                  <p className="text-[#081326] font-bold">{client.mobile || 'N/A'}</p>
                 </div>
                 <div>
-                  <p className="text-gray-400 mb-0.5">Added On</p>
-                  <p className="text-[#081326] font-bold">{new Date(client.createdAt).toLocaleDateString()}</p>
+                  <p className="text-[10px] text-gray-400 font-bold uppercase mb-0.5">Profession</p>
+                  <p className="text-[#081326] font-bold">{client.occupation || 'N/A'}</p>
                 </div>
                 <div>
-                  <p className="text-gray-400 mb-0.5">Added By</p>
-                  <p className="text-[#081326] font-bold">{client.user?.name || 'Website / Self'}</p>
+                  <p className="text-[10px] text-gray-400 font-bold uppercase mb-0.5">Loan Amount</p>
+                  <p className="text-emerald-700 font-bold">{formatCurrency(client.loanAmount)}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-gray-400 font-bold uppercase mb-0.5">Case Type</p>
+                  <p className="text-blue-700 font-bold">{client.caseType || client.loanType || 'General Loan'}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-gray-400 font-bold uppercase mb-0.5">Case Registered</p>
+                  <p className="text-[#081326] font-bold">{new Date(client.createdAt).toLocaleDateString('en-IN')}</p>
                 </div>
               </div>
             </div>
           </div>
-
         </div>
 
-        {/* Tab Navigation */}
-        <div className="px-6 md:px-8 border-t border-gray-50 flex gap-8 overflow-x-auto scrollbar-hide">
+        {/* Tab Navigation: Overview | Documents | Pendency | Manage Docs | Edit History */}
+        <div className="px-6 md:px-8 border-t border-gray-100 flex gap-8 overflow-x-auto scrollbar-hide">
           {tabs.map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`py-4 text-xs font-bold whitespace-nowrap transition-colors relative ${
+              className={`py-4 text-xs font-black whitespace-nowrap transition-colors relative cursor-pointer ${
                 activeTab === tab 
                   ? 'text-[#f59e0b]' 
                   : 'text-gray-400 hover:text-[#081326]'
@@ -201,11 +213,41 @@ const ClientDetails = () => {
       {/* Dynamic Tab Content Area */}
       <div className="flex-1">
         {activeTab === 'Overview' && <OverviewTab client={client} />}
-        {activeTab === 'Documents' && <DocumentsTab client={client} />}
-        {activeTab === 'Records' && <RecordsTab client={client} />}
-        {activeTab === 'CIVIL Score' && <CibilScoreTab client={client} />}
-        {activeTab === 'Credit Information' && <CreditInfoTab client={client} />}
-        {activeTab === 'Client Dashboard' && <ClientDashboardTab client={client} />}
+        {activeTab === 'Documents' && <DocumentRepositoryTab client={client} onRefresh={fetchClient} />}
+        {activeTab === 'Pendency' && <PendencyTab client={client} onRefresh={fetchClient} />}
+        {activeTab === 'Manage Docs' && <DocumentsTab client={client} onRefresh={fetchClient} />}
+        {activeTab === 'Edit History' && (
+          <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm space-y-4">
+            <h4 className="text-xs font-black text-[#081326] uppercase tracking-wider border-b border-gray-50 pb-3 flex items-center gap-2">
+              <History className="w-4 h-4 text-blue-600" /> Edit Audit History Log
+            </h4>
+            {client.editHistory && client.editHistory.length > 0 ? (
+              <div className="relative pl-6 border-l-2 border-gray-200 space-y-6">
+                {client.editHistory.slice().reverse().map((item, idx) => (
+                  <div key={idx} className="relative group">
+                    <div className="absolute -left-[31px] top-1.5 w-4 h-4 rounded-full bg-blue-600 border-2 border-white shadow-sm"></div>
+                    <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="text-xs font-bold text-[#081326]">{item.action}</span>
+                        <span className="text-[10px] text-gray-400 font-medium flex items-center gap-1">
+                          <Clock className="w-3 h-3" /> {new Date(item.timestamp).toLocaleString()}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-gray-600 font-medium mb-1">{item.details}</p>
+                      <p className="text-[10px] text-gray-400 font-bold">
+                        Edited By: <span className="text-gray-700">{item.editorName || 'Staff/Admin'}</span> ({item.editorRole || 'staff'})
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-gray-400 text-center py-8 font-medium">
+                No edit history recorded yet for this client.
+              </p>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Delete Confirmation Modal */}
@@ -223,13 +265,13 @@ const ClientDetails = () => {
             <div className="flex gap-3">
               <button 
                 onClick={() => setShowDeleteModal(false)}
-                className="flex-1 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-sm font-bold transition-colors"
+                className="flex-1 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-sm font-bold transition-colors cursor-pointer"
               >
                 Cancel
               </button>
               <button 
                 onClick={handleDeleteClient}
-                className="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-bold transition-colors shadow-sm shadow-red-200"
+                className="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-bold transition-colors shadow-sm shadow-red-200 cursor-pointer"
               >
                 Yes, Delete
               </button>

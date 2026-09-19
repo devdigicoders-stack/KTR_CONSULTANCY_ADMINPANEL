@@ -1,11 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  Users, UserCheck, UserMinus, FileWarning, Search, Filter, Eye, X, RefreshCcw, Download, CheckCircle, Trash2, Edit, AlertTriangle, History, Clock, Phone, Mail, FileText
+  Users, UserCheck, UserMinus, FileWarning, Search, Eye, X, RefreshCcw, Download, 
+  CheckCircle, Trash2, Edit, AlertTriangle, History, Clock, Phone, Mail, FileText, 
+  Briefcase, IndianRupee, FileCheck, AlertCircle, CheckCircle2, Upload, FileUp, Folder
 } from 'lucide-react';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import { getAssetUrl } from '../utils/url';
+import OverviewTab from '../components/client/OverviewTab';
+import DocumentRepositoryTab from '../components/client/DocumentRepositoryTab';
+import PendencyTab from '../components/client/PendencyTab';
 import DocumentsTab from '../components/client/DocumentsTab';
 
 const StatusBadge = ({ status, isDoc }) => {
@@ -23,9 +28,18 @@ const StatusBadge = ({ status, isDoc }) => {
   return (
     <span className={`${styles[status] || 'text-gray-600 bg-gray-50'} px-2.5 py-1 rounded-md font-bold flex items-center justify-center gap-1.5 w-fit text-[11px]`}>
       {!isDoc && dotColor[status] && <span className={`w-1.5 h-1.5 rounded-full ${dotColor[status]}`}></span>}
-      {status}
+      {status || 'Pending'}
     </span>
   );
+};
+
+const formatCurrency = (amount) => {
+  if (!amount && amount !== 0) return '₹ 0';
+  return Number(amount).toLocaleString('en-IN', {
+    maximumFractionDigits: 0,
+    style: 'currency',
+    currency: 'INR'
+  });
 };
 
 const Clients = () => {
@@ -45,6 +59,18 @@ const Clients = () => {
   const [showEditContactModal, setShowEditContactModal] = useState(false);
   const [contactFormData, setContactFormData] = useState({ fullName: '', mobile: '', email: '' });
   const [updatingContact, setUpdatingContact] = useState(false);
+
+  // Front Quick Add Documents Modal State
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [uploadingForClient, setUploadingForClient] = useState(null);
+  const [uploadFormData, setUploadFormData] = useState({
+    docName: '',
+    category: 'General Documents',
+    notes: ''
+  });
+  const [selectedUploadFiles, setSelectedUploadFiles] = useState([]);
+  const [isUploadingDocs, setIsUploadingDocs] = useState(false);
+  const [uploadError, setUploadError] = useState('');
 
   const fetchClients = async () => {
     try {
@@ -66,7 +92,6 @@ const Clients = () => {
 
   const openPreview = async (client) => {
     try {
-      // Fetch fresh client data including editHistory and documentsList
       const res = await api.get(`/clients/${client._id}`);
       if (res.data.success) {
         setSelectedClient(res.data.data);
@@ -88,6 +113,7 @@ const Clients = () => {
       if (res.data.success) {
         setSelectedClient(res.data.data);
       }
+      fetchClients();
     } catch (err) {
       console.error(err);
     }
@@ -137,6 +163,67 @@ const Clients = () => {
     setShowEditContactModal(true);
   };
 
+  const handleOpenUploadModal = (client, e) => {
+    if (e) e.stopPropagation();
+    setUploadingForClient(client);
+    setUploadFormData({
+      docName: '',
+      category: 'General Documents',
+      notes: ''
+    });
+    setSelectedUploadFiles([]);
+    setUploadError('');
+    setShowUploadModal(true);
+  };
+
+  const handleUploadDocumentsSubmit = async (e) => {
+    e.preventDefault();
+    if (!uploadingForClient?._id) return;
+    if (selectedUploadFiles.length === 0) {
+      setUploadError('Please select at least one document file.');
+      return;
+    }
+    if (!uploadFormData.docName.trim()) {
+      setUploadError('Please specify a document name / title so it can be easily identified.');
+      return;
+    }
+
+    try {
+      setIsUploadingDocs(true);
+      setUploadError('');
+
+      const formData = new FormData();
+      formData.append('documentName', uploadFormData.docName.trim());
+      formData.append('category', uploadFormData.category);
+      if (uploadFormData.notes.trim()) {
+        formData.append('notes', uploadFormData.notes.trim());
+      }
+
+      for (let i = 0; i < selectedUploadFiles.length; i++) {
+        formData.append('files', selectedUploadFiles[i]);
+      }
+
+      const res = await api.post(`/clients/${uploadingForClient._id}/documents`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
+      if (res.data.success) {
+        setShowUploadModal(false);
+        setUploadingForClient(null);
+        setSelectedUploadFiles([]);
+        fetchClients();
+        if (selectedClient?._id === uploadingForClient._id) {
+          refreshSelectedClient();
+        }
+      }
+    } catch (err) {
+      console.error('Error uploading document:', err);
+      setUploadError(err.response?.data?.message || 'Failed to upload documents.');
+    } finally {
+      setIsUploadingDocs(false);
+    }
+  };
+
   const handleSaveContactInfo = async (e) => {
     e.preventDefault();
     if (!selectedClient?._id) return;
@@ -182,7 +269,7 @@ const Clients = () => {
                 </div>
               </div>
               <div>
-                <p className="text-[11px] font-bold text-gray-500 mb-0.5">Total Submissions</p>
+                <p className="text-[11px] font-bold text-gray-500 mb-0.5">Total Clients</p>
                 <h4 className="text-xl sm:text-2xl font-black text-[#081326] leading-none mb-1">{clients.length}</h4>
               </div>
             </div>
@@ -256,92 +343,138 @@ const Clients = () => {
             </div>
           </div>
 
-          {/* Table */}
+          {/* Table: Client Name, Mobile No., Profession, Loan Amount, Case Type, Status, Current Pendency, Action */}
           <div className="overflow-x-auto scrollbar-hide">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-gray-50/50 text-[11px] font-black text-gray-500 border-b border-gray-100 tracking-wider">
-                  <th className="px-5 py-4 whitespace-nowrap">ID</th>
                   <th className="px-5 py-4 whitespace-nowrap">Client Name</th>
-                  <th className="px-5 py-4 whitespace-nowrap">Email & Mobile</th>
+                  <th className="px-5 py-4 whitespace-nowrap">Mobile No.</th>
+                  <th className="px-5 py-4 whitespace-nowrap">Profession</th>
+                  <th className="px-5 py-4 whitespace-nowrap">Loan Amount</th>
+                  <th className="px-5 py-4 whitespace-nowrap">Case Type</th>
                   <th className="px-5 py-4 whitespace-nowrap">Status</th>
-                  <th className="px-5 py-4 whitespace-nowrap">Submitted By</th>
-                  <th className="px-5 py-4 whitespace-nowrap">Submitted On</th>
+                  <th className="px-5 py-4 whitespace-nowrap">Current Pendency</th>
                   <th className="px-5 py-4 whitespace-nowrap text-center">Action</th>
                 </tr>
               </thead>
               <tbody className="text-[12px] text-gray-600 divide-y divide-gray-50">
                 {loading ? (
                   <tr>
-                    <td colSpan="7" className="px-5 py-8 text-center text-xs font-bold text-gray-500">Loading clients...</td>
+                    <td colSpan="8" className="px-5 py-8 text-center text-xs font-bold text-gray-500">Loading clients...</td>
                   </tr>
                 ) : filteredClients.length === 0 ? (
                   <tr>
-                    <td colSpan="7" className="px-5 py-8 text-center text-xs font-bold text-gray-500">No applications found.</td>
+                    <td colSpan="8" className="px-5 py-8 text-center text-xs font-bold text-gray-500">No client cases found.</td>
                   </tr>
                 ) : (
-                  filteredClients.map((client) => (
-                    <tr key={client._id} className="hover:bg-gray-50/80 transition-colors group">
-                      <td className="px-5 py-3.5 whitespace-nowrap text-blue-600 font-bold">{client._id.substring(client._id.length - 6)}</td>
-                      <td className="px-5 py-3.5 font-bold text-[#081326] whitespace-nowrap flex items-center gap-3">
-                        {client.photoUrl ? (
-                          <img src={getAssetUrl(client.photoUrl)} className="w-8 h-8 rounded-full object-cover shadow-sm" alt="" />
-                        ) : (
-                          <div className="w-8 h-8 rounded-full bg-[#081326] text-white flex items-center justify-center font-bold text-[10px]">
-                            {client.fullName.substring(0,2).toUpperCase()}
-                          </div>
-                        )}
-                        {client.fullName}
-                      </td>
-                      <td className="px-5 py-3.5 whitespace-nowrap">
-                        <div className="flex flex-col gap-1">
-                          <span>{client.email || 'N/A'}</span>
-                          <span className="text-gray-400 font-bold">{client.mobile || 'N/A'}</span>
-                        </div>
-                      </td>
-                      <td className="px-5 py-3.5 whitespace-nowrap"><StatusBadge status={client.status} isDoc={false} /></td>
-                      <td className="px-5 py-3.5 whitespace-nowrap">
-                        <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-[9px] shrink-0">
-                            {client.user?.name?.substring(0, 2).toUpperCase() || 'WS'}
-                          </div>
-                          <span className="font-bold text-gray-700">{client.user?.name || 'Website / Self'}</span>
-                        </div>
-                      </td>
-                      <td className="px-5 py-3.5 whitespace-nowrap font-medium text-gray-500">
-                        {new Date(client.createdAt).toLocaleDateString('en-IN')}
-                      </td>
-                      <td className="px-5 py-3.5 whitespace-nowrap text-center">
-                        <div className="flex justify-center items-center gap-2">
-                          <button 
-                            onClick={() => openPreview(client)}
-                            className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white flex items-center justify-center transition-all shadow-sm"
-                            title="View Profile"
-                          >
-                            <Eye className="w-4 h-4 stroke-[2.5]" />
-                          </button>
-                          {role === 'admin' && (
-                            <>
-                              <button 
-                                onClick={() => navigate(`/clients/edit/${client._id}`)}
-                                className="w-8 h-8 rounded-lg bg-orange-50 text-orange-600 hover:bg-orange-600 hover:text-white flex items-center justify-center transition-all shadow-sm"
-                                title="Edit Profile"
-                              >
-                                <Edit className="w-4 h-4 stroke-[2.5]" />
-                              </button>
-                              <button 
-                                onClick={() => { setClientToDelete(client._id); setShowDeleteModal(true); }}
-                                className="w-8 h-8 rounded-lg bg-red-50 text-red-600 hover:bg-red-600 hover:text-white flex items-center justify-center transition-all shadow-sm"
-                                title="Delete Profile"
-                              >
-                                <Trash2 className="w-4 h-4 stroke-[2.5]" />
-                              </button>
-                            </>
+                  filteredClients.map((client) => {
+                    const activePendencies = (client.pendencies || []).filter(p => p.status !== 'Resolved');
+                    const latestPendency = activePendencies.length > 0 ? activePendencies[activePendencies.length - 1] : null;
+
+                    return (
+                      <tr key={client._id} className="hover:bg-gray-50/80 transition-colors group">
+                        {/* 1. Client Name */}
+                        <td className="px-5 py-3.5 font-bold text-[#081326] whitespace-nowrap flex items-center gap-3">
+                          {client.photoUrl ? (
+                            <img src={getAssetUrl(client.photoUrl)} className="w-8 h-8 rounded-full object-cover shadow-sm" alt="" />
+                          ) : (
+                            <div className="w-8 h-8 rounded-full bg-[#081326] text-white flex items-center justify-center font-bold text-[10px]">
+                              {client.fullName ? client.fullName.substring(0,2).toUpperCase() : 'CL'}
+                            </div>
                           )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))
+                          <div>
+                            <span className="block font-bold text-[#081326]">{client.fullName}</span>
+                          </div>
+                        </td>
+
+                        {/* 2. Mobile No. */}
+                        <td className="px-5 py-3.5 whitespace-nowrap font-bold text-gray-700">
+                          {client.mobile || 'N/A'}
+                        </td>
+
+                        {/* 3. Profession */}
+                        <td className="px-5 py-3.5 whitespace-nowrap font-medium text-gray-700">
+                          <span className="bg-gray-50 px-2.5 py-1 rounded-md border border-gray-100 text-xs font-semibold">
+                            {client.occupation || 'N/A'}
+                          </span>
+                        </td>
+
+                        {/* 4. Loan Amount */}
+                        <td className="px-5 py-3.5 whitespace-nowrap font-bold text-emerald-700">
+                          {formatCurrency(client.loanAmount)}
+                        </td>
+
+                        {/* 5. Case Type */}
+                        <td className="px-5 py-3.5 whitespace-nowrap">
+                          <span className="px-2.5 py-1 bg-blue-50 text-blue-700 rounded-md text-xs font-bold border border-blue-100">
+                            {client.caseType || client.loanType || 'General Loan'}
+                          </span>
+                        </td>
+
+                        {/* 6. Status */}
+                        <td className="px-5 py-3.5 whitespace-nowrap">
+                          <StatusBadge status={client.status} isDoc={false} />
+                        </td>
+
+                        {/* 7. Current Pendency */}
+                        <td className="px-5 py-3.5 whitespace-nowrap">
+                          {activePendencies.length > 0 ? (
+                            <div className="flex items-center gap-1.5 bg-amber-50 border border-amber-200 text-amber-900 px-2.5 py-1 rounded-lg text-xs font-bold max-w-[200px] truncate" title={activePendencies.map(p => p.title).join(', ')}>
+                              <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                              <span className="truncate">
+                                {activePendencies.length > 1 ? `(${activePendencies.length}) ` : ''}{latestPendency?.title}
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1 text-green-700 bg-green-50/70 border border-green-100 px-2 py-0.5 rounded-md text-[11px] font-bold w-fit">
+                              <CheckCircle2 className="w-3 h-3 text-green-600" /> No Pendency
+                            </div>
+                          )}
+                        </td>
+
+                        {/* 8. Action: Add Docs + View + Edit/Delete */}
+                        <td className="px-5 py-3.5 whitespace-nowrap text-center">
+                          <div className="flex justify-center items-center gap-1.5">
+                            <button 
+                              onClick={(e) => handleOpenUploadModal(client, e)}
+                              className="px-2.5 py-1.5 rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-600 hover:text-white border border-amber-200 hover:border-amber-600 flex items-center gap-1 text-[11px] font-bold transition-all shadow-xs cursor-pointer"
+                              title="Upload / Add Documents for this Client"
+                            >
+                              <FileUp className="w-3.5 h-3.5 stroke-[2.5]" />
+                              <span>Add Docs</span>
+                            </button>
+
+                            <button 
+                              onClick={() => openPreview(client)}
+                              className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white flex items-center justify-center transition-all shadow-xs cursor-pointer"
+                              title="Review Case"
+                            >
+                              <Eye className="w-4 h-4 stroke-[2.5]" />
+                            </button>
+                            {role === 'admin' && (
+                              <>
+                                <button 
+                                  onClick={() => navigate(`/clients/edit/${client._id}`)}
+                                  className="w-8 h-8 rounded-lg bg-orange-50 text-orange-600 hover:bg-orange-600 hover:text-white flex items-center justify-center transition-all shadow-xs cursor-pointer"
+                                  title="Edit Profile"
+                                >
+                                  <Edit className="w-4 h-4 stroke-[2.5]" />
+                                </button>
+                                <button 
+                                  onClick={() => { setClientToDelete(client._id); setShowDeleteModal(true); }}
+                                  className="w-8 h-8 rounded-lg bg-red-50 text-red-600 hover:bg-red-600 hover:text-white flex items-center justify-center transition-all shadow-xs cursor-pointer"
+                                  title="Delete Profile"
+                                >
+                                  <Trash2 className="w-4 h-4 stroke-[2.5]" />
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -359,23 +492,23 @@ const Clients = () => {
           ></div>
           
           {/* Drawer Panel */}
-          <div className="relative w-full max-w-2xl bg-white h-full shadow-2xl animate-in slide-in-from-right duration-300 flex flex-col">
+          <div className="relative w-full max-w-4xl bg-white h-full shadow-2xl animate-in slide-in-from-right duration-300 flex flex-col">
             
             {/* Header */}
             <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/80">
               <h2 className="text-lg font-black text-[#081326] flex items-center gap-2">
-                <Eye className="w-5 h-5 text-[#f59e0b] stroke-[2.5]" /> Client Profile Review
+                <Eye className="w-5 h-5 text-[#f59e0b] stroke-[2.5]" /> Client Case Review
               </h2>
               <div className="flex gap-3">
                 <button 
                   onClick={() => navigate(`/clients/${selectedClient._id}`)}
-                  className="px-4 py-1.5 bg-[#081326] text-white rounded-lg text-xs font-bold hover:bg-[#11203d] transition-colors shadow-sm"
+                  className="px-4 py-1.5 bg-[#081326] text-white rounded-lg text-xs font-bold hover:bg-[#11203d] transition-colors shadow-sm cursor-pointer"
                 >
-                  View Full Profile
+                  View Full Page
                 </button>
                 <button 
                   onClick={closePreview} 
-                  className="w-8 h-8 flex items-center justify-center bg-white border border-gray-200 text-gray-500 hover:text-red-500 hover:border-red-200 rounded-lg shadow-sm transition-colors"
+                  className="w-8 h-8 flex items-center justify-center bg-white border border-gray-200 text-gray-500 hover:text-red-500 hover:border-red-200 rounded-lg shadow-sm transition-colors cursor-pointer"
                 >
                   <X className="w-4 h-4 stroke-[2.5]" />
                 </button>
@@ -383,31 +516,37 @@ const Clients = () => {
             </div>
 
             {/* Profile Info Header with Quick Edit Button */}
-            <div className="p-6 border-b border-gray-100 flex items-center gap-5">
+            <div className="p-6 border-b border-gray-100 flex items-center gap-5 bg-white">
               {selectedClient.photoUrl ? (
-                 <img src={getAssetUrl(selectedClient.photoUrl)} alt="Profile" className="w-24 h-24 rounded-full object-cover shadow-lg border-4 border-white" />
+                 <img src={getAssetUrl(selectedClient.photoUrl)} alt="Profile" className="w-20 h-20 rounded-full object-cover shadow-lg border-4 border-white" />
               ) : (
-                 <div className="w-24 h-24 rounded-full bg-[#081326] text-white flex items-center justify-center text-3xl font-black shadow-lg border-4 border-white">
+                 <div className="w-20 h-20 rounded-full bg-[#081326] text-white flex items-center justify-center text-2xl font-black shadow-lg border-4 border-white">
                    {selectedClient.fullName ? selectedClient.fullName.substring(0, 2).toUpperCase() : 'CL'}
                  </div>
               )}
               
               <div className="flex flex-col gap-1.5 flex-1">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-2xl font-black text-[#081326]">{selectedClient.fullName}</h2>
+                  <h2 className="text-xl font-black text-[#081326]">{selectedClient.fullName}</h2>
                   <StatusBadge status={selectedClient.status} isDoc={false} />
                 </div>
                 <div className="flex flex-wrap gap-2 text-xs font-bold text-gray-600 items-center">
-                   <span className="bg-gray-50 px-3 py-1 rounded border border-gray-100 flex items-center gap-1">
-                     <Mail className="w-3 h-3 text-gray-400" /> {selectedClient.email || 'No Email'}
+                   <span className="bg-gray-50 px-3 py-1 rounded-lg border border-gray-100 flex items-center gap-1">
+                     <Phone className="w-3.5 h-3.5 text-green-600" /> {selectedClient.mobile || 'No Mobile'}
                    </span>
-                   <span className="bg-gray-50 px-3 py-1 rounded border border-gray-100 flex items-center gap-1">
-                     <Phone className="w-3 h-3 text-gray-400" /> {selectedClient.mobile || 'No Mobile'}
+                   <span className="bg-gray-50 px-3 py-1 rounded-lg border border-gray-100 flex items-center gap-1">
+                     <Briefcase className="w-3.5 h-3.5 text-[#f59e0b]" /> {selectedClient.occupation || 'N/A'}
+                   </span>
+                   <span className="bg-gray-50 px-3 py-1 rounded-lg border border-gray-100 flex items-center gap-1 text-emerald-700">
+                     <IndianRupee className="w-3.5 h-3.5" /> {formatCurrency(selectedClient.loanAmount)}
+                   </span>
+                   <span className="bg-blue-50 text-blue-700 px-3 py-1 rounded-lg border border-blue-100 flex items-center gap-1">
+                     <FileCheck className="w-3.5 h-3.5" /> {selectedClient.caseType || selectedClient.loanType || 'General Loan'}
                    </span>
                    <button 
                      onClick={handleOpenEditContact}
-                     className="bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200 px-3 py-1 rounded flex items-center gap-1 text-[11px] font-bold transition-colors cursor-pointer"
-                     title="Update Mobile No. / Email ID"
+                     className="bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200 px-2.5 py-1 rounded-lg flex items-center gap-1 text-[11px] font-bold transition-colors cursor-pointer"
+                     title="Update Mobile / Contact"
                    >
                      <Edit className="w-3 h-3" /> Edit Contact
                    </button>
@@ -415,13 +554,13 @@ const Clients = () => {
               </div>
             </div>
 
-            {/* Tabs */}
-            <div className="flex gap-1 px-6 pt-4 border-b border-gray-100 bg-white">
-               {['Overview', 'Documents', 'Manage Docs', 'Edit History'].map(tab => (
+            {/* Standardized 5 Tabs: Overview | Documents | Pendency | Manage Docs | Edit History */}
+            <div className="flex gap-1 px-6 pt-4 border-b border-gray-100 bg-white overflow-x-auto scrollbar-hide">
+               {['Overview', 'Documents', 'Pendency', 'Manage Docs', 'Edit History'].map(tab => (
                   <button 
                     key={tab}
                     onClick={() => setPreviewTab(tab)}
-                    className={`px-4 py-2.5 text-xs font-black transition-all border-b-2 ${
+                    className={`px-4 py-2.5 text-xs font-black transition-all border-b-2 whitespace-nowrap cursor-pointer ${
                       previewTab === tab 
                       ? 'text-[#f59e0b] border-[#f59e0b] bg-[#f59e0b]/5 rounded-t-lg' 
                       : 'text-gray-400 border-transparent hover:text-[#081326]'
@@ -435,157 +574,15 @@ const Clients = () => {
             {/* Content Area */}
             <div className="flex-1 overflow-y-auto p-6 bg-gray-50/30">
                {previewTab === 'Overview' && (
-                  <div className="flex flex-col gap-6">
-                    {/* Personal Info */}
-                    <div className="bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
-                      <div className="flex justify-between items-center mb-4 border-b border-gray-50 pb-2">
-                        <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider">Personal Information</h4>
-                        <button 
-                          onClick={handleOpenEditContact}
-                          className="text-[11px] font-bold text-amber-600 hover:underline flex items-center gap-1"
-                        >
-                          <Edit className="w-3 h-3" /> Edit Info
-                        </button>
-                      </div>
-                      <div className="grid grid-cols-2 gap-y-5 gap-x-4">
-                         <div>
-                           <p className="text-[10px] text-gray-400 font-bold mb-1">Date of Birth</p>
-                           <p className="text-xs font-black text-[#081326]">{selectedClient.dob ? new Date(selectedClient.dob).toLocaleDateString() : 'NA'}</p>
-                         </div>
-                         <div>
-                           <p className="text-[10px] text-gray-400 font-bold mb-1">Gender</p>
-                           <p className="text-xs font-black text-[#081326]">{selectedClient.gender || 'NA'}</p>
-                         </div>
-                         <div>
-                           <p className="text-[10px] text-gray-400 font-bold mb-1">Alternative Email</p>
-                           <p className="text-xs font-black text-[#081326]">{selectedClient.alternativeEmail || 'NA'}</p>
-                         </div>
-                         <div>
-                           <p className="text-[10px] text-gray-400 font-bold mb-1">PAN Number</p>
-                           <p className="text-xs font-black text-[#081326] uppercase">{selectedClient.panNumber || 'NA'}</p>
-                         </div>
-                         <div>
-                           <p className="text-[10px] text-gray-400 font-bold mb-1">Aadhaar Number</p>
-                           <p className="text-xs font-black text-[#081326]">{selectedClient.aadhaarNumber || 'NA'}</p>
-                         </div>
-                         <div>
-                           <p className="text-[10px] text-gray-400 font-bold mb-1">ID Proof ({selectedClient.idProofType || 'NA'})</p>
-                           <p className="text-xs font-black text-[#081326]">{selectedClient.idProofNumber || 'NA'}</p>
-                         </div>
-                         <div className="col-span-2">
-                           <p className="text-[10px] text-gray-400 font-bold mb-1">Address Details</p>
-                           <p className="text-xs font-bold text-[#081326] bg-gray-50 p-3 rounded border border-gray-100 leading-relaxed">
-                              {selectedClient.addressLine1} {selectedClient.addressLine2 ? `, ${selectedClient.addressLine2}` : ''}<br/>
-                              {selectedClient.city}, {selectedClient.state}, {selectedClient.country || 'India'} - {selectedClient.pincode}
-                           </p>
-                         </div>
-                      </div>
-                    </div>
-
-                    {/* Business Info */}
-                    <div className="bg-white border border-gray-100 rounded-xl p-5 shadow-sm">
-                      <h4 className="text-xs font-black text-gray-400 uppercase tracking-wider mb-4 border-b border-gray-50 pb-2">Business / Additional</h4>
-                      <div className="grid grid-cols-2 gap-y-5 gap-x-4">
-                         <div>
-                           <p className="text-[10px] text-gray-400 font-bold mb-1">Occupation</p>
-                           <p className="text-xs font-black text-[#081326]">{selectedClient.occupation || 'NA'}</p>
-                         </div>
-                         <div>
-                           <p className="text-[10px] text-gray-400 font-bold mb-1">Company Name</p>
-                           <p className="text-xs font-black text-[#081326]">{selectedClient.companyName || 'NA'}</p>
-                         </div>
-                         <div>
-                           <p className="text-[10px] text-gray-400 font-bold mb-1">Designation</p>
-                           <p className="text-xs font-black text-[#081326]">{selectedClient.designation || 'NA'}</p>
-                         </div>
-                         <div>
-                           <p className="text-[10px] text-gray-400 font-bold mb-1">Annual Income</p>
-                           <p className="text-xs font-black text-[#081326]">{selectedClient.annualIncome ? `₹${selectedClient.annualIncome}` : 'NA'}</p>
-                         </div>
-                         <div>
-                           <p className="text-[10px] text-gray-400 font-bold mb-1">Source of Income</p>
-                           <p className="text-xs font-black text-[#081326]">{selectedClient.sourceOfIncome || 'NA'}</p>
-                         </div>
-                         <div>
-                           <p className="text-[10px] text-gray-400 font-bold mb-1">Business Type</p>
-                           <p className="text-xs font-black text-[#081326]">{selectedClient.businessType || 'NA'}</p>
-                         </div>
-                      </div>
-                    </div>
-                  </div>
+                  <OverviewTab client={selectedClient} />
                )}
 
                {previewTab === 'Documents' && (
-                  <div className="flex flex-col gap-6">
-                    {/* PAN Card */}
-                    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-                       <div className="px-5 py-3 bg-gray-50 border-b border-gray-100 flex justify-between items-center">
-                          <span className="text-xs font-black text-[#081326]">PAN Card</span>
-                          {selectedClient.panCardUrl && (
-                             <a href={getAssetUrl(selectedClient.panCardUrl)} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-[10px] font-bold bg-white border border-gray-200 px-3 py-1.5 rounded hover:bg-gray-50 transition-colors">
-                                <Download className="w-3 h-3" /> Download
-                             </a>
-                          )}
-                       </div>
-                       <div className="p-5 flex justify-center bg-gray-50/30">
-                          {selectedClient.panCardUrl ? (
-                             selectedClient.panCardUrl.toLowerCase().endsWith('.pdf') ? (
-                                <iframe src={`${getAssetUrl(selectedClient.panCardUrl)}#toolbar=0`} title="PAN Card" className="w-full h-60 rounded border border-gray-200 shadow-sm" />
-                             ) : (
-                                <img src={getAssetUrl(selectedClient.panCardUrl)} alt="PAN Card" className="max-h-60 rounded border border-gray-200 shadow-sm" />
-                             )
-                          ) : (
-                             <p className="text-xs text-gray-400 font-bold py-10">Not uploaded</p>
-                          )}
-                       </div>
-                    </div>
+                  <DocumentRepositoryTab client={selectedClient} onRefresh={refreshSelectedClient} />
+               )}
 
-                    {/* ID Proof */}
-                    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-                       <div className="px-5 py-3 bg-gray-50 border-b border-gray-100 flex justify-between items-center">
-                          <span className="text-xs font-black text-[#081326]">ID Proof <span className="text-gray-400 font-bold">({selectedClient.idProofType})</span></span>
-                          {selectedClient.idProofUrl && (
-                             <a href={getAssetUrl(selectedClient.idProofUrl)} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-[10px] font-bold bg-white border border-gray-200 px-3 py-1.5 rounded hover:bg-gray-50 transition-colors">
-                                <Download className="w-3 h-3" /> Download
-                             </a>
-                          )}
-                       </div>
-                       <div className="p-5 flex justify-center bg-gray-50/30">
-                          {selectedClient.idProofUrl ? (
-                             selectedClient.idProofUrl.toLowerCase().endsWith('.pdf') ? (
-                                <iframe src={`${getAssetUrl(selectedClient.idProofUrl)}#toolbar=0`} title="ID Proof" className="w-full h-60 rounded border border-gray-200 shadow-sm" />
-                             ) : (
-                                <img src={getAssetUrl(selectedClient.idProofUrl)} alt="ID Proof" className="max-h-60 rounded border border-gray-200 shadow-sm" />
-                             )
-                          ) : (
-                             <p className="text-xs text-gray-400 font-bold py-10">Not uploaded</p>
-                          )}
-                       </div>
-                    </div>
-
-                    {/* Address Proof */}
-                    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-                       <div className="px-5 py-3 bg-gray-50 border-b border-gray-100 flex justify-between items-center">
-                          <span className="text-xs font-black text-[#081326]">Address Proof</span>
-                          {selectedClient.addressProofUrl && (
-                             <a href={getAssetUrl(selectedClient.addressProofUrl)} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-[10px] font-bold bg-white border border-gray-200 px-3 py-1.5 rounded hover:bg-gray-50 transition-colors">
-                                <Download className="w-3 h-3" /> Download
-                             </a>
-                          )}
-                       </div>
-                       <div className="p-5 flex justify-center bg-gray-50/30">
-                          {selectedClient.addressProofUrl ? (
-                             selectedClient.addressProofUrl.toLowerCase().endsWith('.pdf') ? (
-                                <iframe src={`${getAssetUrl(selectedClient.addressProofUrl)}#toolbar=0`} title="Address Proof" className="w-full h-60 rounded border border-gray-200 shadow-sm" />
-                             ) : (
-                                <img src={getAssetUrl(selectedClient.addressProofUrl)} alt="Address Proof" className="max-h-60 rounded border border-gray-200 shadow-sm" />
-                             )
-                          ) : (
-                             <p className="text-xs text-gray-400 font-bold py-10">Not uploaded</p>
-                          )}
-                       </div>
-                    </div>
-                  </div>
+               {previewTab === 'Pendency' && (
+                  <PendencyTab client={selectedClient} onRefresh={refreshSelectedClient} />
                )}
 
                {previewTab === 'Manage Docs' && (
@@ -753,6 +750,162 @@ const Clients = () => {
                 Yes, Delete
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Quick Add Documents Modal on Front Page */}
+      {showUploadModal && uploadingForClient && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-[#081326]/60 backdrop-blur-sm" onClick={() => setShowUploadModal(false)}></div>
+          <div className="relative bg-white rounded-2xl p-6 w-full max-w-lg shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+            
+            {/* Modal Header */}
+            <div className="flex justify-between items-start pb-4 border-b border-gray-100">
+              <div>
+                <h3 className="text-base font-black text-[#081326] flex items-center gap-2">
+                  <FileUp className="w-5 h-5 text-[#f59e0b]" /> Add Documents
+                </h3>
+                <p className="text-xs text-gray-500 font-semibold mt-0.5">
+                  Client: <span className="text-[#081326] font-bold">{uploadingForClient.fullName}</span> ({uploadingForClient.mobile})
+                </p>
+              </div>
+              <button 
+                onClick={() => setShowUploadModal(false)} 
+                className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-200 text-gray-400 hover:text-gray-700 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Upload Form */}
+            <form onSubmit={handleUploadDocumentsSubmit} className="space-y-4 pt-4">
+              {uploadError && (
+                <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs font-bold">
+                  {uploadError}
+                </div>
+              )}
+
+              {/* 1. Document Name / Title */}
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  Document Name / Title <span className="text-red-500">*</span>
+                </label>
+                <input 
+                  type="text"
+                  placeholder="e.g. 6 Months Bank Statement, Registry Copy, 2024 ITR, etc."
+                  value={uploadFormData.docName}
+                  onChange={(e) => setUploadFormData({ ...uploadFormData, docName: e.target.value })}
+                  required
+                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 outline-none focus:border-[#f59e0b] focus:bg-white"
+                />
+                <p className="text-[11px] text-gray-400 mt-1">
+                  Mention the clear document name so it can be identified and reviewed instantly.
+                </p>
+              </div>
+
+              {/* 2. Category */}
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  Document Category
+                </label>
+                <select
+                  value={uploadFormData.category}
+                  onChange={(e) => setUploadFormData({ ...uploadFormData, category: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 outline-none focus:border-[#f59e0b] focus:bg-white cursor-pointer"
+                >
+                  <option value="General Documents">General Documents</option>
+                  <option value="KYC Documents">KYC Documents (PAN / Aadhaar / Voter)</option>
+                  <option value="Income Documents">Income Documents (Salary Slip / Form 16 / ITR)</option>
+                  <option value="Bank Statements">Bank Statements</option>
+                  <option value="Property Papers">Property Papers (Registry / Chain / Maps / EC)</option>
+                  <option value="Business Documents">Business Documents (GST / MSME / License)</option>
+                  <option value="Loan Sanction Letters">Loan Sanction Letters & Track Record</option>
+                  <option value="Custom Folders">Custom Folders</option>
+                </select>
+              </div>
+
+              {/* 3. Multiple File Selection */}
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  Select Files (Multiple allowed) <span className="text-red-500">*</span>
+                </label>
+                <div className="border-2 border-dashed border-gray-200 hover:border-[#f59e0b] rounded-xl p-4 text-center bg-gray-50/50 transition-colors">
+                  <input 
+                    type="file" 
+                    id="front-doc-multi-file-input"
+                    multiple
+                    accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.xls,.xlsx"
+                    onChange={(e) => {
+                      if (e.target.files) {
+                        setSelectedUploadFiles(Array.from(e.target.files));
+                      }
+                    }}
+                    className="hidden"
+                  />
+                  <label 
+                    htmlFor="front-doc-multi-file-input"
+                    className="cursor-pointer flex flex-col items-center gap-1.5"
+                  >
+                    <Upload className="w-7 h-7 text-[#f59e0b]" />
+                    <span className="text-xs font-bold text-[#081326]">
+                      Click to choose files from device
+                    </span>
+                    <span className="text-[11px] text-gray-400 font-medium">
+                      Supports PDFs, Images (JPG, PNG), Excel, Word docs (Multiple files can be selected)
+                    </span>
+                  </label>
+                </div>
+
+                {selectedUploadFiles.length > 0 && (
+                  <div className="mt-3 bg-amber-50/70 border border-amber-200 rounded-xl p-3">
+                    <p className="text-xs font-bold text-amber-900 mb-1.5">
+                      Selected {selectedUploadFiles.length} file{selectedUploadFiles.length > 1 ? 's' : ''}:
+                    </p>
+                    <ul className="space-y-1 max-h-28 overflow-y-auto text-[11px] text-gray-700 font-medium pr-1">
+                      {selectedUploadFiles.map((file, idx) => (
+                        <li key={idx} className="flex justify-between items-center bg-white px-2 py-1 rounded border border-amber-100">
+                          <span className="truncate max-w-[280px] font-bold text-[#081326]">{file.name}</span>
+                          <span className="text-gray-400 shrink-0 ml-2">{(file.size / 1024).toFixed(1)} KB</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+
+              {/* 4. Notes (Optional) */}
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  Optional Remarks / Notes
+                </label>
+                <input 
+                  type="text"
+                  placeholder="e.g. Bank statement for 2024, Pending paper received"
+                  value={uploadFormData.notes}
+                  onChange={(e) => setUploadFormData({ ...uploadFormData, notes: e.target.value })}
+                  className="w-full px-3.5 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium text-gray-800 outline-none focus:border-[#f59e0b] focus:bg-white"
+                />
+              </div>
+
+              {/* Modal Buttons */}
+              <div className="flex gap-3 pt-3 border-t border-gray-100">
+                <button 
+                  type="button" 
+                  onClick={() => setShowUploadModal(false)}
+                  className="flex-1 py-2.5 bg-gray-100 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-200 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  disabled={isUploadingDocs || selectedUploadFiles.length === 0}
+                  className="flex-1 py-2.5 bg-[#081326] text-white rounded-xl text-xs font-bold hover:bg-[#11203d] disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+                >
+                  {isUploadingDocs ? 'Uploading Files...' : `Upload ${selectedUploadFiles.length > 0 ? selectedUploadFiles.length + ' File(s)' : 'Documents'}`}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

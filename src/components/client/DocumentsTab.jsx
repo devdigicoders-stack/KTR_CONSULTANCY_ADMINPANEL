@@ -47,6 +47,8 @@ const DocumentsTab = ({ client, onRefresh }) => {
     );
   };
 
+  const [selectedFiles, setSelectedFiles] = useState([]);
+
   const handleCreateFolderSubmit = async (e) => {
     e.preventDefault();
     if (!newFolderName.trim()) {
@@ -56,8 +58,9 @@ const DocumentsTab = ({ client, onRefresh }) => {
     try {
       setCreatingFolder(true);
       const res = await api.post(`/clients/${client._id}/folders`, {
-        name: newFolderName,
-        description: newFolderDescription
+        folderName: newFolderName.trim(),
+        name: newFolderName.trim(),
+        description: newFolderDescription.trim()
       });
       if (res.data.success) {
         setShowCreateFolderModal(false);
@@ -69,15 +72,15 @@ const DocumentsTab = ({ client, onRefresh }) => {
     } catch (err) {
       console.error('Create folder error:', err);
       alert('Failed to create folder: ' + (err.response?.data?.message || err.message));
-    } fontFinally: {
+    } finally {
       setCreatingFolder(false);
     }
   };
 
   const handleUploadSubmit = async (e) => {
     e.preventDefault();
-    if (!selectedFile) {
-      alert('Please select a file to upload.');
+    if (!selectedFiles || selectedFiles.length === 0) {
+      alert('Please select at least one file to upload.');
       return;
     }
     if (!client?._id) {
@@ -88,25 +91,28 @@ const DocumentsTab = ({ client, onRefresh }) => {
     try {
       setUploading(true);
       const formData = new FormData();
-      formData.append('file', selectedFile);
+      
+      // Append each selected file separately
+      selectedFiles.forEach(file => {
+        formData.append('files', file);
+      });
 
-      let endpoint = `/clients/${client._id}/documents`;
       if (currentFolder) {
-        endpoint = `/clients/${client._id}/folders/${currentFolder._id}/documents`;
-        formData.append('docName', docName || selectedFile.name);
+        formData.append('folderId', currentFolder._id);
+        formData.append('docName', docName || '');
       } else {
         formData.append('docType', docType);
-        formData.append('docName', docName || selectedFile.name);
+        formData.append('docName', docName || '');
       }
 
-      const res = await api.post(endpoint, formData, {
+      const res = await api.post(`/clients/${client._id}/documents`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
 
       if (res.data.success) {
         setShowUploadModal(false);
         setDocName('');
-        setSelectedFile(null);
+        setSelectedFiles([]);
         if (onRefresh) onRefresh();
         else window.location.reload();
       }
@@ -537,55 +543,85 @@ const DocumentsTab = ({ client, onRefresh }) => {
                   <select 
                     value={docType}
                     onChange={(e) => setDocType(e.target.value)}
-                    className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg outline-none focus:border-blue-500 font-medium"
+                    className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg outline-none focus:border-blue-500 font-bold cursor-pointer"
                   >
                     <option value="panCardUrl">PAN Card</option>
                     <option value="aadhaarUrl">Aadhaar Card</option>
+                    <option value="salarySlipUrl">Salary Slips</option>
+                    <option value="itrUrl">Income Tax Return (ITR)</option>
+                    <option value="form16Url">Form 16</option>
+                    <option value="bankStatementUrl">Bank Statement</option>
+                    <option value="propertyDocUrl">Property Papers / Documents</option>
                     <option value="idProofUrl">ID Proof</option>
                     <option value="addressProofUrl">Address Proof</option>
-                    <option value="salarySlipUrl">Salary Slip / ITR</option>
-                    <option value="bankStatementUrl">Bank Statement</option>
+                    <option value="photoUrl">Photograph</option>
                     <option value="otherDocUrl">Other Document (Primary)</option>
-                    <option value="otherDocs">Other Document (Additional)</option>
+                    <option value="customDocument">Custom Named Document</option>
                   </select>
                 </div>
               )}
 
               <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1">Document Title / Name</label>
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  Document Name / Title (Optional)
+                </label>
                 <input 
                   type="text" 
-                  placeholder="e.g. Passport, GST Certificate, Bank Passbook"
+                  placeholder="e.g. Property Registry, ICICI Bank Statement, Form 16 Part A"
                   value={docName}
                   onChange={(e) => setDocName(e.target.value)}
-                  className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg outline-none focus:border-blue-500"
+                  className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg outline-none focus:border-blue-500 font-medium"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1">Select File</label>
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  Select Files (Multiple Allowed: PDF / Images / Docs) *
+                </label>
                 <input 
                   type="file" 
-                  onChange={(e) => setSelectedFile(e.target.files[0])}
+                  multiple
+                  onChange={(e) => setSelectedFiles(Array.from(e.target.files || []))}
                   required
-                  className="w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                  className="w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
                 />
               </div>
+
+              {selectedFiles.length > 0 && (
+                <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 space-y-1.5 max-h-36 overflow-y-auto">
+                  <div className="flex justify-between items-center text-[10px] font-bold text-gray-500 uppercase">
+                    <span>Selected Files ({selectedFiles.length})</span>
+                    <button 
+                      type="button" 
+                      onClick={() => setSelectedFiles([])}
+                      className="text-red-500 hover:underline cursor-pointer"
+                    >
+                      Clear All
+                    </button>
+                  </div>
+                  {selectedFiles.map((f, i) => (
+                    <div key={i} className="flex justify-between items-center text-xs bg-white p-2 rounded border border-gray-100">
+                      <span className="truncate font-medium text-gray-700 max-w-[240px]">{f.name}</span>
+                      <span className="text-[10px] text-gray-400 shrink-0 font-mono">{(f.size / 1024).toFixed(0)} KB</span>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               <div className="flex gap-3 pt-2">
                 <button 
                   type="button" 
                   onClick={() => setShowUploadModal(false)}
-                  className="flex-1 py-2.5 bg-gray-100 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-200"
+                  className="flex-1 py-2.5 bg-gray-100 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-200 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button 
                   type="submit" 
-                  disabled={uploading}
-                  className="flex-1 py-2.5 bg-[#081326] text-white rounded-xl text-xs font-bold hover:bg-[#11203d] disabled:opacity-50"
+                  disabled={uploading || selectedFiles.length === 0}
+                  className="flex-1 py-2.5 bg-[#081326] text-white rounded-xl text-xs font-bold hover:bg-[#11203d] disabled:opacity-50 cursor-pointer"
                 >
-                  {uploading ? 'Uploading...' : 'Upload Document'}
+                  {uploading ? 'Uploading...' : `Upload ${selectedFiles.length > 1 ? `${selectedFiles.length} Files` : 'Document'}`}
                 </button>
               </div>
             </form>
