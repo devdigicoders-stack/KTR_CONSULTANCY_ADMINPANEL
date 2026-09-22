@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronRight, Download, Eye, Trash2, X, AlertTriangle, FileText, CheckCircle, Info, RotateCcw, Receipt } from 'lucide-react';
+import { ChevronRight, Download, Eye, Trash2, X, AlertTriangle, FileText, CheckCircle, Info, RotateCcw, Receipt, ExternalLink } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
@@ -504,19 +504,36 @@ const Cibil = () => {
                     </a>
                   </div>
                   
-                  {/* Inline PDF Viewer */}
-                  <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col h-[500px]">
+                  {/* Inline PDF Viewer with direct fallbacks for mobile browsers */}
+                  <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col h-[520px]">
                     <div className="bg-gray-50 border-b border-gray-100 p-3 flex items-center justify-between">
                        <h4 className="text-xs font-bold text-gray-700 flex items-center gap-2">
-                         <FileText className="w-4 h-4 text-gray-500" />
+                         <FileText className="w-4 h-4 text-[#f59e0b]" />
                          Live Report Document
                        </h4>
+                       <a 
+                         href={selectedReport.pdfLink} 
+                         target="_blank" 
+                         rel="noreferrer"
+                         className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-lg border border-blue-200 transition-colors"
+                       >
+                         <span>Open Full PDF</span>
+                         <ExternalLink className="w-3.5 h-3.5" />
+                       </a>
                     </div>
-                    <iframe 
-                      src={`https://docs.google.com/viewer?url=${encodeURIComponent(selectedReport.pdfLink)}&embedded=true`}
-                      title="CIBIL Report" 
-                      className="w-full h-full border-none"
-                    />
+                    <div className="w-full h-full relative bg-gray-100">
+                      <object
+                        data={selectedReport.pdfLink}
+                        type="application/pdf"
+                        className="w-full h-full border-none"
+                      >
+                        <iframe 
+                          src={selectedReport.pdfLink}
+                          title="CIBIL Report" 
+                          className="w-full h-full border-none"
+                        />
+                      </object>
+                    </div>
                   </div>
                 </div>
               )}
