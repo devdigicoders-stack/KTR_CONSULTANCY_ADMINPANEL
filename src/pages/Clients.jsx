@@ -211,7 +211,8 @@ const Clients = () => {
       }
 
       const res = await api.post(`/clients/${uploadingForClient._id}/documents`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 180000 // 3 minutes for large file uploads
       });
 
       if (res.data.success) {
@@ -225,7 +226,8 @@ const Clients = () => {
       }
     } catch (err) {
       console.error('Error uploading document:', err);
-      setUploadError(err.response?.data?.message || 'Failed to upload documents.');
+      const msg = err.response?.data?.message || err.message || 'Failed to upload documents.';
+      setUploadError(msg);
     } finally {
       setIsUploadingDocs(false);
     }
@@ -855,7 +857,7 @@ const Clients = () => {
               </button>
             </div>
 
-            {/* Upload Form */}
+            {/* Upload Form - Simple Document Upload (Only Name + Files) */}
             <form onSubmit={handleUploadDocumentsSubmit} className="space-y-4 pt-4">
               {uploadError && (
                 <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs font-bold">
@@ -874,40 +876,17 @@ const Clients = () => {
                   value={uploadFormData.docName}
                   onChange={(e) => setUploadFormData({ ...uploadFormData, docName: e.target.value })}
                   required
+                  autoFocus
                   className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 outline-none focus:border-[#f59e0b] focus:bg-white"
                 />
-                <p className="text-[11px] text-gray-400 mt-1">
-                  Mention the clear document name so it can be identified and reviewed instantly.
-                </p>
               </div>
 
-              {/* 2. Category */}
+              {/* 2. Select Files (Multiple allowed) */}
               <div>
                 <label className="block text-xs font-bold text-gray-700 mb-1">
-                  Document Category
+                  Select File(s) <span className="text-red-500">*</span>
                 </label>
-                <select
-                  value={uploadFormData.category}
-                  onChange={(e) => setUploadFormData({ ...uploadFormData, category: e.target.value })}
-                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 outline-none focus:border-[#f59e0b] focus:bg-white cursor-pointer"
-                >
-                  <option value="General Documents">General Documents</option>
-                  <option value="KYC Documents">KYC Documents (PAN / Aadhaar / Voter)</option>
-                  <option value="Income Documents">Income Documents (Salary Slip / Form 16 / ITR)</option>
-                  <option value="Bank Statements">Bank Statements</option>
-                  <option value="Property Papers">Property Papers (Registry / Chain / Maps / EC)</option>
-                  <option value="Business Documents">Business Documents (GST / MSME / License)</option>
-                  <option value="Loan Sanction Letters">Loan Sanction Letters & Track Record</option>
-                  <option value="Custom Folders">Custom Folders</option>
-                </select>
-              </div>
-
-              {/* 3. Multiple File Selection */}
-              <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1">
-                  Select Files (Multiple allowed) <span className="text-red-500">*</span>
-                </label>
-                <div className="border-2 border-dashed border-gray-200 hover:border-[#f59e0b] rounded-xl p-4 text-center bg-gray-50/50 transition-colors">
+                <div className="border-2 border-dashed border-gray-200 hover:border-[#f59e0b] rounded-xl p-5 text-center bg-gray-50/50 transition-colors">
                   <input 
                     type="file" 
                     id="front-doc-multi-file-input"
@@ -924,12 +903,12 @@ const Clients = () => {
                     htmlFor="front-doc-multi-file-input"
                     className="cursor-pointer flex flex-col items-center gap-1.5"
                   >
-                    <Upload className="w-7 h-7 text-[#f59e0b]" />
+                    <Upload className="w-8 h-8 text-[#f59e0b]" />
                     <span className="text-xs font-bold text-[#081326]">
                       Click to choose files from device
                     </span>
                     <span className="text-[11px] text-gray-400 font-medium">
-                      Supports PDFs, Images (JPG, PNG), Excel, Word docs (Multiple files can be selected)
+                      Supports PDFs, Images (JPG, PNG), Excel, Word docs (Multiple files allowed)
                     </span>
                   </label>
                 </div>
@@ -939,30 +918,16 @@ const Clients = () => {
                     <p className="text-xs font-bold text-amber-900 mb-1.5">
                       Selected {selectedUploadFiles.length} file{selectedUploadFiles.length > 1 ? 's' : ''}:
                     </p>
-                    <ul className="space-y-1 max-h-28 overflow-y-auto text-[11px] text-gray-700 font-medium pr-1">
+                    <ul className="space-y-1 max-h-32 overflow-y-auto text-[11px] text-gray-700 font-medium pr-1">
                       {selectedUploadFiles.map((file, idx) => (
-                        <li key={idx} className="flex justify-between items-center bg-white px-2 py-1 rounded border border-amber-100">
+                        <li key={idx} className="flex justify-between items-center bg-white px-2.5 py-1.5 rounded-lg border border-amber-100">
                           <span className="truncate max-w-[280px] font-bold text-[#081326]">{file.name}</span>
-                          <span className="text-gray-400 shrink-0 ml-2">{(file.size / 1024).toFixed(1)} KB</span>
+                          <span className="text-gray-400 shrink-0 ml-2 font-mono">{(file.size / 1024).toFixed(1)} KB</span>
                         </li>
                       ))}
                     </ul>
                   </div>
                 )}
-              </div>
-
-              {/* 4. Notes (Optional) */}
-              <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1">
-                  Optional Remarks / Notes
-                </label>
-                <input 
-                  type="text"
-                  placeholder="e.g. Bank statement for 2024, Pending paper received"
-                  value={uploadFormData.notes}
-                  onChange={(e) => setUploadFormData({ ...uploadFormData, notes: e.target.value })}
-                  className="w-full px-3.5 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium text-gray-800 outline-none focus:border-[#f59e0b] focus:bg-white"
-                />
               </div>
 
               {/* Modal Buttons */}
