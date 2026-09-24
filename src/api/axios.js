@@ -21,16 +21,18 @@ api.interceptors.request.use(
   }
 );
 
-// Add a response interceptor to handle token expiry or unauthorized access globally
+// Add a response interceptor to handle token expiry globally
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response && (error.response.status === 401 || error.response.status === 403)) {
-      // Clear token and force logout if unauthorized or inactive
-      localStorage.removeItem('adminToken');
-      localStorage.removeItem('user');
-      localStorage.removeItem('role');
-      window.location.href = '/login'; 
+    if (error.response && error.response.status === 401) {
+      // Clear token and force logout ONLY on 401 (unauthenticated/expired session)
+      if (window.location.pathname !== '/login') {
+        localStorage.removeItem('adminToken');
+        localStorage.removeItem('user');
+        localStorage.removeItem('role');
+        window.location.href = '/login'; 
+      }
     }
     return Promise.reject(error);
   }

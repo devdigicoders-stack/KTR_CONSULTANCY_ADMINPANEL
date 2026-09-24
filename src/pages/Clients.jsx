@@ -158,7 +158,13 @@ const Clients = () => {
     setContactFormData({
       fullName: selectedClient.fullName || '',
       mobile: selectedClient.mobile || '',
-      email: selectedClient.email || ''
+      email: selectedClient.email || '',
+      panNumber: selectedClient.panNumber || selectedClient.pan || '',
+      loanAmount: selectedClient.loanAmount || '',
+      caseType: selectedClient.caseType || selectedClient.loanType || '',
+      occupation: selectedClient.occupation || '',
+      addressLine1: selectedClient.addressLine1 || selectedClient.address || '',
+      status: selectedClient.status || 'Pending'
     });
     setShowEditContactModal(true);
   };
@@ -193,6 +199,7 @@ const Clients = () => {
       setUploadError('');
 
       const formData = new FormData();
+      formData.append('docName', uploadFormData.docName.trim());
       formData.append('documentName', uploadFormData.docName.trim());
       formData.append('category', uploadFormData.category);
       if (uploadFormData.notes.trim()) {
@@ -343,7 +350,7 @@ const Clients = () => {
             </div>
           </div>
 
-          {/* Table: Client Name, Mobile No., Profession, Loan Amount, Case Type, Status, Current Pendency, Action */}
+          {/* Table: Client Name, Mobile No., Profession, Loan Amount, Case Type, Current Pendency, Action, Status */}
           <div className="overflow-x-auto scrollbar-hide">
             <table className="w-full text-left border-collapse">
               <thead>
@@ -353,9 +360,9 @@ const Clients = () => {
                   <th className="px-5 py-4 whitespace-nowrap">Profession</th>
                   <th className="px-5 py-4 whitespace-nowrap">Loan Amount</th>
                   <th className="px-5 py-4 whitespace-nowrap">Case Type</th>
-                  <th className="px-5 py-4 whitespace-nowrap">Status</th>
                   <th className="px-5 py-4 whitespace-nowrap">Current Pendency</th>
                   <th className="px-5 py-4 whitespace-nowrap text-center">Action</th>
+                  <th className="px-5 py-4 whitespace-nowrap text-center">Status</th>
                 </tr>
               </thead>
               <tbody className="text-[12px] text-gray-600 divide-y divide-gray-50">
@@ -370,7 +377,6 @@ const Clients = () => {
                 ) : (
                   filteredClients.map((client) => {
                     const activePendencies = (client.pendencies || []).filter(p => p.status !== 'Resolved');
-                    const latestPendency = activePendencies.length > 0 ? activePendencies[activePendencies.length - 1] : null;
 
                     return (
                       <tr key={client._id} className="hover:bg-gray-50/80 transition-colors group">
@@ -412,28 +418,28 @@ const Clients = () => {
                           </span>
                         </td>
 
-                        {/* 6. Status */}
-                        <td className="px-5 py-3.5 whitespace-nowrap">
-                          <StatusBadge status={client.status} isDoc={false} />
-                        </td>
-
-                        {/* 7. Current Pendency */}
-                        <td className="px-5 py-3.5 whitespace-nowrap">
+                        {/* 6. Current Pendency (Full Display) */}
+                        <td className="px-5 py-3.5 min-w-[220px]">
                           {activePendencies.length > 0 ? (
-                            <div className="flex items-center gap-1.5 bg-amber-50 border border-amber-200 text-amber-900 px-2.5 py-1 rounded-lg text-xs font-bold max-w-[200px] truncate" title={activePendencies.map(p => p.title).join(', ')}>
-                              <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                              <span className="truncate">
-                                {activePendencies.length > 1 ? `(${activePendencies.length}) ` : ''}{latestPendency?.title}
-                              </span>
+                            <div className="flex flex-col gap-1">
+                              {activePendencies.map((pendency, pIdx) => (
+                                <div 
+                                  key={pIdx}
+                                  className="flex items-center gap-1.5 bg-amber-50 border border-amber-200 text-amber-900 px-2.5 py-1 rounded-lg text-xs font-bold w-fit leading-snug whitespace-normal"
+                                >
+                                  <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                  <span>{pendency.title}</span>
+                                </div>
+                              ))}
                             </div>
                           ) : (
                             <div className="flex items-center gap-1 text-green-700 bg-green-50/70 border border-green-100 px-2 py-0.5 rounded-md text-[11px] font-bold w-fit">
-                              <CheckCircle2 className="w-3 h-3 text-green-600" /> No Pendency
+                              <CheckCircle2 className="w-3 h-3 text-green-600 shrink-0" /> No Pendency
                             </div>
                           )}
                         </td>
 
-                        {/* 8. Action: Add Docs + View + Edit/Delete */}
+                        {/* 7. Action: Add Docs + View + Edit/Delete */}
                         <td className="px-5 py-3.5 whitespace-nowrap text-center">
                           <div className="flex justify-center items-center gap-1.5">
                             <button 
@@ -471,6 +477,11 @@ const Clients = () => {
                               </>
                             )}
                           </div>
+                        </td>
+
+                        {/* 8. Status (Moved after Action) */}
+                        <td className="px-5 py-3.5 whitespace-nowrap text-center">
+                          <StatusBadge status={client.status} isDoc={false} />
                         </td>
                       </tr>
                     );
@@ -544,12 +555,12 @@ const Clients = () => {
                      <FileCheck className="w-3.5 h-3.5" /> {selectedClient.caseType || selectedClient.loanType || 'General Loan'}
                    </span>
                    <button 
-                     onClick={handleOpenEditContact}
-                     className="bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200 px-2.5 py-1 rounded-lg flex items-center gap-1 text-[11px] font-bold transition-colors cursor-pointer"
-                     title="Update Mobile / Contact"
-                   >
-                     <Edit className="w-3 h-3" /> Edit Contact
-                   </button>
+                      onClick={handleOpenEditContact}
+                      className="bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200 px-3 py-1 rounded-lg flex items-center gap-1.5 text-[11px] font-black transition-colors cursor-pointer shadow-xs"
+                      title="Edit Case Details (Loan Amount, Case Type, Name, Mobile, Status, etc.)"
+                    >
+                      <Edit className="w-3.5 h-3.5 text-amber-600" /> Edit Case Details
+                    </button>
                 </div>
               </div>
             </div>
@@ -574,7 +585,7 @@ const Clients = () => {
             {/* Content Area */}
             <div className="flex-1 overflow-y-auto p-6 bg-gray-50/30">
                {previewTab === 'Overview' && (
-                  <OverviewTab client={selectedClient} />
+                  <OverviewTab client={selectedClient} onEditClick={handleOpenEditContact} />
                )}
 
                {previewTab === 'Documents' && (
@@ -650,60 +661,126 @@ const Clients = () => {
         </div>
       )}
 
-      {/* Edit Contact Info Modal */}
+      {/* Edit Client Info & Case Details Modal */}
       {showEditContactModal && selectedClient && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-[#081326]/60 backdrop-blur-sm" onClick={() => setShowEditContactModal(false)}></div>
-          <div className="relative bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex justify-between items-center mb-4">
+          <div className="relative bg-white rounded-2xl p-6 w-full max-w-xl shadow-2xl animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4 pb-3 border-b border-gray-100">
               <h3 className="text-base font-black text-[#081326] flex items-center gap-2">
-                <Edit className="w-5 h-5 text-[#f59e0b]" /> Edit Client Contact Info
+                <Edit className="w-5 h-5 text-[#f59e0b]" /> Edit Client Case Details
               </h3>
-              <button onClick={() => setShowEditContactModal(false)} className="text-gray-400 hover:text-gray-600">
+              <button onClick={() => setShowEditContactModal(false)} className="text-gray-400 hover:text-gray-600 cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <form onSubmit={handleSaveContactInfo} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Full Name *</label>
+                  <input 
+                    type="text" 
+                    value={contactFormData.fullName}
+                    onChange={(e) => setContactFormData({ ...contactFormData, fullName: e.target.value })}
+                    required
+                    className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg outline-none focus:border-[#f59e0b] font-medium"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Mobile Number *</label>
+                  <input 
+                    type="tel" 
+                    value={contactFormData.mobile}
+                    onChange={(e) => setContactFormData({ ...contactFormData, mobile: e.target.value })}
+                    required
+                    placeholder="10-digit mobile"
+                    className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg outline-none focus:border-[#f59e0b] font-medium"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Email Address</label>
+                  <input 
+                    type="email" 
+                    value={contactFormData.email}
+                    onChange={(e) => setContactFormData({ ...contactFormData, email: e.target.value })}
+                    placeholder="Client email address"
+                    className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg outline-none focus:border-[#f59e0b] font-medium"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">PAN Number</label>
+                  <input 
+                    type="text" 
+                    value={contactFormData.panNumber}
+                    onChange={(e) => setContactFormData({ ...contactFormData, panNumber: e.target.value.toUpperCase() })}
+                    placeholder="e.g. ABCDE1234F"
+                    className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg outline-none focus:border-[#f59e0b] font-medium uppercase"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-emerald-800 mb-1">Required Loan Amount (₹)</label>
+                  <input 
+                    type="number" 
+                    value={contactFormData.loanAmount}
+                    onChange={(e) => setContactFormData({ ...contactFormData, loanAmount: e.target.value })}
+                    placeholder="e.g. 500000"
+                    className="w-full px-3 py-2 text-xs border border-emerald-200 bg-emerald-50/40 rounded-lg outline-none focus:border-emerald-500 font-bold text-emerald-950"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-blue-800 mb-1">Case Type / Service</label>
+                  <input 
+                    type="text" 
+                    value={contactFormData.caseType}
+                    onChange={(e) => setContactFormData({ ...contactFormData, caseType: e.target.value })}
+                    placeholder="e.g. Fake Loan Removal, Property Legal, MSME Loan"
+                    className="w-full px-3 py-2 text-xs border border-blue-200 bg-blue-50/40 rounded-lg outline-none focus:border-blue-500 font-bold text-blue-950"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Occupation / Profession</label>
+                  <input 
+                    type="text" 
+                    value={contactFormData.occupation}
+                    onChange={(e) => setContactFormData({ ...contactFormData, occupation: e.target.value })}
+                    placeholder="e.g. Salaried, Businessman, Professional"
+                    className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg outline-none focus:border-[#f59e0b] font-medium"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Case Status</label>
+                  <select 
+                    value={contactFormData.status}
+                    onChange={(e) => setContactFormData({ ...contactFormData, status: e.target.value })}
+                    className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg outline-none focus:border-[#f59e0b] font-bold cursor-pointer"
+                  >
+                    <option value="Pending">Pending</option>
+                    <option value="Approved">Approved</option>
+                    <option value="Rejected">Rejected</option>
+                  </select>
+                </div>
+              </div>
+
               <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1">Full Name</label>
+                <label className="block text-xs font-bold text-gray-700 mb-1">Address</label>
                 <input 
                   type="text" 
-                  value={contactFormData.fullName}
-                  onChange={(e) => setContactFormData({ ...contactFormData, fullName: e.target.value })}
-                  required
-                  className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg outline-none focus:border-blue-500 font-medium"
+                  value={contactFormData.addressLine1}
+                  onChange={(e) => setContactFormData({ ...contactFormData, addressLine1: e.target.value })}
+                  placeholder="Client full street address"
+                  className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg outline-none focus:border-[#f59e0b] font-medium"
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1">Mobile Number</label>
-                <input 
-                  type="tel" 
-                  value={contactFormData.mobile}
-                  onChange={(e) => setContactFormData({ ...contactFormData, mobile: e.target.value })}
-                  required
-                  placeholder="Enter 10 digit mobile number"
-                  className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg outline-none focus:border-blue-500 font-medium"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1">Email Address</label>
-                <input 
-                  type="email" 
-                  value={contactFormData.email}
-                  onChange={(e) => setContactFormData({ ...contactFormData, email: e.target.value })}
-                  placeholder="Enter client email address"
-                  className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg outline-none focus:border-blue-500 font-medium"
-                />
-              </div>
-
-              <div className="p-3 bg-blue-50/70 border border-blue-100 rounded-xl text-[11px] text-blue-800">
-                ⚡ Any update to Mobile No. or Email ID will be logged into the client's <strong>Edit History Audit Log</strong>.
-              </div>
-
-              <div className="flex gap-3 pt-2">
+              <div className="flex gap-3 pt-3 border-t border-gray-100">
                 <button 
                   type="button" 
                   onClick={() => setShowEditContactModal(false)}
@@ -714,9 +791,9 @@ const Clients = () => {
                 <button 
                   type="submit" 
                   disabled={updatingContact}
-                  className="flex-1 py-2.5 bg-[#081326] text-white rounded-xl text-xs font-bold hover:bg-[#11203d] disabled:opacity-50 cursor-pointer"
+                  className="flex-1 py-2.5 bg-[#081326] text-white rounded-xl text-xs font-bold hover:bg-[#11203d] disabled:opacity-50 cursor-pointer shadow-sm"
                 >
-                  {updatingContact ? 'Saving...' : 'Save Changes'}
+                  {updatingContact ? 'Saving Changes...' : 'Save Case Details'}
                 </button>
               </div>
             </form>

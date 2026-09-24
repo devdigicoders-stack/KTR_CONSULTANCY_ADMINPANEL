@@ -10,9 +10,8 @@ export const getAssetUrl = (path) => {
     return cleanPath;
   }
 
-  // Get backend base URL from VITE_API_BASE_URL (e.g. https://api.ktrconsultants.in/api -> https://api.ktrconsultants.in)
   const apiBase = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL;
-  let serverBase = '';
+  let serverBase;
 
   if (apiBase) {
     serverBase = apiBase.replace(/\/api\/?$/, '');
@@ -31,4 +30,12 @@ export const getAssetUrl = (path) => {
 
   const normalizedPath = cleanPath.startsWith('/') ? cleanPath : `/${cleanPath}`;
   return `${serverBase}${normalizedPath}`;
+};
+
+export const getPublicShareDocsUrl = (clientId) => {
+  if (!clientId) return '';
+  if (typeof window !== 'undefined') {
+    return `${window.location.origin}/shared-docs/${clientId}`;
+  }
+  return `https://ktrconsultants.in/shared-docs/${clientId}`;
 };

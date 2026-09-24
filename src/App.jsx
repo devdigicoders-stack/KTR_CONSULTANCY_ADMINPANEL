@@ -27,6 +27,7 @@ import Profile from './pages/Profile';
 import Users from './pages/Users';
 import CreatePaymentLink from './pages/CreatePaymentLink';
 import Invoices from './pages/Invoices';
+import SharedDocuments from './pages/SharedDocuments';
 
 // ProtectedRoute component
 const ProtectedRoute = ({ children }) => {
@@ -49,6 +50,9 @@ function App() {
       <Router>
         <Routes>
           <Route path="/login" element={<Login />} />
+          
+          {/* Public Shared Client Documents Route (No login required) */}
+          <Route path="/shared-docs/:id" element={<SharedDocuments />} />
           
           {/* Protected Routes */}
           <Route path="/" element={

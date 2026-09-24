@@ -303,6 +303,22 @@ const EditClient = () => {
                   <label className="text-xs font-bold text-green-700 block">Required Loan Amount (₹)</label>
                   <input type="number" name="loanAmount" value={formData.loanAmount} onChange={handleChange} placeholder="Enter required loan amount" className="w-full px-3.5 py-2.5 bg-green-50/50 border border-green-200 rounded-lg text-sm font-bold outline-none text-green-900 focus:border-green-500 focus:bg-white transition-colors" />
                 </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-gray-700 block">Case Type</label>
+                  <select name="caseType" value={formData.caseType} onChange={handleChange} className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-normal text-gray-800 outline-none hover:border-gray-300 focus:border-[#f59e0b] focus:bg-white transition-colors cursor-pointer">
+                    <option value="">Select Case Type</option>
+                    <option value="CIBIL Repair / Loan Case">CIBIL Repair / Loan Case</option>
+                    <option value="Personal Loan">Personal Loan</option>
+                    <option value="Home Loan">Home Loan</option>
+                    <option value="Business Loan">Business Loan</option>
+                    <option value="Mortgage Loan">Mortgage Loan</option>
+                    <option value="Debt Consolidation">Debt Consolidation</option>
+                    <option value="Credit Score Improvement">Credit Score Improvement</option>
+                    <option value="Legal Notice Response">Legal Notice Response</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
                 
                 <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-medium text-gray-700 block">Source of Income</label>

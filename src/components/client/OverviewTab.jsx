@@ -1,7 +1,7 @@
 import React from 'react';
-import { User, Phone, Briefcase, IndianRupee, FileCheck, CheckCircle2, Clock, AlertCircle } from 'lucide-react';
+import { User, Phone, Briefcase, IndianRupee, FileCheck, CheckCircle2, Clock, AlertCircle, Edit } from 'lucide-react';
 
-const OverviewTab = ({ client }) => {
+const OverviewTab = ({ client, onEditClick }) => {
   if (!client) return null;
 
   const activePendencies = (client.pendencies || []).filter(p => p.status !== 'Resolved');
@@ -32,12 +32,23 @@ const OverviewTab = ({ client }) => {
       {/* Main Core Client Details */}
       <div className="flex-1 space-y-6">
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 md:p-8">
-          <div className="flex items-center justify-between border-b border-gray-100 pb-4 mb-6">
+          <div className="flex flex-wrap items-center justify-between border-b border-gray-100 pb-4 mb-6 gap-3">
             <div>
               <h3 className="font-black text-[#081326] text-base">Client Case Overview</h3>
               <p className="text-xs text-gray-400 font-medium mt-0.5">Primary intake details registered for this client</p>
             </div>
-            {getStatusBadge(client.status)}
+            <div className="flex items-center gap-3">
+              {onEditClick && (
+                <button 
+                  onClick={onEditClick}
+                  className="px-3 py-1.5 bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200 rounded-lg text-xs font-black transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
+                  title="Edit Case Details (Loan Amount, Case Type, Name, Contact, Status)"
+                >
+                  <Edit className="w-3.5 h-3.5 text-amber-600" /> Edit Details
+                </button>
+              )}
+              {getStatusBadge(client.status)}
+            </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
