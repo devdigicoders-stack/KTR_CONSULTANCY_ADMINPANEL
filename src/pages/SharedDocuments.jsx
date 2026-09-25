@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { 
   FileText, Download, Eye, ShieldCheck, CheckCircle2, 
-  Folder, Copy, Check, 
+  Folder, Copy, Check, ChevronLeft, ChevronRight, ArrowLeft,
   Building, CreditCard, FileSpreadsheet, Image as ImageIcon, AlertCircle
 } from 'lucide-react';
 import { getAssetUrl } from '../utils/url';
@@ -32,7 +32,7 @@ const SharedDocuments = () => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [previewFile, setPreviewFile] = useState(null);
+  const [previewData, setPreviewData] = useState(null);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
@@ -56,6 +56,55 @@ const SharedDocuments = () => {
 
     if (id) fetchSharedDocs();
   }, [id]);
+
+  const closePreview = useCallback(() => {
+    setPreviewData(null);
+  }, []);
+
+  const openPreview = useCallback((title, files, startIndex = 0) => {
+    if (!files || files.length === 0) return;
+    const formattedFiles = files.map(f => typeof f === 'string' ? { fileUrl: f, title } : f);
+    try {
+      window.history.pushState({ ktrSharedPreview: true }, '');
+    } catch (e) {}
+
+    setPreviewData({
+      title,
+      files: formattedFiles,
+      activeIndex: Math.max(0, Math.min(startIndex, formattedFiles.length - 1))
+    });
+  }, []);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      if (previewData) {
+        setPreviewData(null);
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [previewData]);
+
+  useEffect(() => {
+    if (!previewData) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        closePreview();
+      } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+        setPreviewData(prev => {
+          if (!prev || prev.activeIndex >= prev.files.length - 1) return prev;
+          return { ...prev, activeIndex: prev.activeIndex + 1 };
+        });
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+        setPreviewData(prev => {
+          if (!prev || prev.activeIndex <= 0) return prev;
+          return { ...prev, activeIndex: prev.activeIndex - 1 };
+        });
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [previewData, closePreview]);
 
   const handleDownloadFile = async (e, fileUrl, customFileName) => {
     if (e) e.preventDefault();
@@ -108,7 +157,7 @@ const SharedDocuments = () => {
     setTimeout(() => setCopied(false), 3000);
   };
 
-  const isPdf = (url) => url && url.toLowerCase().endsWith('.pdf');
+  const isPdf = (url) => url && url.toLowerCase().split('?')[0].endsWith('.pdf');
 
   if (loading) {
     return (
@@ -188,21 +237,40 @@ const SharedDocuments = () => {
     }
   });
 
-  // Custom documents (only standalone ones)
+  // Custom documents (group by title / name)
+  const customGroups = new Map();
   (data.customDocuments || []).forEach((doc, idx) => {
     if (claimedUrls.has(doc.fileUrl)) return;
-    allAvailableDocs.push({
-      id: `custom_${doc._id || idx}`,
-      docId: doc._id,
-      docType: 'custom',
-      title: doc.name,
-      subtitle: doc.notes || (doc.uploadedAt ? `Uploaded on ${new Date(doc.uploadedAt).toLocaleDateString('en-IN')}` : 'Client Document'),
-      category: doc.category || 'Uploaded File',
-      files: [{ title: doc.name, fileUrl: doc.fileUrl }],
-      fileUrl: doc.fileUrl,
-      icon: FileText,
-      type: 'custom'
-    });
+    claimedUrls.add(doc.fileUrl);
+
+    const docName = (doc.name || 'Document').trim();
+    if (customGroups.has(docName)) {
+      customGroups.get(docName).files.push({
+        title: doc.name,
+        fileUrl: doc.fileUrl,
+        docId: doc._id
+      });
+    } else {
+      customGroups.set(docName, {
+        id: `custom_${doc._id || idx}`,
+        docId: doc._id,
+        docType: 'custom',
+        title: docName,
+        subtitle: doc.notes || (doc.uploadedAt ? `Uploaded on ${new Date(doc.uploadedAt).toLocaleDateString('en-IN')}` : 'Client Document'),
+        category: doc.category || 'Uploaded File',
+        files: [{ title: doc.name, fileUrl: doc.fileUrl, docId: doc._id }],
+        fileUrl: doc.fileUrl,
+        icon: FileText,
+        type: 'custom'
+      });
+    }
+  });
+
+  customGroups.forEach(groupDoc => {
+    if (groupDoc.files.length > 1) {
+      groupDoc.subtitle = `${groupDoc.files.length} attached files`;
+    }
+    allAvailableDocs.push(groupDoc);
   });
 
   // Custom Folders
@@ -423,21 +491,21 @@ const SharedDocuments = () => {
                   className="bg-white rounded-2xl border border-gray-200/80 p-5 shadow-xs hover:border-amber-300 hover:shadow-md transition-all flex flex-col justify-between gap-4"
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-3 overflow-hidden">
-                      <span className="px-2.5 py-1 bg-amber-100 text-amber-900 border border-amber-200 rounded-lg text-xs font-mono font-black shrink-0">
+                    <div className="flex items-start gap-3 min-w-0 flex-1">
+                      <span className="px-2.5 py-1 bg-amber-100 text-amber-900 border border-amber-200 rounded-lg text-xs font-mono font-black shrink-0 mt-0.5">
                         #{idx + 1}
                       </span>
                       <div className="w-11 h-11 rounded-xl bg-blue-50/80 border border-blue-100 flex items-center justify-center text-blue-600 shrink-0 shadow-2xs">
                         <IconComponent className="w-5 h-5" />
                       </div>
-                      <div className="truncate">
-                        <div className="flex items-center gap-2">
-                          <h4 className="font-bold text-sm text-[#081326] truncate">{item.title}</h4>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start gap-2 flex-wrap sm:flex-nowrap">
+                          <h4 className="font-bold text-sm text-[#081326] break-words whitespace-normal leading-snug">{item.title}</h4>
                           <span className="text-[10px] font-bold text-green-700 bg-green-50 px-2 py-0.5 rounded-full border border-green-200 shrink-0">
                             {hasMultipleFiles ? `${item.files.length} Files Available` : 'Available'}
                           </span>
                         </div>
-                        <p className="text-xs text-gray-400 truncate mt-0.5">{item.subtitle || item.category}</p>
+                        <p className="text-xs text-gray-400 break-words whitespace-normal mt-0.5">{item.subtitle || item.category}</p>
                       </div>
                     </div>
                   </div>
@@ -445,9 +513,17 @@ const SharedDocuments = () => {
                   {/* If multiple files exist for this category, list each file with its own actions */}
                   {hasMultipleFiles ? (
                     <div className="pt-3 border-t border-gray-100 space-y-2">
-                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                        Attached Files ({item.files.length})
-                      </p>
+                      <div className="flex justify-between items-center">
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                          Attached Files ({item.files.length})
+                        </p>
+                        <button
+                          onClick={() => openPreview(item.title, item.files, 0)}
+                          className="text-xs font-bold text-blue-600 hover:underline flex items-center gap-1 cursor-pointer"
+                        >
+                          <Eye className="w-3 h-3" /> Preview All ({item.files.length})
+                        </button>
+                      </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                         {item.files.map((fileObj, fIdx) => (
                           <div 
@@ -459,13 +535,13 @@ const SharedDocuments = () => {
                                 {fIdx + 1}
                               </span>
                               <span className="font-bold text-xs text-gray-800 truncate" title={fileObj.title}>
-                                {fileObj.title}
+                                {fileObj.title || fileObj.fileUrl.split('/').pop()}
                               </span>
                             </div>
 
                             <div className="flex items-center gap-1.5 shrink-0">
                               <button
-                                onClick={() => setPreviewFile({ url: fileObj.fileUrl, title: fileObj.title })}
+                                onClick={() => openPreview(item.title, item.files, fIdx)}
                                 className="p-1.5 text-blue-600 hover:bg-blue-100 rounded-lg cursor-pointer transition-colors"
                                 title="Preview File"
                               >
@@ -493,7 +569,7 @@ const SharedDocuments = () => {
                   ) : (
                     <div className="pt-3 border-t border-gray-100 flex items-center justify-end gap-2 flex-wrap">
                       <button
-                        onClick={() => setPreviewFile({ url: item.fileUrl, title: item.title })}
+                        onClick={() => openPreview(item.title, item.files || [{ fileUrl: item.fileUrl, title: item.title }], 0)}
                         className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl text-xs font-bold border border-blue-200 flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
                       >
                         <Eye className="w-3.5 h-3.5" /> Preview
@@ -529,30 +605,82 @@ const SharedDocuments = () => {
         </footer>
       </main>
 
-      {/* Fullscreen Preview Modal */}
-      {previewFile && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#081326]/70 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl w-full max-w-4xl h-[85vh] flex flex-col shadow-2xl overflow-hidden border border-gray-200">
-            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/80">
-              <h3 className="text-sm font-black text-[#081326] flex items-center gap-2 truncate pr-4">
-                <FileText className="w-4 h-4 text-[#f59e0b] shrink-0" /> {previewFile.title}
-              </h3>
-              <div className="flex items-center gap-2 shrink-0">
+      {/* Fullscreen Multi-File Preview Modal with Next/Previous navigation & Back button */}
+      {previewData && activePreviewFile && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-[#081326]/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl w-full max-w-5xl h-[92vh] sm:h-[88vh] flex flex-col shadow-2xl overflow-hidden border border-gray-200">
+            {/* Header */}
+            <div className="px-4 sm:px-6 py-3.5 border-b border-gray-200 flex justify-between items-center bg-gray-50/90 gap-3">
+              <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                {/* Back Button */}
                 <button
-                  onClick={(e) => handleDownloadFile(e, previewFile.url, previewFile.title)}
-                  className="px-3.5 py-1.5 bg-[#081326] text-white rounded-xl text-xs font-bold hover:bg-[#11203d] flex items-center gap-1.5 shadow-sm cursor-pointer"
+                  type="button"
+                  onClick={closePreview}
+                  className="p-1.5 hover:bg-gray-200 rounded-xl text-gray-700 flex items-center gap-1 text-xs font-bold cursor-pointer transition-colors shrink-0"
+                  title="Back to Documents"
                 >
-                  <Download className="w-3.5 h-3.5" /> Download
+                  <ArrowLeft className="w-4 h-4" />
+                  <span className="hidden sm:inline">Back</span>
+                </button>
+
+                <div className="min-w-0">
+                  <h3 className="text-sm font-black text-[#081326] flex items-center gap-2 truncate">
+                    <FileText className="w-4 h-4 text-[#f59e0b] shrink-0" />
+                    <span className="truncate">{previewData.title}</span>
+                  </h3>
+                  {previewData.files.length > 1 && (
+                    <p className="text-[11px] text-gray-500 font-medium truncate">
+                      File {previewData.activeIndex + 1} of {previewData.files.length}: <span className="font-mono text-gray-700">{activePreviewFile.fileUrl.split('/').pop()}</span>
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Actions & Next/Prev */}
+              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                {previewData.files.length > 1 && (
+                  <div className="flex items-center bg-gray-100 rounded-xl p-0.5 border border-gray-200 mr-1">
+                    <button
+                      type="button"
+                      disabled={previewData.activeIndex <= 0}
+                      onClick={() => setPreviewData(prev => ({ ...prev, activeIndex: prev.activeIndex - 1 }))}
+                      className="p-1.5 hover:bg-white text-gray-700 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-all"
+                      title="Previous File (← Arrow Key)"
+                    >
+                      <ChevronLeft className="w-4 h-4 stroke-[2.5]" />
+                    </button>
+                    <span className="text-xs font-mono font-bold px-2 text-gray-700">
+                      {previewData.activeIndex + 1}/{previewData.files.length}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={previewData.activeIndex >= previewData.files.length - 1}
+                      onClick={() => setPreviewData(prev => ({ ...prev, activeIndex: prev.activeIndex + 1 }))}
+                      className="p-1.5 hover:bg-white text-gray-700 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-all"
+                      title="Next File (→ Arrow Key)"
+                    >
+                      <ChevronRight className="w-4 h-4 stroke-[2.5]" />
+                    </button>
+                  </div>
+                )}
+
+                <button
+                  onClick={(e) => handleDownloadFile(e, activePreviewFile.fileUrl, `${previewData.title}_${previewData.activeIndex + 1}`)}
+                  className="px-3 py-1.5 bg-[#081326] text-white rounded-xl text-xs font-bold hover:bg-[#11203d] flex items-center gap-1.5 shadow-sm cursor-pointer"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Download</span>
                 </button>
                 <button
-                  onClick={(e) => handleShareDocOnWhatsApp(e, previewFile.title, previewFile.url)}
+                  onClick={(e) => handleShareDocOnWhatsApp(e, `${previewData.title} (Part ${previewData.activeIndex + 1})`, activePreviewFile.fileUrl)}
                   className="px-3 py-1.5 bg-[#25D366] hover:bg-[#20bd5a] text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer"
                   title="Share Document via WhatsApp"
                 >
-                  <WhatsAppIcon className="w-3.5 h-3.5" /> WhatsApp
+                  <WhatsAppIcon className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">WhatsApp</span>
                 </button>
                 <button
-                  onClick={() => setPreviewFile(null)}
+                  onClick={closePreview}
                   className="w-8 h-8 flex items-center justify-center rounded-xl bg-gray-200 text-gray-700 hover:bg-red-50 hover:text-red-600 transition-colors font-bold cursor-pointer"
                 >
                   ✕
@@ -560,21 +688,69 @@ const SharedDocuments = () => {
               </div>
             </div>
 
-            <div className="flex-1 bg-gray-900/5 p-4 flex items-center justify-center overflow-auto">
-              {isPdf(previewFile.url) ? (
+            {/* Viewer Body */}
+            <div className="flex-1 bg-gray-900/5 p-2 sm:p-4 flex items-center justify-center overflow-auto relative group">
+              {/* Prev Floating Arrow */}
+              {previewData.files.length > 1 && previewData.activeIndex > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setPreviewData(prev => ({ ...prev, activeIndex: prev.activeIndex - 1 }))}
+                  className="absolute left-4 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-white/95 hover:bg-white shadow-xl border border-gray-200 text-[#081326] flex items-center justify-center transition-all z-20 cursor-pointer hover:scale-105"
+                  title="Previous File"
+                >
+                  <ChevronLeft className="w-6 h-6 stroke-[2.5]" />
+                </button>
+              )}
+
+              {/* Next Floating Arrow */}
+              {previewData.files.length > 1 && previewData.activeIndex < previewData.files.length - 1 && (
+                <button
+                  type="button"
+                  onClick={() => setPreviewData(prev => ({ ...prev, activeIndex: prev.activeIndex + 1 }))}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-white/95 hover:bg-white shadow-xl border border-gray-200 text-[#081326] flex items-center justify-center transition-all z-20 cursor-pointer hover:scale-105"
+                  title="Next File"
+                >
+                  <ChevronRight className="w-6 h-6 stroke-[2.5]" />
+                </button>
+              )}
+
+              {isPdf(activePreviewFile.fileUrl) ? (
                 <iframe
-                  src={`${getAssetUrl(previewFile.url)}#toolbar=0`}
-                  title={previewFile.title}
+                  key={activePreviewFile.fileUrl}
+                  src={`${getAssetUrl(activePreviewFile.fileUrl)}#toolbar=0`}
+                  title={previewData.title}
                   className="w-full h-full rounded-2xl border border-gray-200 shadow-inner bg-white"
                 />
               ) : (
                 <img
-                  src={getAssetUrl(previewFile.url)}
-                  alt={previewFile.title}
-                  className="max-h-full max-w-full object-contain rounded-2xl shadow-lg border border-gray-200"
+                  key={activePreviewFile.fileUrl}
+                  src={getAssetUrl(activePreviewFile.fileUrl)}
+                  alt={previewData.title}
+                  className="max-h-full max-w-full object-contain rounded-2xl shadow-lg border border-gray-200 bg-white"
                 />
               )}
             </div>
+
+            {/* Bottom thumbnail strip for multi-files */}
+            {previewData.files.length > 1 && (
+              <div className="px-4 py-2.5 bg-gray-50 border-t border-gray-200 flex items-center justify-center gap-2 overflow-x-auto">
+                <span className="text-[11px] font-bold text-gray-500 uppercase shrink-0">Switch File:</span>
+                {previewData.files.map((f, fIdx) => (
+                  <button
+                    key={fIdx}
+                    type="button"
+                    onClick={() => setPreviewData(prev => ({ ...prev, activeIndex: fIdx }))}
+                    className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                      previewData.activeIndex === fIdx
+                        ? 'bg-[#081326] text-white shadow-sm ring-2 ring-[#081326]/20'
+                        : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-100'
+                    }`}
+                  >
+                    <span>File {fIdx + 1}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
