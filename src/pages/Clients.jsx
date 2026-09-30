@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { 
   Users, UserCheck, UserMinus, FileWarning, Search, Eye, X, RefreshCcw, Download, 
   CheckCircle, Trash2, Edit, AlertTriangle, History, Clock, Phone, Mail, FileText, 
-  Briefcase, IndianRupee, FileCheck, AlertCircle, CheckCircle2, Upload, FileUp, Folder
+  Briefcase, IndianRupee, FileCheck, AlertCircle, CheckCircle2, Upload, FileUp, Folder, UserPlus
 } from 'lucide-react';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
@@ -70,7 +70,18 @@ const Clients = () => {
   });
   const [selectedUploadFiles, setSelectedUploadFiles] = useState([]);
   const [isUploadingDocs, setIsUploadingDocs] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadError, setUploadError] = useState('');
+
+  // Co-Applicant Modal State
+  const [showCoApplicantModal, setShowCoApplicantModal] = useState(false);
+  const [coApplicantClient, setCoApplicantClient] = useState(null);
+  const [isSavingCoApplicant, setIsSavingCoApplicant] = useState(false);
+  const [coApplicantError, setCoApplicantError] = useState('');
+  const [coApplicantForm, setCoApplicantForm] = useState({
+    fullName: '', mobile: '', occupation: '', panNumber: '',
+    aadhaarNumber: '', motherName: '', addressLine1: '', city: '', state: '', pincode: ''
+  });
 
   const fetchClients = async () => {
     try {
@@ -182,6 +193,55 @@ const Clients = () => {
     setShowUploadModal(true);
   };
 
+  const handleOpenCoApplicantModal = (client, e) => {
+    e?.stopPropagation();
+    setCoApplicantClient(client);
+    // Pre-fill if co-applicant already exists
+    setCoApplicantForm({
+      fullName: client.coApplicant?.fullName || '',
+      mobile: client.coApplicant?.mobile || '',
+      occupation: client.coApplicant?.occupation || '',
+      panNumber: client.coApplicant?.panNumber || '',
+      aadhaarNumber: client.coApplicant?.aadhaarNumber || '',
+      motherName: client.coApplicant?.motherName || '',
+      addressLine1: client.coApplicant?.addressLine1 || '',
+      city: client.coApplicant?.city || '',
+      state: client.coApplicant?.state || '',
+      pincode: client.coApplicant?.pincode || ''
+    });
+    setCoApplicantError('');
+    setShowCoApplicantModal(true);
+  };
+
+  const handleSaveCoApplicant = async (e) => {
+    e.preventDefault();
+    if (!coApplicantClient?._id) return;
+    if (!coApplicantForm.fullName.trim() || !coApplicantForm.mobile.trim()) {
+      setCoApplicantError('Co-applicant ka naam aur mobile number zaroori hai.');
+      return;
+    }
+    try {
+      setIsSavingCoApplicant(true);
+      setCoApplicantError('');
+      const res = await api.put(`/clients/${coApplicantClient._id}`, {
+        hasCoApplicant: true,
+        coApplicant: coApplicantForm
+      });
+      if (res.data.success) {
+        setShowCoApplicantModal(false);
+        setCoApplicantClient(null);
+        fetchClients();
+        if (selectedClient?._id === coApplicantClient._id) {
+          refreshSelectedClient();
+        }
+      }
+    } catch (err) {
+      setCoApplicantError(err.response?.data?.message || 'Co-applicant save nahi ho saka.');
+    } finally {
+      setIsSavingCoApplicant(false);
+    }
+  };
+
   const handleUploadDocumentsSubmit = async (e) => {
     e.preventDefault();
     if (!uploadingForClient?._id) return;
@@ -194,42 +254,70 @@ const Clients = () => {
       return;
     }
 
+    // File size check — warn if any single file > 25MB
+    const MAX_FILE_MB = 25;
+    const oversized = selectedUploadFiles.filter(f => f.size > MAX_FILE_MB * 1024 * 1024);
+    if (oversized.length > 0) {
+      const names = oversized.map(f => `${f.name} (${(f.size / 1024 / 1024).toFixed(1)} MB)`).join(', ');
+      setUploadError(`File too large (max ${MAX_FILE_MB}MB each): ${names}. Please compress or split the file.`);
+      return;
+    }
+
     try {
       setIsUploadingDocs(true);
+      setUploadProgress(0);
       setUploadError('');
 
-      const formData = new FormData();
-      formData.append('docName', uploadFormData.docName.trim());
-      formData.append('documentName', uploadFormData.docName.trim());
-      formData.append('category', uploadFormData.category);
-      if (uploadFormData.notes.trim()) {
-        formData.append('notes', uploadFormData.notes.trim());
-      }
-
-      for (let i = 0; i < selectedUploadFiles.length; i++) {
-        formData.append('files', selectedUploadFiles[i]);
-      }
-
-      const res = await api.post(`/clients/${uploadingForClient._id}/documents`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-        timeout: 180000 // 3 minutes for large file uploads
-      });
-
-      if (res.data.success) {
-        setShowUploadModal(false);
-        setUploadingForClient(null);
-        setSelectedUploadFiles([]);
-        fetchClients();
-        if (selectedClient?._id === uploadingForClient._id) {
-          refreshSelectedClient();
+      // Upload files ONE BY ONE to avoid server timeout/size issues
+      const total = selectedUploadFiles.length;
+      for (let i = 0; i < total; i++) {
+        const file = selectedUploadFiles[i];
+        const formData = new FormData();
+        formData.append('docName', total > 1 ? `${uploadFormData.docName.trim()} (${i + 1}/${total})` : uploadFormData.docName.trim());
+        formData.append('documentName', total > 1 ? `${uploadFormData.docName.trim()} (${i + 1}/${total})` : uploadFormData.docName.trim());
+        formData.append('category', uploadFormData.category);
+        if (uploadFormData.notes.trim()) {
+          formData.append('notes', uploadFormData.notes.trim());
         }
+        formData.append('files', file);
+
+        await api.post(`/clients/${uploadingForClient._id}/documents`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+          timeout: 120000, // 2 minutes per file
+          onUploadProgress: (progressEvent) => {
+            if (progressEvent.total) {
+              // Overall progress across all files
+              const fileProgress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+              const overall = Math.round(((i * 100) + fileProgress) / total);
+              setUploadProgress(overall);
+            }
+          }
+        });
+      }
+
+      setShowUploadModal(false);
+      setUploadingForClient(null);
+      setSelectedUploadFiles([]);
+      fetchClients();
+      if (selectedClient?._id === uploadingForClient._id) {
+        refreshSelectedClient();
       }
     } catch (err) {
       console.error('Error uploading document:', err);
-      const msg = err.response?.data?.message || err.message || 'Failed to upload documents.';
+      let msg = 'Failed to upload documents.';
+      if (err.code === 'ERR_NETWORK' || err.message === 'Network Error') {
+        msg = 'Network Error: File size bahot badi hai ya server se connection toot gaya. File compress karke dobara try karein.';
+      } else if (err.code === 'ECONNABORTED') {
+        msg = 'Upload timeout: File bahot badi hai. File compress karke dobara try karein.';
+      } else if (err.response?.status === 413) {
+        msg = 'File too large: Server ne reject kar diya. File ka size kam karke dobara try karein.';
+      } else {
+        msg = err.response?.data?.message || err.message || 'Failed to upload documents.';
+      }
       setUploadError(msg);
     } finally {
       setIsUploadingDocs(false);
+      setUploadProgress(0);
     }
   };
 
@@ -451,6 +539,15 @@ const Clients = () => {
                             >
                               <FileUp className="w-3.5 h-3.5 stroke-[2.5]" />
                               <span>Add Docs</span>
+                            </button>
+
+                            <button 
+                              onClick={(e) => handleOpenCoApplicantModal(client, e)}
+                              className="px-2.5 py-1.5 rounded-lg bg-purple-50 text-purple-700 hover:bg-purple-600 hover:text-white border border-purple-200 hover:border-purple-600 flex items-center gap-1 text-[11px] font-bold transition-all shadow-xs cursor-pointer"
+                              title={client.coApplicant?.fullName ? `Co-Applicant: ${client.coApplicant.fullName}` : 'Add Co-Applicant'}
+                            >
+                              <UserPlus className="w-3.5 h-3.5 stroke-[2.5]" />
+                              <span>{client.coApplicant?.fullName ? 'Co-App ✓' : 'Co-App'}</span>
                             </button>
 
                             <button 
@@ -930,12 +1027,40 @@ const Clients = () => {
                 )}
               </div>
 
+              {/* Upload Progress Bar */}
+              {isUploadingDocs && (
+                <div className="pt-2 pb-1">
+                  <div className="flex justify-between items-center mb-1.5">
+                    <span className="text-[11px] font-bold text-[#081326]">
+                      {selectedUploadFiles.length > 1
+                        ? `Uploading file ${Math.min(Math.ceil((uploadProgress / 100) * selectedUploadFiles.length) + 1, selectedUploadFiles.length)} of ${selectedUploadFiles.length}...`
+                        : 'Uploading file...'
+                      }
+                    </span>
+                    <span className="text-[11px] font-bold text-[#f59e0b]">{uploadProgress}%</span>
+                  </div>
+                  <div className="w-full bg-gray-100 rounded-full h-2.5 overflow-hidden">
+                    <div
+                      className="h-2.5 rounded-full transition-all duration-300 ease-out"
+                      style={{
+                        width: `${uploadProgress}%`,
+                        background: 'linear-gradient(90deg, #f59e0b, #d97706)'
+                      }}
+                    />
+                  </div>
+                  <p className="text-[10px] text-gray-400 mt-1 font-medium">
+                    {uploadProgress < 100 ? 'Please wait, do not close this window...' : 'Saving to server...'}
+                  </p>
+                </div>
+              )}
+
               {/* Modal Buttons */}
               <div className="flex gap-3 pt-3 border-t border-gray-100">
                 <button 
                   type="button" 
                   onClick={() => setShowUploadModal(false)}
-                  className="flex-1 py-2.5 bg-gray-100 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-200 cursor-pointer"
+                  disabled={isUploadingDocs}
+                  className="flex-1 py-2.5 bg-gray-100 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-200 cursor-pointer disabled:opacity-40"
                 >
                   Cancel
                 </button>
@@ -944,7 +1069,105 @@ const Clients = () => {
                   disabled={isUploadingDocs || selectedUploadFiles.length === 0}
                   className="flex-1 py-2.5 bg-[#081326] text-white rounded-xl text-xs font-bold hover:bg-[#11203d] disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer shadow-sm"
                 >
-                  {isUploadingDocs ? 'Uploading Files...' : `Upload ${selectedUploadFiles.length > 0 ? selectedUploadFiles.length + ' File(s)' : 'Documents'}`}
+                  {isUploadingDocs
+                    ? (
+                      <span className="flex items-center gap-2">
+                        <svg className="animate-spin w-3.5 h-3.5" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                        </svg>
+                        {uploadProgress < 100 ? `${uploadProgress}% Uploading...` : 'Saving...'}
+                      </span>
+                    )
+                    : `Upload ${selectedUploadFiles.length > 0 ? selectedUploadFiles.length + ' File(s)' : 'Documents'}`
+                  }
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {/* Co-Applicant Modal */}
+      {showCoApplicantModal && coApplicantClient && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-[#081326]/60 backdrop-blur-sm" onClick={() => setShowCoApplicantModal(false)} />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white z-10 rounded-t-2xl">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-purple-100 flex items-center justify-center">
+                  <UserPlus className="w-5 h-5 text-purple-600" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-[#081326]">
+                    {coApplicantClient.coApplicant?.fullName ? 'Edit Co-Applicant' : 'Add Co-Applicant'}
+                  </h3>
+                  <p className="text-[11px] text-gray-400 font-medium">Client: {coApplicantClient.fullName} ({coApplicantClient.mobile})</p>
+                </div>
+              </div>
+              <button onClick={() => setShowCoApplicantModal(false)} className="w-7 h-7 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center cursor-pointer transition-colors">
+                <X className="w-4 h-4 text-gray-500" />
+              </button>
+            </div>
+            <form onSubmit={handleSaveCoApplicant} className="p-6 space-y-4">
+              {coApplicantError && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs font-bold text-red-600">{coApplicantError}</div>
+              )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Full Name <span className="text-red-500">*</span></label>
+                  <input type="text" value={coApplicantForm.fullName} onChange={e => setCoApplicantForm(p => ({ ...p, fullName: e.target.value }))} placeholder="Co-applicant ka poora naam" required className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 outline-none focus:border-purple-400 focus:bg-white transition-all" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Mobile <span className="text-red-500">*</span></label>
+                  <input type="tel" value={coApplicantForm.mobile} onChange={e => setCoApplicantForm(p => ({ ...p, mobile: e.target.value }))} placeholder="10 digit number" maxLength={10} required className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 outline-none focus:border-purple-400 focus:bg-white transition-all" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Occupation</label>
+                  <input type="text" value={coApplicantForm.occupation} onChange={e => setCoApplicantForm(p => ({ ...p, occupation: e.target.value }))} placeholder="e.g. Salaried, Business" className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 outline-none focus:border-purple-400 focus:bg-white transition-all" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Mother's Name</label>
+                  <input type="text" value={coApplicantForm.motherName} onChange={e => setCoApplicantForm(p => ({ ...p, motherName: e.target.value }))} placeholder="Mother ka naam" className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 outline-none focus:border-purple-400 focus:bg-white transition-all" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">PAN Number</label>
+                  <input type="text" value={coApplicantForm.panNumber} onChange={e => setCoApplicantForm(p => ({ ...p, panNumber: e.target.value.toUpperCase() }))} placeholder="ABCDE1234F" maxLength={10} className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 outline-none focus:border-purple-400 focus:bg-white transition-all uppercase" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Aadhaar Number</label>
+                  <input type="text" value={coApplicantForm.aadhaarNumber} onChange={e => setCoApplicantForm(p => ({ ...p, aadhaarNumber: e.target.value }))} placeholder="12 digit Aadhaar" maxLength={12} className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 outline-none focus:border-purple-400 focus:bg-white transition-all" />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Address</label>
+                  <input type="text" value={coApplicantForm.addressLine1} onChange={e => setCoApplicantForm(p => ({ ...p, addressLine1: e.target.value }))} placeholder="Ghar/flat, colony, street" className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 outline-none focus:border-purple-400 focus:bg-white transition-all" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">City</label>
+                  <input type="text" value={coApplicantForm.city} onChange={e => setCoApplicantForm(p => ({ ...p, city: e.target.value }))} placeholder="City" className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 outline-none focus:border-purple-400 focus:bg-white transition-all" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">State</label>
+                  <input type="text" value={coApplicantForm.state} onChange={e => setCoApplicantForm(p => ({ ...p, state: e.target.value }))} placeholder="State" className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 outline-none focus:border-purple-400 focus:bg-white transition-all" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Pincode</label>
+                  <input type="text" value={coApplicantForm.pincode} onChange={e => setCoApplicantForm(p => ({ ...p, pincode: e.target.value }))} placeholder="6 digit pincode" maxLength={6} className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 outline-none focus:border-purple-400 focus:bg-white transition-all" />
+                </div>
+              </div>
+              <div className="flex gap-3 pt-3 border-t border-gray-100">
+                <button type="button" onClick={() => setShowCoApplicantModal(false)} disabled={isSavingCoApplicant} className="flex-1 py-2.5 bg-gray-100 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-200 cursor-pointer disabled:opacity-40">Cancel</button>
+                <button type="submit" disabled={isSavingCoApplicant} className="flex-1 py-2.5 bg-purple-600 text-white rounded-xl text-xs font-bold hover:bg-purple-700 disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer shadow-sm">
+                  {isSavingCoApplicant ? (
+                    <span className="flex items-center gap-2">
+                      <svg className="animate-spin w-3.5 h-3.5" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+                      Saving...
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1.5">
+                      <UserPlus className="w-3.5 h-3.5" />
+                      {coApplicantClient.coApplicant?.fullName ? 'Update Co-Applicant' : 'Save Co-Applicant'}
+                    </span>
+                  )}
                 </button>
               </div>
             </form>

@@ -226,9 +226,6 @@ const CibilInvoiceModal = ({ isOpen, onClose, reportData }) => {
               <p className="text-[11px] text-gray-500 leading-tight mt-1">
                 Website: www.ktrconsultants.in | Email: info@ktrconsultants.in
               </p>
-              <p className="text-[11px] text-gray-500 leading-tight">
-                Helpline: +91 99186 99696 / +91 96969 66896
-              </p>
             </div>
 
             <div className="sm:text-right">
