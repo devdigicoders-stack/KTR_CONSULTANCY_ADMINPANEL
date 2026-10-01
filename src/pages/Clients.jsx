@@ -978,7 +978,21 @@ const Clients = () => {
                 />
               </div>
 
-              {/* 2. Select Files (Multiple allowed) */}
+              {/* 2. Notes / Remarks / Credentials (Optional) */}
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  Document Notes / Remarks / Password <span className="text-gray-400 font-normal">(Optional - can be copied later)</span>
+                </label>
+                <input 
+                  type="text"
+                  placeholder="e.g. Password: KTR@2026, Netbanking User ID, Registry Book No. 4"
+                  value={uploadFormData.notes || ''}
+                  onChange={(e) => setUploadFormData({ ...uploadFormData, notes: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium text-gray-800 outline-none focus:border-[#f59e0b] focus:bg-white"
+                />
+              </div>
+
+              {/* 3. Select Files (Multiple allowed) */}
               <div>
                 <label className="block text-xs font-bold text-gray-700 mb-1">
                   Select File(s) <span className="text-red-500">*</span>
@@ -988,7 +1002,7 @@ const Clients = () => {
                     type="file" 
                     id="front-doc-multi-file-input"
                     multiple
-                    accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.xls,.xlsx"
+                    accept="application/pdf,image/*,.doc,.docx,.xls,.xlsx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,*/*"
                     onChange={(e) => {
                       if (e.target.files) {
                         setSelectedUploadFiles(Array.from(e.target.files));

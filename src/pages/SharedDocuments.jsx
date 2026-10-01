@@ -3,8 +3,9 @@ import { useParams } from 'react-router-dom';
 import { 
   FileText, Download, Eye, ShieldCheck, CheckCircle2, 
   Folder, Copy, Check, ChevronLeft, ChevronRight, ArrowLeft,
-  Building, CreditCard, FileSpreadsheet, Image as ImageIcon, AlertCircle
+  Building, CreditCard, FileSpreadsheet, Image as ImageIcon, AlertCircle, StickyNote
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { getAssetUrl } from '../utils/url';
 import api from '../api/axios';
 
@@ -251,12 +252,14 @@ const SharedDocuments = () => {
         docId: doc._id
       });
     } else {
+      const docNote = doc.notes || (data.documentNotes ? data.documentNotes[docName] : '') || '';
       customGroups.set(docName, {
         id: `custom_${doc._id || idx}`,
         docId: doc._id,
         docType: 'custom',
         title: docName,
-        subtitle: doc.notes || (doc.uploadedAt ? `Uploaded on ${new Date(doc.uploadedAt).toLocaleDateString('en-IN')}` : 'Client Document'),
+        subtitle: doc.uploadedAt ? `Uploaded on ${new Date(doc.uploadedAt).toLocaleDateString('en-IN')}` : 'Client Document',
+        notes: docNote,
         category: doc.category || 'Uploaded File',
         files: [{ title: doc.name, fileUrl: doc.fileUrl, docId: doc._id }],
         fileUrl: doc.fileUrl,
@@ -506,6 +509,26 @@ const SharedDocuments = () => {
                           </span>
                         </div>
                         <p className="text-xs text-gray-400 break-words whitespace-normal mt-0.5">{item.subtitle || item.category}</p>
+                        {item.notes ? (
+                          <div className="mt-2 inline-flex items-center gap-2 bg-gradient-to-r from-amber-50 to-orange-50/60 border border-amber-200/90 rounded-xl px-2.5 py-1 text-xs text-gray-800 shadow-2xs max-w-full">
+                            <StickyNote className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                            <span className="font-semibold text-gray-900 break-all select-all font-mono text-[11.5px]">
+                              {item.notes}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard.writeText(item.notes);
+                                toast.success('Note copied to clipboard!');
+                              }}
+                              className="ml-1 pl-1.5 border-l border-amber-200/80 text-amber-800 hover:text-amber-900 font-bold text-[10px] flex items-center gap-1 cursor-pointer"
+                              title="Copy Note"
+                            >
+                              <Copy className="w-3 h-3" />
+                              <span>Copy</span>
+                            </button>
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                   </div>

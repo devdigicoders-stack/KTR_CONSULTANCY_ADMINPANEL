@@ -4,8 +4,9 @@ import {
   ExternalLink, Search, PlusCircle, X, Trash2,
   Copy, Check, ArrowUp, ArrowDown, GripVertical,
   CheckSquare, Square, Share2, ChevronLeft, ChevronRight,
-  Layers, ArrowLeft
+  Layers, ArrowLeft, Edit3, StickyNote, Loader2
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { getAssetUrl, getPublicShareDocsUrl } from '../../utils/url';
 import api from '../../api/axios';
 
@@ -25,7 +26,14 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
   // Multi-file Upload Modal State
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [customDocTitle, setCustomDocTitle] = useState('');
+  const [customDocNotes, setCustomDocNotes] = useState('');
   const [selectedFiles, setSelectedFiles] = useState([]);
+
+  // Document Notes State
+  const [editingNoteDoc, setEditingNoteDoc] = useState(null); // { docName, text }
+  const [savingNote, setSavingNote] = useState(false);
+  const [copiedNoteKey, setCopiedNoteKey] = useState(null);
+  const [localNotesMap, setLocalNotesMap] = useState({});
 
   // Multi-Select for Batch Sharing
   const [selectedDocIds, setSelectedDocIds] = useState([]);
@@ -108,6 +116,53 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [previewData, closePreview]);
 
+  // Document Notes Helper
+  const getNoteForDoc = (groupKey, cd) => {
+    if (localNotesMap[groupKey] !== undefined) return localNotesMap[groupKey];
+    if (cd?.notes) return cd.notes;
+    if (client?.documentNotes) {
+      if (typeof client.documentNotes.get === 'function') {
+        const val = client.documentNotes.get(groupKey);
+        if (val) return val;
+      } else if (typeof client.documentNotes === 'object') {
+        const val = client.documentNotes[groupKey];
+        if (val) return val;
+      }
+    }
+    return '';
+  };
+
+  const handleCopyDocNote = (noteText, docKey) => {
+    if (!noteText) return;
+    navigator.clipboard.writeText(noteText);
+    setCopiedNoteKey(docKey);
+    toast.success('Note copied to clipboard!');
+    setTimeout(() => setCopiedNoteKey(null), 2000);
+  };
+
+  const handleSaveDocNote = async (docName, doc) => {
+    if (!client?._id || !docName) return;
+    setSavingNote(true);
+    const newNote = (editingNoteDoc?.text || '').trim();
+    try {
+      await api.put(`/clients/${client._id}/document-notes`, {
+        docName,
+        notes: newNote,
+        docId: doc?.files?.[0]?.docId,
+        fileUrl: doc?.files?.[0]?.fileUrl
+      });
+      setLocalNotesMap(prev => ({ ...prev, [docName]: newNote }));
+      setEditingNoteDoc(null);
+      toast.success('Document note saved!');
+      if (onRefresh) onRefresh();
+    } catch (err) {
+      console.error('Failed to save document note:', err);
+      toast.error(err.response?.data?.message || 'Failed to save note');
+    } finally {
+      setSavingNote(false);
+    }
+  };
+
   // ----------------------------------------------------
   // GATHER & GROUP DOCUMENTS BY TITLE / NAME
   // ----------------------------------------------------
@@ -122,6 +177,7 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
     seenUrls.add(cd.fileUrl);
 
     const groupKey = (cd.name || 'Document').trim();
+    const docNotes = getNoteForDoc(groupKey, cd);
     const docEntry = {
       id: `cd_${cd._id || idx}`,
       docId: cd._id,
@@ -131,11 +187,15 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
       category: cd.category || 'Uploaded File',
       uploadedAt: cd.uploadedAt,
       uploadedByName: cd.uploadedByName,
+      notes: docNotes,
       rawDoc: cd
     };
 
     if (groupedDocsMap.has(groupKey)) {
       groupedDocsMap.get(groupKey).files.push(docEntry);
+      if (docNotes && !groupedDocsMap.get(groupKey).notes) {
+        groupedDocsMap.get(groupKey).notes = docNotes;
+      }
     } else {
       groupedDocsMap.set(groupKey, {
         id: `group_${docEntry.id}`,
@@ -144,6 +204,7 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
         category: docEntry.category,
         uploadedAt: docEntry.uploadedAt,
         uploadedByName: docEntry.uploadedByName,
+        notes: docNotes,
         files: [docEntry]
       });
     }
@@ -156,6 +217,7 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
       seenUrls.add(fDoc.fileUrl);
 
       const groupKey = (fDoc.name || 'Folder Document').trim();
+      const docNotes = getNoteForDoc(groupKey, fDoc);
       const docEntry = {
         id: `folderdoc_${f._id}_${fDoc._id || fIdx}`,
         docId: fDoc._id,
@@ -164,11 +226,15 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
         docType: 'folderDocument',
         category: `Folder: ${f.folderName || f.name}`,
         uploadedAt: fDoc.uploadedAt,
-        uploadedByName: fDoc.uploadedByName
+        uploadedByName: fDoc.uploadedByName,
+        notes: docNotes
       };
 
       if (groupedDocsMap.has(groupKey)) {
         groupedDocsMap.get(groupKey).files.push(docEntry);
+        if (docNotes && !groupedDocsMap.get(groupKey).notes) {
+          groupedDocsMap.get(groupKey).notes = docNotes;
+        }
       } else {
         groupedDocsMap.set(groupKey, {
           id: `group_${docEntry.id}`,
@@ -177,6 +243,7 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
           category: docEntry.category,
           uploadedAt: docEntry.uploadedAt,
           uploadedByName: docEntry.uploadedByName,
+          notes: docNotes,
           files: [docEntry]
         });
       }
@@ -202,22 +269,28 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
     if (client?.[item.key] && !seenUrls.has(client[item.key])) {
       seenUrls.add(client[item.key]);
       const groupKey = item.label;
+      const docNotes = getNoteForDoc(groupKey, null);
       const docEntry = {
         id: `legacy_${item.key}`,
         name: groupKey,
         fileUrl: client[item.key],
         docType: item.key,
-        category: 'Client Document'
+        category: 'Client Document',
+        notes: docNotes
       };
 
       if (groupedDocsMap.has(groupKey)) {
         groupedDocsMap.get(groupKey).files.push(docEntry);
+        if (docNotes && !groupedDocsMap.get(groupKey).notes) {
+          groupedDocsMap.get(groupKey).notes = docNotes;
+        }
       } else {
         groupedDocsMap.set(groupKey, {
           id: `group_${docEntry.id}`,
           name: groupKey,
           docType: docEntry.docType,
           category: docEntry.category,
+          notes: docNotes,
           files: [docEntry]
         });
       }
@@ -229,22 +302,28 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
     if (!seenUrls.has(url)) {
       seenUrls.add(url);
       const groupKey = `Document ${idx + 1}`;
+      const docNotes = getNoteForDoc(groupKey, null);
       const docEntry = {
         id: `other_${idx}`,
         name: groupKey,
         fileUrl: url,
         docType: 'other',
-        category: 'Client Document'
+        category: 'Client Document',
+        notes: docNotes
       };
 
       if (groupedDocsMap.has(groupKey)) {
         groupedDocsMap.get(groupKey).files.push(docEntry);
+        if (docNotes && !groupedDocsMap.get(groupKey).notes) {
+          groupedDocsMap.get(groupKey).notes = docNotes;
+        }
       } else {
         groupedDocsMap.set(groupKey, {
           id: `group_${docEntry.id}`,
           name: groupKey,
           docType: docEntry.docType,
           category: docEntry.category,
+          notes: docNotes,
           files: [docEntry]
         });
       }
@@ -401,6 +480,9 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
       formData.append('docName', customDocTitle.trim());
       formData.append('documentName', customDocTitle.trim());
       formData.append('category', 'Case Document');
+      if (customDocNotes.trim()) {
+        formData.append('notes', customDocNotes.trim());
+      }
 
       const res = await api.post(`/clients/${client._id}/documents`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
@@ -410,6 +492,7 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
       if (res.data.success) {
         setShowUploadModal(false);
         setCustomDocTitle('');
+        setCustomDocNotes('');
         setSelectedFiles([]);
         if (onRefresh) await onRefresh();
       }
@@ -839,12 +922,105 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
                           </span>
                         )}
                       </div>
-                      <p className="text-[11px] text-gray-400 font-mono break-all mt-0.5">
-                        {fileCount === 1 
-                          ? primaryUrl.split('/').pop() 
-                          : `${fileCount} uploaded attachments under this document title`}
-                        {doc.uploadedAt ? ` • Uploaded ${new Date(doc.uploadedAt).toLocaleDateString('en-IN')}` : ''}
-                      </p>
+
+                      <div className="flex items-center gap-2 flex-wrap text-[11px] text-gray-400 font-medium mt-0.5">
+                        {doc.uploadedAt && (
+                          <span>
+                            📅 Uploaded {new Date(doc.uploadedAt).toLocaleDateString('en-IN')}
+                          </span>
+                        )}
+                        {fileCount > 1 && (
+                          <span>• {fileCount} attachments combined</span>
+                        )}
+                      </div>
+
+                      {/* Notes Column / Box with 1-click Copy & Edit */}
+                      <div className="mt-1.5 pt-0.5">
+                        {editingNoteDoc?.docName === doc.name ? (
+                          <div className="flex items-center gap-2 bg-amber-50/90 border border-amber-300 rounded-xl p-2 animate-in fade-in duration-150 max-w-lg">
+                            <StickyNote className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                            <input
+                              type="text"
+                              value={editingNoteDoc.text}
+                              onChange={(e) => setEditingNoteDoc({ docName: doc.name, text: e.target.value })}
+                              placeholder="Enter note, password, login ID, or remark..."
+                              className="flex-1 bg-white border border-amber-200 rounded-lg px-2.5 py-1 text-xs text-gray-800 outline-none focus:border-amber-500 font-medium"
+                              autoFocus
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleSaveDocNote(doc.name, doc);
+                                if (e.key === 'Escape') setEditingNoteDoc(null);
+                              }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleSaveDocNote(doc.name, doc)}
+                              disabled={savingNote}
+                              className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer disabled:opacity-50 shrink-0 shadow-2xs"
+                            >
+                              {savingNote ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3 stroke-[3]" />}
+                              <span>Save</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditingNoteDoc(null)}
+                              disabled={savingNote}
+                              className="p-1 text-gray-400 hover:text-gray-700 rounded-lg cursor-pointer shrink-0"
+                              title="Cancel"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ) : doc.notes ? (
+                          <div className="inline-flex items-center gap-2 bg-gradient-to-r from-amber-50 to-orange-50/60 border border-amber-200/90 rounded-xl px-2.5 py-1 text-xs text-gray-800 shadow-2xs max-w-full">
+                            <StickyNote className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                            <span className="font-semibold text-gray-900 break-all select-all font-mono text-[11.5px]">
+                              {doc.notes}
+                            </span>
+                            <div className="flex items-center gap-1 ml-1 shrink-0 border-l border-amber-200/80 pl-1.5">
+                              <button
+                                type="button"
+                                onClick={() => handleCopyDocNote(doc.notes, doc.id)}
+                                className={`p-1 rounded-md transition-all flex items-center gap-1 text-[11px] font-bold cursor-pointer ${
+                                  copiedNoteKey === doc.id
+                                    ? 'bg-emerald-100 text-emerald-700'
+                                    : 'text-amber-800 hover:bg-amber-100'
+                                }`}
+                                title="Click to copy note text"
+                              >
+                                {copiedNoteKey === doc.id ? (
+                                  <>
+                                    <Check className="w-3 h-3 text-emerald-600 stroke-[3]" />
+                                    <span className="text-[10px]">Copied!</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Copy className="w-3 h-3" />
+                                    <span className="text-[10px]">Copy</span>
+                                  </>
+                                )}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setEditingNoteDoc({ docName: doc.name, text: doc.notes })}
+                                className="p-1 text-gray-400 hover:text-amber-700 hover:bg-amber-100 rounded-md transition-colors cursor-pointer"
+                                title="Edit Note"
+                              >
+                                <Edit3 className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setEditingNoteDoc({ docName: doc.name, text: '' })}
+                            className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700/80 hover:text-amber-800 hover:underline cursor-pointer transition-colors"
+                            title="Add note, password, or remarks for this document"
+                          >
+                            <PlusCircle className="w-3 h-3 text-amber-600" />
+                            <span>+ Add Note / Remarks / Password</span>
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
 
@@ -979,7 +1155,21 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
                 />
               </div>
 
-              {/* 2. Select Files */}
+              {/* 2. Notes / Remarks / Credentials (Optional) */}
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  Document Notes / Remarks / Password <span className="text-gray-400 font-normal">(Optional - can be copied later)</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Password: KTR@2026, Netbanking User ID, Registry Book No. 4"
+                  value={customDocNotes}
+                  onChange={(e) => setCustomDocNotes(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium text-gray-800 outline-none focus:border-amber-500 focus:bg-white"
+                />
+              </div>
+
+              {/* 3. Select Files */}
               <div>
                 <div className="flex justify-between items-center mb-1">
                   <label className="text-xs font-bold text-gray-700">
