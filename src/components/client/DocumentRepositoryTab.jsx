@@ -4,21 +4,21 @@ import {
   ExternalLink, Search, PlusCircle, X, Trash2,
   Copy, Check, ArrowUp, ArrowDown, GripVertical,
   CheckSquare, Square, Share2, ChevronLeft, ChevronRight,
-  Layers, ArrowLeft, Edit3, StickyNote, Loader2
+  Layers, ArrowLeft, Edit3, StickyNote, Loader2, Printer
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import * as pdfjsLib from 'pdfjs-dist';
+import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.mjs?url';
 import { getAssetUrl, getPublicShareDocsUrl } from '../../utils/url';
 import api from '../../api/axios';
+import PdfViewer from '../common/PdfViewer';
+import ImageViewer from '../common/ImageViewer';
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
 const WhatsAppIcon = ({ className = "w-3.5 h-3.5" }) => (
   <svg className={className} viewBox="0 0 24 24" fill="currentColor">
     <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.82 11.82 0 00-3.48-8.413Z"/>
-  </svg>
-);
-
-const WhatsAppBusinessIcon = ({ className = "w-3.5 h-3.5" }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="currentColor">
-    <path d="M12.004 0C5.373 0 0 5.373 0 12.004c0 2.115.547 4.178 1.589 6.002L.057 24l6.173-1.62a11.96 11.96 0 005.774 1.48h.005c6.63 0 11.996-5.373 11.996-12.004A11.97 11.97 0 0012.004 0zm0 21.848h-.004a9.82 9.82 0 01-5.006-1.371l-.359-.213-3.722.977.994-3.63-.234-.373a9.81 9.81 0 01-1.503-5.234c0-5.426 4.414-9.84 9.838-9.84 2.628 0 5.099 1.024 6.958 2.883a9.78 9.78 0 012.879 6.957c0 5.426-4.414 9.84-9.841 9.84zm-2.42-14.73h3.58c1.71 0 2.87.89 2.87 2.31 0 1.01-.61 1.76-1.52 2.05v.06c1.13.25 1.83 1.09 1.83 2.29 0 1.62-1.31 2.58-3.18 2.58H9.584V7.118zm1.96 3.66h1.41c.78 0 1.25-.43 1.25-1.07 0-.67-.47-1.04-1.25-1.04h-1.41v2.11zm0 3.91h1.61c.88 0 1.39-.46 1.39-1.18 0-.74-.51-1.18-1.39-1.18h-1.61v2.36z"/>
   </svg>
 );
 
@@ -36,7 +36,7 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
   const [selectedFiles, setSelectedFiles] = useState([]);
 
   // Document Notes State
-  const [editingNoteDoc, setEditingNoteDoc] = useState(null); // { docName, text }
+  const [editingNoteDoc, setEditingNoteDoc] = useState(null);
   const [savingNote, setSavingNote] = useState(false);
   const [copiedNoteKey, setCopiedNoteKey] = useState(null);
   const [localNotesMap, setLocalNotesMap] = useState({});
@@ -44,11 +44,14 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
   // Multi-Select for Batch Sharing
   const [selectedDocIds, setSelectedDocIds] = useState([]);
 
-  // WhatsApp Share States
-  const [shareDocTarget, setShareDocTarget] = useState(null); // single doc or batch { title, url, isBatch }
-  const [showShareBundleModal, setShowShareBundleModal] = useState(false);
+  // Share Modals (Share File vs Share Link)
+  const [shareDocModal, setShareDocModal] = useState(null);
+  const [topShareModal, setTopShareModal] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedDocUrl, setCopiedDocUrl] = useState(false);
+
+  // Printing Progress State
+  const [printingProgress, setPrintingProgress] = useState({ active: false, current: 0, total: 0, status: '' });
 
   // Document Serial Order State & Dragging
   const [localOrder, setLocalOrder] = useState(null);
@@ -75,12 +78,9 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
     if (!files || files.length === 0) return;
     const formattedFiles = files.map(f => typeof f === 'string' ? { fileUrl: f, title } : f);
     
-    // Push dummy state to browser history so Android/Browser back button closes modal safely
     try {
       window.history.pushState({ ktrPreviewModal: true }, '');
-    } catch (e) {
-      // ignore
-    }
+    } catch (e) {}
 
     setPreviewData({
       title,
@@ -92,12 +92,12 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
   useEffect(() => {
     const handlePopState = () => {
       setPreviewData(null);
+      setShareDocModal(null);
+      setTopShareModal(false);
     };
 
     window.addEventListener('popstate', handlePopState);
-    return () => {
-      window.removeEventListener('popstate', handlePopState);
-    };
+    return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
   // Keyboard navigation for preview modal (ArrowLeft, ArrowRight, Escape)
@@ -157,25 +157,24 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
         docName,
         notes: newNote,
         docId: doc?.files?.[0]?.docId,
-        fileUrl: doc?.files?.[0]?.fileUrl
+        docType: doc?.docType
       });
+
       setLocalNotesMap(prev => ({ ...prev, [docName]: newNote }));
       setEditingNoteDoc(null);
-      toast.success('Document note saved!');
+      toast.success('Note saved successfully!');
       if (onRefresh) onRefresh();
     } catch (err) {
-      console.error('Failed to save document note:', err);
-      toast.error(err.response?.data?.message || 'Failed to save note');
+      console.error('Save doc note error:', err);
+      toast.error('Failed to save note');
     } finally {
       setSavingNote(false);
     }
   };
 
   // ----------------------------------------------------
-  // GATHER & GROUP DOCUMENTS BY TITLE / NAME
+  // ASSEMBLE ALL DOCUMENTS INTO GROUPS
   // ----------------------------------------------------
-  // When staff uploads multiple files under one title (e.g. "6 Months Salary Slips"),
-  // they group cleanly together so Preview opens all files with Next/Prev navigation.
   const groupedDocsMap = new Map();
   const seenUrls = new Set();
 
@@ -343,9 +342,8 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
   // Sort by saved serial order
   const activeOrder = localOrder || client?.documentOrder || [];
   const sortedDocItems = [...rawDocs].sort((a, b) => {
-    // Match either group ID or individual file ID
-    const indexA = activeOrder.findIndex(key => key === a.id || a.files.some(f => f.id === key));
-    const indexB = activeOrder.findIndex(key => key === b.id || b.files.some(f => f.id === key));
+    const indexA = activeOrder.findIndex(key => key === a.id || key === a.name || a.files.some(f => f.id === key || f.docId === key || f.fileUrl === key));
+    const indexB = activeOrder.findIndex(key => key === b.id || key === b.name || b.files.some(f => f.id === key || f.docId === key || f.fileUrl === key));
     if (indexA !== -1 && indexB !== -1) return indexA - indexB;
     if (indexA !== -1) return -1;
     if (indexB !== -1) return 1;
@@ -362,7 +360,15 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
     newItems[index] = newItems[targetIndex];
     newItems[targetIndex] = temp;
 
-    const newOrderKeys = newItems.flatMap(item => item.files.map(f => f.id));
+    const newOrderKeys = newItems.flatMap(item => [
+      item.id,
+      item.name,
+      item.docType,
+      `legacy_${item.docType}`,
+      ...item.files.map(f => f.id),
+      ...item.files.map(f => f.docId).filter(Boolean),
+      ...item.files.map(f => f.fileUrl).filter(Boolean)
+    ]);
     setLocalOrder(newOrderKeys);
 
     try {
@@ -378,7 +384,7 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
     }
   };
 
-  // Drag & Drop Reordering (Mouse and Touch support)
+  // Drag & Drop Reordering
   const touchStartYRef = useRef(null);
   const touchStartIndexRef = useRef(null);
   const [touchHoverIndex, setTouchHoverIndex] = useState(null);
@@ -401,7 +407,15 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
     newItems.splice(fromIndex, 1);
     newItems.splice(toIndex, 0, draggedItem);
 
-    const newOrderKeys = newItems.flatMap(item => item.files.map(f => f.id));
+    const newOrderKeys = newItems.flatMap(item => [
+      item.id,
+      item.name,
+      item.docType,
+      `legacy_${item.docType}`,
+      ...item.files.map(f => f.id),
+      ...item.files.map(f => f.docId).filter(Boolean),
+      ...item.files.map(f => f.fileUrl).filter(Boolean)
+    ]);
     setLocalOrder(newOrderKeys);
     setDraggedIndex(null);
     setTouchHoverIndex(null);
@@ -424,7 +438,6 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
     await executeReorder(draggedIndex, targetIndex);
   };
 
-  // Mobile Touch Reorder Handlers on Drag Handle (☰)
   const handleTouchStart = (e, index) => {
     touchStartIndexRef.current = index;
     setDraggedIndex(index);
@@ -439,7 +452,6 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
     const clientY = touch.clientY;
     const clientX = touch.clientX;
 
-    // Find the item element under the touch point
     const element = document.elementFromPoint(clientX, clientY);
     if (!element) return;
     const itemCard = element.closest('[data-doc-index]');
@@ -502,6 +514,7 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
         setCustomDocTitle('');
         setCustomDocNotes('');
         setSelectedFiles([]);
+        toast.success('Document uploaded successfully!');
         if (onRefresh) await onRefresh();
       }
     } catch (err) {
@@ -521,45 +534,36 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
       const fresh = incoming.filter(f => !existing.has(`${f.name}_${f.size}_${f.lastModified}`));
       return [...prev, ...fresh];
     });
-
-    e.target.value = '';
   };
 
-  const handleRemoveSelectedFile = (indexToRemove) => {
-    setSelectedFiles(prev => prev.filter((_, idx) => idx !== indexToRemove));
+  const handleRemoveSelectedFile = (idx) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== idx));
   };
 
-  // Delete an entire document group or specific file
-  const handleDeleteDocGroup = async (groupDoc) => {
-    const fileName = groupDoc.name || 'Document';
-    const filesCount = groupDoc.files?.length || 1;
-    const confirmPrompt = filesCount > 1 
-      ? `Delete all ${filesCount} file(s) under "${fileName}"?` 
-      : `Delete "${fileName}"?`;
-
-    if (!window.confirm(confirmPrompt)) return;
+  const handleDeleteGroup = async (groupDoc) => {
+    if (!window.confirm(`Are you sure you want to delete "${groupDoc.name}"? This action cannot be undone.`)) return;
 
     try {
-      // Delete all files belonging to this group
       for (const fileObj of groupDoc.files) {
         await api.delete(`/clients/${client._id}/documents`, {
           data: {
-            docType: fileObj.docType || 'customDocument',
+            docType: fileObj.docType || groupDoc.docType,
             docId: fileObj.docId || fileObj._id,
             fileUrl: fileObj.fileUrl,
-            docName: fileName,
+            docName: groupDoc.name,
             reason: 'Deleted by staff'
           }
         });
       }
+      toast.success(`"${groupDoc.name}" deleted successfully!`);
       if (onRefresh) onRefresh();
     } catch (err) {
-      alert('Failed to delete document: ' + (err.response?.data?.message || err.message));
+      console.error('Failed to delete doc:', err);
+      toast.error('Failed to delete document: ' + (err.response?.data?.message || err.message));
     }
   };
 
-  const handleDeleteSingleFile = async (e, fileObj, docTitle) => {
-    e.stopPropagation();
+  const handleDeleteSingleFileInGroup = async (fileObj, docTitle) => {
     if (!window.confirm(`Delete attached file "${fileObj.name || docTitle}"?`)) return;
     try {
       const res = await api.delete(`/clients/${client._id}/documents`, {
@@ -571,9 +575,12 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
           reason: 'Deleted by staff'
         }
       });
-      if (res.data.success && onRefresh) onRefresh();
+      if (res.data.success) {
+        toast.success('File deleted');
+        if (onRefresh) onRefresh();
+      }
     } catch (err) {
-      alert('Failed to delete file: ' + (err.response?.data?.message || err.message));
+      toast.error('Failed to delete file: ' + (err.response?.data?.message || err.message));
     }
   };
 
@@ -583,6 +590,7 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
     const fullUrl = getAssetUrl(fileUrl);
     const fileName = customFileName || fileUrl.split('/').pop() || 'document';
 
+    toast.loading('Preparing download...', { id: 'download-toast' });
     try {
       const response = await fetch(fullUrl);
       const blob = await response.blob();
@@ -594,6 +602,7 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(blobUrl);
+      toast.success('Download started!', { id: 'download-toast' });
     } catch (error) {
       console.error('Error downloading file:', error);
       const link = document.createElement('a');
@@ -602,125 +611,360 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-    }
-  };
-
-  const handleDownloadAllInGroup = async (e, groupDoc) => {
-    if (e) e.preventDefault();
-    if (!groupDoc.files || groupDoc.files.length === 0) return;
-    for (let i = 0; i < groupDoc.files.length; i++) {
-      const f = groupDoc.files[i];
-      const suffix = groupDoc.files.length > 1 ? `_Part${i + 1}` : '';
-      const ext = f.fileUrl.split('.').pop() || 'pdf';
-      const cleanName = `${groupDoc.name}${suffix}.${ext}`;
-      await handleDownloadFile(null, f.fileUrl, cleanName);
+      toast.success('Opening file download...', { id: 'download-toast' });
     }
   };
 
   const copyToClipboard = async (text, setSuccessState) => {
     try {
-      if (navigator?.clipboard?.writeText) {
-        await navigator.clipboard.writeText(text);
-      } else {
-        const ta = document.createElement('textarea');
-        ta.value = text;
-        document.body.appendChild(ta);
-        ta.select();
-        document.execCommand('copy');
-        document.body.removeChild(ta);
-      }
+      await navigator.clipboard.writeText(text);
       setSuccessState(true);
+      toast.success('Link copied to clipboard!');
       setTimeout(() => setSuccessState(false), 2500);
     } catch (err) {
       console.error('Failed to copy to clipboard:', err);
     }
   };
 
-  // Universal Share Execution (Supports Native App Chooser, WhatsApp Business, Personal WhatsApp & Direct Number)
-  const executeShare = async (message, targetMobile = null, appType = 'chooser') => {
-    const encoded = encodeURIComponent(message);
-
-    // 1. Direct phone number chat
-    if (targetMobile) {
-      window.open(`https://wa.me/91${targetMobile}?text=${encoded}`, '_blank');
+  // SMART PRINTING SYSTEM: Auto Orientation (Portrait / Landscape) & Perfect Page Fit
+  const handleSmartPrint = async (docsToPrint, printTitle = 'Client Documents') => {
+    if (!docsToPrint || docsToPrint.length === 0) {
+      toast.error('No documents available to print.');
       return;
     }
 
-    const isAndroid = /Android/i.test(navigator.userAgent);
+    const allFiles = [];
+    docsToPrint.forEach(doc => {
+      const files = doc.files || [{ name: doc.name, fileUrl: doc.fileUrl }];
+      files.forEach((f, idx) => {
+        if (f.fileUrl) {
+          allFiles.push({
+            docTitle: doc.name,
+            fileTitle: f.name || doc.name,
+            fileUrl: f.fileUrl,
+            pageLabel: files.length > 1 ? `Page ${idx + 1} of ${files.length}` : ''
+          });
+        }
+      });
+    });
 
-    // 2. WhatsApp Business Direct
-    if (appType === 'business') {
-      if (isAndroid) {
-        window.location.href = `intent://send?text=${encoded}#Intent;package=com.whatsapp.w4b;scheme=whatsapp;end`;
-      } else {
-        window.open(`https://api.whatsapp.com/send?text=${encoded}`, '_blank');
+    if (allFiles.length === 0) {
+      toast.error('No document files found.');
+      return;
+    }
+
+    setPrintingProgress({
+      active: true,
+      current: 0,
+      total: allFiles.length,
+      status: `Initializing print engine for ${allFiles.length} file(s)...`
+    });
+
+    try {
+      const renderedPages = [];
+
+      for (let i = 0; i < allFiles.length; i++) {
+        const file = allFiles[i];
+        const fullUrl = getAssetUrl(file.fileUrl);
+        const isFilePdf = isPdf(file.fileUrl);
+
+        setPrintingProgress({
+          active: true,
+          current: i + 1,
+          total: allFiles.length,
+          status: `Processing ${file.fileTitle} (${i + 1}/${allFiles.length})...`
+        });
+
+        if (isFilePdf) {
+          try {
+            const loadingTask = pdfjsLib.getDocument({ url: fullUrl, withCredentials: false });
+            const pdf = await loadingTask.promise;
+            for (let pNum = 1; pNum <= pdf.numPages; pNum++) {
+              const page = await pdf.getPage(pNum);
+              const viewport = page.getViewport({ scale: 2.0 });
+              const canvas = document.createElement('canvas');
+              canvas.width = Math.floor(viewport.width);
+              canvas.height = Math.floor(viewport.height);
+              const ctx = canvas.getContext('2d');
+              await page.render({ canvasContext: ctx, viewport }).promise;
+
+              const isLandscape = viewport.width > viewport.height * 1.05;
+              renderedPages.push({
+                dataUrl: canvas.toDataURL('image/png'),
+                title: `${file.docTitle} ${pdf.numPages > 1 ? `(Page ${pNum}/${pdf.numPages})` : ''}`,
+                isLandscape
+              });
+            }
+          } catch (pdfErr) {
+            console.error('PDF print processing error:', pdfErr);
+            renderedPages.push({
+              imgUrl: fullUrl,
+              title: file.fileTitle,
+              isLandscape: false
+            });
+          }
+        } else {
+          await new Promise((resolve) => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => {
+              const isLandscape = img.naturalWidth > img.naturalHeight * 1.05;
+              renderedPages.push({
+                imgUrl: fullUrl,
+                title: file.fileTitle,
+                isLandscape
+              });
+              resolve();
+            };
+            img.onerror = () => {
+              renderedPages.push({
+                imgUrl: fullUrl,
+                title: file.fileTitle,
+                isLandscape: false
+              });
+              resolve();
+            };
+            img.src = fullUrl;
+          });
+        }
       }
-      return;
-    }
 
-    // 3. Personal WhatsApp Direct
-    if (appType === 'personal') {
-      if (isAndroid) {
-        window.location.href = `intent://send?text=${encoded}#Intent;package=com.whatsapp;scheme=whatsapp;end`;
-      } else {
-        window.open(`https://api.whatsapp.com/send?text=${encoded}`, '_blank');
-      }
-      return;
-    }
+      setPrintingProgress({
+        active: true,
+        current: allFiles.length,
+        total: allFiles.length,
+        status: 'Finalizing layout for printer...'
+      });
 
-    // 4. App Chooser (Native System Share Sheet - lets user pick WhatsApp or WhatsApp Business)
+      const printFrame = document.createElement('iframe');
+      printFrame.style.position = 'fixed';
+      printFrame.style.right = '0';
+      printFrame.style.bottom = '0';
+      printFrame.style.width = '0';
+      printFrame.style.height = '0';
+      printFrame.style.border = '0';
+      document.body.appendChild(printFrame);
+
+      const frameDoc = printFrame.contentWindow.document;
+      frameDoc.open();
+      frameDoc.write(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>${printTitle} - KTR Consultants</title>
+            <style>
+              @page {
+                margin: 6mm;
+                size: auto;
+              }
+              * {
+                box-sizing: border-box;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+              }
+              html, body {
+                margin: 0;
+                padding: 0;
+                background: #fff;
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+              }
+              .page-container {
+                page-break-after: always;
+                break-after: page;
+                page-break-inside: avoid;
+                break-inside: avoid;
+                width: 100%;
+                height: 100vh;
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
+                padding: 4mm 2mm;
+                box-sizing: border-box;
+              }
+              .page-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                border-bottom: 1px solid #cbd5e1;
+                padding-bottom: 3px;
+                margin-bottom: 4px;
+                font-size: 8pt;
+                font-weight: 700;
+                color: #334155;
+              }
+              .page-body {
+                flex: 1;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                overflow: hidden;
+              }
+              .page-body img {
+                max-width: 100%;
+                max-height: calc(100vh - 20mm);
+                width: auto;
+                height: auto;
+                object-fit: contain;
+                display: block;
+                margin: auto;
+              }
+              .landscape-page .page-body img {
+                max-width: 100%;
+                max-height: calc(100vh - 20mm);
+              }
+            </style>
+          </head>
+          <body>
+            ${renderedPages.map((pg, idx) => `
+              <div class="page-container ${pg.isLandscape ? 'landscape-page' : ''}">
+                <div class="page-header">
+                  <span>📂 KTR Consultants | ${pg.title}</span>
+                  <span>Doc ${idx + 1} of ${renderedPages.length}</span>
+                </div>
+                <div class="page-body">
+                  <img src="${pg.dataUrl || pg.imgUrl}" alt="${pg.title}" />
+                </div>
+              </div>
+            `).join('')}
+          </body>
+        </html>
+      `);
+      frameDoc.close();
+
+      setTimeout(() => {
+        setPrintingProgress({ active: false, current: 0, total: 0, status: '' });
+        printFrame.contentWindow.focus();
+        printFrame.contentWindow.print();
+        setTimeout(() => {
+          if (document.body.contains(printFrame)) {
+            document.body.removeChild(printFrame);
+          }
+        }, 15000);
+      }, 700);
+
+    } catch (err) {
+      console.error('Smart Print execution error:', err);
+      toast.error('Print generation failed.');
+      setPrintingProgress({ active: false, current: 0, total: 0, status: '' });
+    }
+  };
+
+  // Share portal link via chooser / WhatsApp
+  const handleSharePortalLink = async () => {
+    const clientName = client?.fullName || 'Client';
+    const text = `📂 KTR Consultants - Client Documents Portal\nClient: ${clientName}\n\nReview verified case documents here:\n${shareBundleUrl}`;
+
     if (navigator.share) {
       try {
         await navigator.share({
-          title: `Case Documents - ${client?.fullName || 'Client'}`,
-          text: message
+          title: `${clientName} - Documents Portal`,
+          text: text,
+          url: shareBundleUrl
         });
+        setTopShareModal(false);
         return;
       } catch (err) {
-        if (err.name === 'AbortError') return; // User simply closed the picker
+        if (err.name !== 'AbortError') console.log('Share dismissed', err);
+        else {
+          setTopShareModal(false);
+          return;
+        }
       }
     }
 
-    // Fallback if navigator.share unavailable
-    window.open(`https://api.whatsapp.com/send?text=${encoded}`, '_blank');
+    navigator.clipboard.writeText(text);
+    toast.success('Portal link copied to clipboard!');
+    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
+    setTopShareModal(false);
   };
 
-  // WhatsApp Single Document Share
-  const handleShareDocOnWhatsApp = (docTitle, fileUrl, targetMobile = null, appType = 'chooser') => {
-    if (!shareBundleUrl) return;
-    const clientName = client?.fullName || 'Client';
-    const appId = client?.applicationId ? ` (${client.applicationId})` : '';
-    
-    // Direct view portal link
-    const message = `📄 *Document:* ${docTitle}\n👤 *Client:* ${clientName}${appId}\n\n👉 *Open Link to View Document Online:*\n${shareBundleUrl}\n\n_Sent via KTR Consultants Case Portal_`;
-    
-    executeShare(message, targetMobile, appType);
-  };
+  // Share all case files via native chooser
+  const handleShareAllFiles = async (docsToShare) => {
+    const allFiles = [];
+    docsToShare.forEach(doc => {
+      const files = doc.files || [{ name: doc.name, fileUrl: doc.fileUrl }];
+      files.forEach(f => {
+        if (f.fileUrl) {
+          allFiles.push({ title: f.name || doc.name, fileUrl: f.fileUrl });
+        }
+      });
+    });
 
-  // WhatsApp Batch / Selected / All Documents Share
-  const handleShareSelectedOnWhatsApp = (targetMobile = null, appType = 'chooser') => {
-    if (!shareBundleUrl) return;
-    const clientName = client?.fullName || 'Client';
-    const appId = client?.applicationId ? ` (${client.applicationId})` : '';
-    
-    const selectedItems = sortedDocItems.filter(item => selectedDocIds.includes(item.id));
-    const isAll = selectedItems.length === 0 || selectedItems.length === sortedDocItems.length;
-
-    let docListText = '';
-    if (!isAll) {
-      docListText = `\n📋 *Selected Documents (${selectedItems.length}):*\n` + selectedItems.map((it, i) => `${i + 1}. 📄 ${it.name} ${it.files?.length > 1 ? `(${it.files.length} files)` : ''}`).join('\n');
-    } else {
-      docListText = `\n📋 *All Case Documents (${sortedDocItems.length} Categories):*\n` + sortedDocItems.map((it, i) => `${i + 1}. 📄 ${it.name} ${it.files?.length > 1 ? `(${it.files.length} files)` : ''}`).join('\n');
+    if (allFiles.length === 0) {
+      toast.error('No files available to share.');
+      setTopShareModal(false);
+      return;
     }
 
-    const message = `📂 *Case Documents: ${clientName}*${appId}${docListText}\n\n👉 *Open Link to View, Preview & Download Documents Online:*\n${shareBundleUrl}\n\n_KTR Consultants - Financial & Legal Services_`;
-    
-    executeShare(message, targetMobile, appType);
+    toast.loading('Preparing files for sharing...', { id: 'share-all-toast' });
+
+    try {
+      const fileObjects = [];
+      for (const item of allFiles.slice(0, 10)) {
+        const fullUrl = getAssetUrl(item.fileUrl);
+        const fileName = (item.title || 'document').replace(/[^a-zA-Z0-9_-]/g, '_') + (item.fileUrl.toLowerCase().endsWith('.pdf') ? '.pdf' : '.jpg');
+        const res = await fetch(fullUrl);
+        const blob = await res.blob();
+        fileObjects.push(new File([blob], fileName, { type: blob.type || 'application/octet-stream' }));
+      }
+
+      if (navigator.canShare && navigator.canShare({ files: fileObjects })) {
+        toast.dismiss('share-all-toast');
+        await navigator.share({
+          files: fileObjects,
+          title: `${client?.fullName || 'Client'} - Documents`,
+          text: `Verified Case Documents for ${client?.fullName || 'Client'}`
+        });
+        setTopShareModal(false);
+        return;
+      }
+    } catch (err) {
+      console.log('Native all-files share not supported or dismissed', err);
+    }
+
+    toast.dismiss('share-all-toast');
+    handleSharePortalLink();
+  };
+
+  // Share single document file
+  const handleShareSingleDocFile = async (docItem) => {
+    const primaryFile = docItem.files?.[0] || docItem;
+    const fileUrl = primaryFile.fileUrl;
+    if (!fileUrl) return;
+    const fullUrl = getAssetUrl(fileUrl);
+    const fileName = docItem.name.replace(/[^a-zA-Z0-9_-]/g, '_') + (fileUrl.toLowerCase().endsWith('.pdf') ? '.pdf' : '.jpg');
+
+    toast.loading('Preparing file for sharing...', { id: 'share-file-toast' });
+
+    try {
+      const response = await fetch(fullUrl);
+      const blob = await response.blob();
+      const file = new File([blob], fileName, { type: blob.type || 'application/octet-stream' });
+
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        toast.dismiss('share-file-toast');
+        await navigator.share({
+          files: [file],
+          title: docItem.name,
+          text: `${docItem.name} - ${client?.fullName || 'Client'}`
+        });
+        setShareDocModal(null);
+        return;
+      }
+    } catch (err) {
+      console.log('Native file share not supported or cancelled', err);
+    }
+
+    toast.dismiss('share-file-toast');
+    const text = `📄 Document: ${docItem.name}\nClient: ${client?.fullName || 'Client'}\n\n🔗 View securely on KTR Portal:\n${shareBundleUrl}`;
+    navigator.clipboard.writeText(text);
+    toast.success('Document link copied to clipboard!');
+    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
+    setShareDocModal(null);
   };
 
   const isPdf = (url) => url && url.toLowerCase().split('?')[0].endsWith('.pdf');
 
-  // Toggle selection
   const toggleSelectDoc = (id) => {
     setSelectedDocIds(prev => 
       prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
@@ -735,7 +979,6 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
     }
   };
 
-  // Filter based on search query
   const displayedDocs = sortedDocItems.filter(doc => {
     if (!searchQuery) return true;
     return doc.name.toLowerCase().includes(searchQuery.toLowerCase());
@@ -762,28 +1005,51 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5 flex-wrap w-full md:w-auto">
+        <div className="flex items-center gap-2 flex-wrap w-full md:w-auto">
           {/* Search Box */}
-          <div className="relative flex-1 sm:w-56">
+          <div className="relative flex-1 sm:w-48">
             <Search className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input 
               type="text"
-              placeholder="Search document name..."
+              placeholder="Search documents..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-8 pr-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold outline-none focus:border-amber-500 focus:bg-white transition-all"
             />
           </div>
 
-          {/* Share All Documents Button */}
+          {/* Copy Share Link */}
           <button
             type="button"
-            onClick={() => setShowShareBundleModal(true)}
-            className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm cursor-pointer transition-all shrink-0"
-            title="Share All Documents Link via WhatsApp"
+            onClick={() => copyToClipboard(shareBundleUrl, setCopiedLink)}
+            className="px-3 py-2 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-2xs cursor-pointer transition-all shrink-0"
+            title="Copy Public Banker Portal Link"
           >
-            <WhatsAppIcon className="w-4 h-4 fill-white" />
-            <span>Share All Documents</span>
+            {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5 text-gray-500" />}
+            <span>{copiedLink ? 'Copied' : 'Copy'}</span>
+          </button>
+
+          {/* Share Button (File vs Link) */}
+          <button
+            type="button"
+            onClick={() => setTopShareModal(true)}
+            className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-[#081326] rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-2xs cursor-pointer transition-all shrink-0 border border-gray-200"
+            title="Share Documents with Apps"
+          >
+            <Share2 className="w-3.5 h-3.5 text-blue-600" />
+            <span>Share</span>
+          </button>
+
+          {/* Print All Button (Smart Print) */}
+          <button
+            type="button"
+            onClick={() => handleSmartPrint(sortedDocItems, `${client?.fullName || 'Client'} - Complete Case File`)}
+            disabled={printingProgress.active}
+            className="px-3 py-2 bg-[#081326] hover:bg-[#11203d] text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-2xs cursor-pointer transition-all shrink-0 disabled:opacity-50"
+            title="Smart Print All Case Documents"
+          >
+            <Printer className="w-3.5 h-3.5 text-amber-400" />
+            <span>{printingProgress.active ? 'Preparing...' : 'Print All'}</span>
           </button>
 
           {/* Add Docs Button */}
@@ -791,12 +1057,13 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
             type="button"
             onClick={() => {
               setCustomDocTitle('');
+              setCustomDocNotes('');
               setSelectedFiles([]);
               setShowUploadModal(true);
             }}
-            className="px-4 py-2 bg-[#081326] hover:bg-[#11203d] text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-sm cursor-pointer transition-all shrink-0"
+            className="px-3.5 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-sm cursor-pointer transition-all shrink-0"
           >
-            <PlusCircle className="w-4 h-4 text-[#f59e0b]" />
+            <PlusCircle className="w-4 h-4 text-slate-950" />
             <span>+ Add Docs</span>
           </button>
         </div>
@@ -813,11 +1080,14 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => handleShareSelectedOnWhatsApp()}
-              className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs cursor-pointer transition-all"
+              onClick={() => {
+                const selected = sortedDocItems.filter(item => selectedDocIds.includes(item.id));
+                handleSmartPrint(selected, `${client?.fullName || 'Client'} - Selected Documents`);
+              }}
+              className="px-3.5 py-1.5 bg-[#081326] hover:bg-[#11203d] text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs cursor-pointer transition-all"
             >
-              <WhatsAppIcon className="w-3.5 h-3.5 fill-white" />
-              <span>Share Selected ({selectedDocIds.length})</span>
+              <Printer className="w-3.5 h-3.5 text-amber-400" />
+              <span>Print Selected ({selectedDocIds.length})</span>
             </button>
             <button
               type="button"
@@ -881,66 +1151,65 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
 
             return (
               <div
-                key={doc.id}
+                key={doc.id || index}
                 data-doc-index={index}
                 draggable
                 onDragStart={(e) => handleDragStart(e, index)}
                 onDragOver={(e) => handleDragOver(e, index)}
                 onDrop={(e) => handleDrop(e, index)}
-                className={`bg-white rounded-2xl border transition-all duration-200 p-4 sm:p-4.5 shadow-xs flex flex-col justify-between gap-3 ${
-                  isBeingDragged ? 'opacity-50 scale-[0.99] border-amber-500 bg-amber-50/50' : ''
-                } ${
-                  isTouchTarget ? 'border-amber-500 ring-2 ring-amber-400 bg-amber-100/30' : ''
-                } ${
-                  isSelected ? 'border-amber-400 ring-2 ring-amber-400/20 bg-amber-50/20' : 'border-gray-200 hover:border-gray-300'
+                className={`bg-white rounded-2xl border transition-all duration-200 shadow-xs ${
+                  isBeingDragged
+                    ? 'opacity-40 border-amber-400 scale-[0.98]'
+                    : isTouchTarget
+                    ? 'border-amber-500 bg-amber-50/40 ring-2 ring-amber-400/50'
+                    : isSelected
+                    ? 'border-amber-300 bg-amber-50/20'
+                    : 'border-gray-200/90 hover:border-gray-300'
                 }`}
               >
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                  {/* Left side: Reorder + Checkbox + Icon + Document Name */}
-                  <div className="flex items-start sm:items-center gap-3 w-full sm:w-auto min-w-0 flex-1">
-                    {/* Drag Handle (☰) & Arrow Controls */}
-                    <div className="flex items-center bg-gray-50 border border-gray-200 rounded-xl p-1 shrink-0 gap-0.5 select-none">
-                      {/* Dedicated ☰ Mobile Drag Handle */}
-                      <div 
+                <div className="p-3.5 sm:p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  {/* Left: Drag Handle, Serial, Checkbox, Doc Info */}
+                  <div className="flex items-center gap-3 min-w-0 flex-1 w-full sm:w-auto">
+                    {/* Reorder Buttons & Touch Handle */}
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
                         onTouchStart={(e) => handleTouchStart(e, index)}
                         onTouchMove={handleTouchMove}
                         onTouchEnd={handleTouchEnd}
-                        className="cursor-grab active:cursor-grabbing px-1.5 py-1 text-gray-500 hover:text-amber-700 bg-white sm:bg-transparent rounded-lg border sm:border-0 border-gray-200 flex items-center justify-center font-bold text-sm touch-none"
-                        title="Hold & Drag (☰) to reorder on mobile or desktop"
-                        aria-label="Drag Handle"
+                        className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-gray-100 rounded-lg cursor-grab active:cursor-grabbing touch-none select-none transition-colors"
+                        title="Drag to Reorder Serial"
                       >
-                        <span className="text-base leading-none select-none">☰</span>
-                      </div>
+                        <GripVertical className="w-4 h-4" />
+                      </button>
 
-                      <button
-                        type="button"
-                        disabled={isFirst || savingOrder}
-                        onClick={() => handleMoveItem(index, 'up')}
-                        className="p-1 text-gray-400 hover:text-amber-600 disabled:opacity-20 cursor-pointer disabled:cursor-not-allowed"
-                        title="Move Up"
-                      >
-                        <ArrowUp className="w-3.5 h-3.5 stroke-[2.5]" />
-                      </button>
-                      <span className="text-[11px] font-mono font-black text-amber-700 px-1">
-                        #{index + 1}
-                      </span>
-                      <button
-                        type="button"
-                        disabled={isLast || savingOrder}
-                        onClick={() => handleMoveItem(index, 'down')}
-                        className="p-1 text-gray-400 hover:text-amber-600 disabled:opacity-20 cursor-pointer disabled:cursor-not-allowed"
-                        title="Move Down"
-                      >
-                        <ArrowDown className="w-3.5 h-3.5 stroke-[2.5]" />
-                      </button>
+                      <div className="flex flex-col gap-0.5">
+                        <button
+                          type="button"
+                          onClick={() => handleMoveItem(index, 'up')}
+                          disabled={isFirst || savingOrder}
+                          className="p-0.5 text-gray-400 hover:text-[#081326] disabled:opacity-20 transition-colors"
+                          title="Move Up"
+                        >
+                          <ArrowUp className="w-3 h-3" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleMoveItem(index, 'down')}
+                          disabled={isLast || savingOrder}
+                          className="p-0.5 text-gray-400 hover:text-[#081326] disabled:opacity-20 transition-colors"
+                          title="Move Down"
+                        >
+                          <ArrowDown className="w-3 h-3" />
+                        </button>
+                      </div>
                     </div>
 
-                    {/* Multi-select Checkbox */}
+                    {/* Checkbox */}
                     <button
                       type="button"
                       onClick={() => toggleSelectDoc(doc.id)}
-                      className="cursor-pointer text-gray-400 hover:text-amber-600 shrink-0 mt-1 sm:mt-0"
-                      title="Select document"
+                      className="text-gray-400 hover:text-amber-600 shrink-0 cursor-pointer"
                     >
                       {isSelected ? (
                         <CheckSquare className="w-4 h-4 text-amber-600" />
@@ -949,483 +1218,181 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
                       )}
                     </button>
 
-                    {/* Document Icon */}
-                    <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 border border-blue-100 flex items-center justify-center shrink-0 mt-0.5 sm:mt-0 relative">
-                      <FileText className="w-5 h-5" />
-                      {fileCount > 1 && (
-                        <span className="absolute -top-1.5 -right-1.5 px-1.5 py-0.2 bg-amber-500 text-white rounded-full text-[9px] font-black font-mono shadow-2xs">
-                          {fileCount}
-                        </span>
-                      )}
-                    </div>
+                    {/* Serial Tag */}
+                    <span className="px-2 py-0.5 bg-[#081326] text-amber-400 rounded-md text-[11px] font-mono font-bold shrink-0">
+                      #{index + 1}
+                    </span>
 
-                    {/* Document Title Entered by User - Full complete name wrapping across multiple lines */}
-                    <div className="min-w-0 flex-1">
+                    {/* Document Name & Badges */}
+                    <div 
+                      className="min-w-0 flex-1 cursor-pointer"
+                      onClick={() => openPreview(doc.name, doc.files, 0)}
+                    >
                       <div className="flex items-center gap-2 flex-wrap">
-                        <h4 className="text-sm font-black text-[#081326] break-words whitespace-normal leading-snug">
+                        <h4 className="text-xs sm:text-sm font-black text-[#081326] hover:text-amber-600 transition-colors truncate">
                           {doc.name}
                         </h4>
                         {fileCount > 1 && (
-                          <span className="px-2 py-0.5 bg-amber-100 text-amber-900 border border-amber-200 rounded-md text-[10px] font-bold flex items-center gap-1 shrink-0">
-                            <Layers className="w-3 h-3 text-amber-700" /> {fileCount} Files Combined
+                          <span className="text-[10px] font-bold bg-blue-50 text-blue-700 px-1.5 py-0.2 rounded border border-blue-200">
+                            {fileCount} Pages
                           </span>
                         )}
+                        <span className="text-[10px] font-medium bg-gray-100 text-gray-600 px-1.5 py-0.2 rounded">
+                          {isPdf(primaryUrl) ? 'PDF' : 'IMAGE'}
+                        </span>
                       </div>
 
-                      <div className="flex items-center gap-2 flex-wrap text-[11px] text-gray-400 font-medium mt-0.5">
-                        {doc.uploadedAt && (
-                          <span>
-                            📅 Uploaded {new Date(doc.uploadedAt).toLocaleDateString('en-IN')}
-                          </span>
-                        )}
-                        {fileCount > 1 && (
-                          <span>• {fileCount} attachments combined</span>
-                        )}
-                      </div>
-
+                      {/* Notes snippet */}
+                      {doc.notes && (
+                        <p className="text-[11px] text-amber-700 font-medium truncate mt-0.5">
+                          Note: {doc.notes}
+                        </p>
+                      )}
                     </div>
                   </div>
 
-                  {/* Right side: Preview, Download, WhatsApp, Delete Buttons */}
-                  <div className="flex items-center gap-2 self-start sm:self-center shrink-0 flex-wrap">
-                    {/* 1. Preview Button (Opens all files in viewer) */}
+                  {/* Right: Quick Action Buttons (Eye, Share, Print, Download, Note, Delete) */}
+                  <div className="flex items-center gap-1 shrink-0 w-full sm:w-auto justify-end pt-2 sm:pt-0 border-t sm:border-t-0 border-gray-100">
                     <button
                       type="button"
                       onClick={() => openPreview(doc.name, doc.files, 0)}
-                      className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl text-xs font-bold border border-blue-200 flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
-                      title={fileCount > 1 ? `Preview All ${fileCount} Files Together` : "Preview Document Online"}
+                      className="p-1.5 text-gray-600 hover:text-amber-600 hover:bg-gray-100 rounded-lg cursor-pointer transition-colors"
+                      title="Preview Document"
                     >
-                      <Eye className="w-3.5 h-3.5" />
-                      <span>{fileCount > 1 ? `Preview (${fileCount})` : 'Preview'}</span>
+                      <Eye className="w-4 h-4" />
                     </button>
 
-                    {/* 2. Download Button */}
                     <button
                       type="button"
-                      onClick={(e) => {
-                        if (fileCount > 1) {
-                          handleDownloadAllInGroup(e, doc);
-                        } else {
-                          handleDownloadFile(e, primaryUrl, doc.name);
-                        }
-                      }}
-                      className="px-3 py-1.5 bg-gray-50 hover:bg-gray-100 text-gray-700 rounded-xl text-xs font-bold border border-gray-200 flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
-                      title={fileCount > 1 ? `Download all ${fileCount} files` : "Download to Device"}
+                      onClick={() => setShareDocModal(doc)}
+                      className="p-1.5 text-gray-600 hover:text-blue-600 hover:bg-gray-100 rounded-lg cursor-pointer transition-colors"
+                      title="Share Document (File / Link)"
                     >
-                      <Download className="w-3.5 h-3.5" />
-                      <span>Download</span>
+                      <Share2 className="w-4 h-4" />
                     </button>
 
-                    {/* 3. WhatsApp Share Button */}
                     <button
                       type="button"
-                      onClick={() => setShareDocTarget({ title: doc.name, url: primaryUrl })}
-                      className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
-                      title="Share Document via WhatsApp Link"
+                      onClick={() => handleSmartPrint([doc], `${doc.name} - ${client?.fullName || 'Client'}`)}
+                      className="p-1.5 text-gray-600 hover:text-purple-600 hover:bg-gray-100 rounded-lg cursor-pointer transition-colors"
+                      title="Smart Print Document"
                     >
-                      <WhatsAppIcon className="w-3.5 h-3.5" />
-                      <span>Share</span>
+                      <Printer className="w-4 h-4" />
                     </button>
 
-                    {/* 4. Delete Button */}
                     <button
                       type="button"
-                      onClick={() => handleDeleteDocGroup(doc)}
-                      className="p-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl border border-red-200 transition-all cursor-pointer shadow-2xs"
-                      title={fileCount > 1 ? `Delete all ${fileCount} files` : "Delete Document"}
+                      onClick={(e) => handleDownloadFile(e, primaryUrl, doc.name)}
+                      className="p-1.5 text-gray-600 hover:text-emerald-600 hover:bg-gray-100 rounded-lg cursor-pointer transition-colors"
+                      title="Download File"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <Download className="w-4 h-4" />
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setEditingNoteDoc({ docName: doc.name, text: doc.notes || '', doc })}
+                      className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-gray-100 rounded-lg cursor-pointer transition-colors"
+                      title="Add / Edit Note"
+                    >
+                      <StickyNote className="w-4 h-4" />
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteGroup(doc)}
+                      className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg cursor-pointer transition-colors"
+                      title="Delete Document"
+                    >
+                      <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
                 </div>
-
-                {/* Left-Aligned Full-Width Notes Section (Single Line) */}
-                <div className="w-full flex items-center justify-start pt-0.5">
-                  {editingNoteDoc?.docName === doc.name ? (
-                    <div className="flex items-center gap-2 bg-amber-50/90 border border-amber-300 rounded-xl p-2 animate-in fade-in duration-150 w-full max-w-xl">
-                      <StickyNote className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                      <input
-                        type="text"
-                        value={editingNoteDoc.text}
-                        onChange={(e) => setEditingNoteDoc({ docName: doc.name, text: e.target.value })}
-                        placeholder="Enter note, password, login ID, or remark..."
-                        className="flex-1 bg-white border border-amber-200 rounded-lg px-2.5 py-1 text-xs text-gray-800 outline-none focus:border-amber-500 font-medium"
-                        autoFocus
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') handleSaveDocNote(doc.name, doc);
-                          if (e.key === 'Escape') setEditingNoteDoc(null);
-                        }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => handleSaveDocNote(doc.name, doc)}
-                        disabled={savingNote}
-                        className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer disabled:opacity-50 shrink-0 shadow-2xs"
-                      >
-                        {savingNote ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3 stroke-[3]" />}
-                        <span>Save</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setEditingNoteDoc(null)}
-                        disabled={savingNote}
-                        className="p-1 text-gray-400 hover:text-gray-700 rounded-lg cursor-pointer shrink-0"
-                        title="Cancel"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ) : doc.notes ? (
-                    <div className="inline-flex items-center gap-2 bg-gradient-to-r from-amber-50 to-orange-50/60 border border-amber-200/90 rounded-xl px-2.5 py-1 text-xs text-gray-800 shadow-2xs max-w-full">
-                      <StickyNote className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                      <span className="font-semibold text-gray-900 break-all select-all font-mono text-[11.5px]">
-                        {doc.notes}
-                      </span>
-                      <div className="flex items-center gap-1 ml-1 shrink-0 border-l border-amber-200/80 pl-1.5">
-                        <button
-                          type="button"
-                          onClick={() => handleCopyDocNote(doc.notes, doc.id)}
-                          className={`p-1 rounded-md transition-all flex items-center gap-1 text-[11px] font-bold cursor-pointer ${
-                            copiedNoteKey === doc.id
-                              ? 'bg-emerald-100 text-emerald-700'
-                              : 'text-amber-800 hover:bg-amber-100'
-                          }`}
-                          title="Click to copy note text"
-                        >
-                          {copiedNoteKey === doc.id ? (
-                            <>
-                              <Check className="w-3 h-3 text-emerald-600 stroke-[3]" />
-                              <span className="text-[10px]">Copied!</span>
-                            </>
-                          ) : (
-                            <>
-                              <Copy className="w-3 h-3" />
-                              <span className="text-[10px]">Copy</span>
-                            </>
-                          )}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setEditingNoteDoc({ docName: doc.name, text: doc.notes })}
-                          className="p-1 text-gray-400 hover:text-amber-700 hover:bg-amber-100 rounded-md transition-colors cursor-pointer"
-                          title="Edit Note"
-                        >
-                          <Edit3 className="w-3 h-3" />
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setEditingNoteDoc({ docName: doc.name, text: '' })}
-                      className="inline-flex items-center gap-1.5 text-[11px] font-bold text-amber-700 hover:text-amber-800 hover:underline cursor-pointer transition-colors whitespace-nowrap py-0.5"
-                      title="Add note, password, or remarks for this document"
-                    >
-                      <PlusCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                      <span>+ Add Note / Remarks / Password</span>
-                    </button>
-                  )}
-                </div>
-
-                {/* Sub-files chip list if multiple files attached */}
-                {fileCount > 1 && (
-                  <div className="pt-2 border-t border-gray-100/80 flex items-center gap-2 overflow-x-auto py-1">
-                    <span className="text-[10px] font-bold text-gray-400 uppercase shrink-0">Files:</span>
-                    {doc.files.map((fileObj, fIdx) => (
-                      <div
-                        key={fIdx}
-                        onClick={() => openPreview(doc.name, doc.files, fIdx)}
-                        className="px-2.5 py-1 bg-gray-50 hover:bg-amber-50 hover:border-amber-300 border border-gray-200 rounded-lg text-xs font-medium text-gray-700 flex items-center gap-1.5 shrink-0 cursor-pointer transition-all"
-                        title={`Click to preview file ${fIdx + 1}`}
-                      >
-                        <span className="w-4 h-4 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-[10px] font-bold font-mono">
-                          {fIdx + 1}
-                        </span>
-                        <span className="text-[11px] truncate max-w-[140px]">
-                          {fileObj.fileUrl.split('/').pop()}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={(e) => handleDeleteSingleFile(e, fileObj, doc.name)}
-                          className="text-gray-400 hover:text-red-500 p-0.5 rounded cursor-pointer"
-                          title="Delete this specific file"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
             );
           })
         )}
       </div>
 
-      {/* Add Docs Modal (Only Document Name + Select File(s)) */}
-      {showUploadModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#081326]/60 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="relative bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-150">
-            <div className="flex justify-between items-center pb-4 border-b border-gray-100">
-              <div className="flex items-center gap-2">
-                <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
-                  <Upload className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-black text-[#081326]">Add Document(s)</h3>
-                  <p className="text-[11px] text-gray-400 font-medium">Simple upload with custom name</p>
-                </div>
-              </div>
-              <button 
-                type="button" 
-                onClick={() => {
-                  setShowUploadModal(false);
-                  setSelectedFiles([]);
-                }}
-                className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSimpleUpload} className="space-y-4 pt-4">
-              {/* 1. Document Name / Title */}
-              <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1">
-                  Document Name / Title <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Last 6 Months Salary Slips, Bank Statement, Property Registry, etc."
-                  value={customDocTitle}
-                  onChange={(e) => setCustomDocTitle(e.target.value)}
-                  required
-                  autoFocus
-                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 outline-none focus:border-amber-500 focus:bg-white"
-                />
-              </div>
-
-              {/* 2. Notes / Remarks / Credentials (Optional) */}
-              <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1">
-                  Document Notes / Remarks / Password <span className="text-gray-400 font-normal">(Optional - can be copied later)</span>
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Password: KTR@2026, Netbanking User ID, Registry Book No. 4"
-                  value={customDocNotes}
-                  onChange={(e) => setCustomDocNotes(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium text-gray-800 outline-none focus:border-amber-500 focus:bg-white"
-                />
-              </div>
-
-              {/* 3. Select Files */}
-              <div>
-                <div className="flex justify-between items-center mb-1">
-                  <label className="text-xs font-bold text-gray-700">
-                    Select File(s) <span className="text-red-500">*</span>
-                  </label>
-                  {selectedFiles.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="text-[11px] font-bold text-amber-700 hover:underline flex items-center gap-1 cursor-pointer"
-                    >
-                      <PlusCircle className="w-3 h-3 text-amber-600" /> + Add More
-                    </button>
-                  )}
-                </div>
-
-                {/* Mobile/Android file picker: No restrictive accept attribute so Android opens the full system 'Files' / File Manager */}
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  onChange={handleFileSelect}
-                  className="hidden"
-                />
-
-                {selectedFiles.length === 0 ? (
-                  <div
-                    onClick={() => fileInputRef.current?.click()}
-                    className="border-2 border-dashed border-gray-200 hover:border-amber-500 bg-gray-50/50 hover:bg-amber-50/20 p-6 rounded-2xl text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-1.5"
-                  >
-                    <Upload className="w-8 h-8 text-[#f59e0b]" />
-                    <p className="text-xs font-black text-gray-800">
-                      Click to choose files from device
-                    </p>
-                    <p className="text-[11px] text-gray-400 font-medium">
-                      Supports PDFs, Images, Excel, Word documents (Multiple files allowed)
-                    </p>
-                  </div>
-                ) : (
-                  <div className="bg-gray-50 p-3 rounded-2xl border border-gray-200 space-y-2 max-h-48 overflow-y-auto">
-                    <div className="flex justify-between items-center text-[10px] font-bold text-gray-500 uppercase px-1">
-                      <span>Selected ({selectedFiles.length})</span>
-                      <button
-                        type="button"
-                        onClick={() => setSelectedFiles([])}
-                        className="text-red-500 hover:underline cursor-pointer lowercase first-letter:uppercase"
-                      >
-                        Clear All
-                      </button>
-                    </div>
-                    <div className="space-y-1.5">
-                      {selectedFiles.map((f, i) => (
-                        <div key={i} className="flex justify-between items-center text-xs bg-white p-2.5 rounded-xl border border-gray-200 gap-2 shadow-2xs">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <FileText className="w-4 h-4 text-blue-600 shrink-0" />
-                            <span className="truncate font-bold text-gray-800 max-w-[200px]" title={f.name}>
-                              {f.name}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2 shrink-0">
-                            <span className="text-[10px] text-gray-400 font-mono">
-                              {(f.size / 1024).toFixed(0)} KB
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveSelectedFile(i)}
-                              className="w-5 h-5 rounded flex items-center justify-center text-gray-400 hover:text-red-600 hover:bg-red-50 cursor-pointer"
-                            >
-                              <X className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex gap-3 pt-3 border-t border-gray-100">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowUploadModal(false);
-                    setSelectedFiles([]);
-                  }}
-                  className="flex-1 py-2.5 bg-gray-100 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-200 cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={uploading || selectedFiles.length === 0}
-                  className="flex-1 py-2.5 bg-[#081326] text-white rounded-xl text-xs font-bold hover:bg-[#11203d] disabled:opacity-50 flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
-                >
-                  <Upload className="w-4 h-4 text-[#f59e0b]" />
-                  <span>
-                    {uploading ? 'Uploading...' : `Upload ${selectedFiles.length > 0 ? selectedFiles.length + ' File(s)' : ''}`}
-                  </span>
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Online Document Multi-File Preview Modal with Next/Previous navigation & Back button */}
-      {previewData && activePreviewFile && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-[#081326]/80 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="bg-white rounded-3xl w-full max-w-5xl h-[92vh] sm:h-[88vh] flex flex-col shadow-2xl overflow-hidden border border-gray-200">
+      {/* ---------------------------------------------------- */}
+      {/* 1. DOCUMENT PREVIEW MODAL (With PDF.js & ImageViewer) */}
+      {/* ---------------------------------------------------- */}
+      {previewData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-[#081326]/80 backdrop-blur-md animate-in fade-in duration-150">
+          <div className="relative bg-white w-full max-w-4xl h-[92vh] max-h-[850px] rounded-3xl shadow-2xl flex flex-col overflow-hidden border border-gray-200">
             {/* Modal Header */}
-            <div className="px-4 sm:px-6 py-3.5 border-b border-gray-200 flex justify-between items-center bg-gray-50/90 gap-3">
-              <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                {/* Back Button */}
-                <button
-                  type="button"
-                  onClick={closePreview}
-                  className="p-1.5 hover:bg-gray-200 rounded-xl text-gray-700 flex items-center gap-1 text-xs font-bold cursor-pointer transition-colors shrink-0"
-                  title="Back to Documents"
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                  <span className="hidden sm:inline">Back</span>
-                </button>
-
+            <div className="p-3 sm:p-4 bg-white border-b border-gray-100 flex items-center justify-between gap-3 shrink-0">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-8 h-8 rounded-lg bg-[#081326] text-amber-400 flex items-center justify-center font-bold text-xs shrink-0">
+                  {previewData.activeIndex + 1}
+                </div>
                 <div className="min-w-0">
-                  <h3 className="text-sm font-black text-[#081326] flex items-center gap-2 truncate">
-                    <FileText className="w-4 h-4 text-[#f59e0b] shrink-0" />
-                    <span className="truncate">{previewData.title}</span>
+                  <h3 className="text-xs sm:text-sm font-black text-[#081326] truncate">
+                    {previewData.title}
                   </h3>
                   {previewData.files.length > 1 && (
-                    <p className="text-[11px] text-gray-500 font-medium truncate">
-                      File {previewData.activeIndex + 1} of {previewData.files.length}: <span className="font-mono text-gray-700">{activePreviewFile.fileUrl.split('/').pop()}</span>
+                    <p className="text-[10px] text-gray-400 font-medium">
+                      Attachment {previewData.activeIndex + 1} of {previewData.files.length}
                     </p>
                   )}
                 </div>
               </div>
 
-              {/* Navigation & Actions */}
-              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-                {/* Next / Prev Controls */}
-                {previewData.files.length > 1 && (
-                  <div className="flex items-center bg-gray-100 rounded-xl p-0.5 border border-gray-200 mr-1">
-                    <button
-                      type="button"
-                      disabled={previewData.activeIndex <= 0}
-                      onClick={() => setPreviewData(prev => ({ ...prev, activeIndex: prev.activeIndex - 1 }))}
-                      className="p-1.5 hover:bg-white text-gray-700 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-all"
-                      title="Previous File (← Arrow Key)"
-                    >
-                      <ChevronLeft className="w-4 h-4 stroke-[2.5]" />
-                    </button>
-                    <span className="text-xs font-mono font-bold px-2 text-gray-700">
-                      {previewData.activeIndex + 1}/{previewData.files.length}
-                    </span>
-                    <button
-                      type="button"
-                      disabled={previewData.activeIndex >= previewData.files.length - 1}
-                      onClick={() => setPreviewData(prev => ({ ...prev, activeIndex: prev.activeIndex + 1 }))}
-                      className="p-1.5 hover:bg-white text-gray-700 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-all"
-                      title="Next File (→ Arrow Key)"
-                    >
-                      <ChevronRight className="w-4 h-4 stroke-[2.5]" />
-                    </button>
-                  </div>
-                )}
+              {/* Header Actions: Open Tab, Print, Download, Close */}
+              <div className="flex items-center gap-1.5 shrink-0">
+                <a
+                  href={getAssetUrl(activePreviewFile.fileUrl)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-xl text-xs font-bold flex items-center gap-1 transition-colors"
+                  title="Open direct file in new tab"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Open Tab</span>
+                </a>
 
                 <button
                   type="button"
-                  onClick={(e) => handleDownloadFile(e, activePreviewFile.fileUrl, `${previewData.title}_${previewData.activeIndex + 1}`)}
-                  className="px-3 py-1.5 bg-[#081326] text-white rounded-xl text-xs font-bold hover:bg-[#11203d] flex items-center gap-1.5 shadow-sm cursor-pointer"
-                  title="Download current file"
+                  onClick={() => handleSmartPrint([{ name: previewData.title, files: previewData.files }], `${previewData.title} - ${client?.fullName || 'Client'}`)}
+                  className="px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-xl text-xs font-bold flex items-center gap-1 transition-colors"
+                  title="Smart Print"
                 >
-                  <Download className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Download</span>
+                  <Printer className="w-3.5 h-3.5 text-purple-600" />
+                  <span className="hidden sm:inline">Print</span>
                 </button>
+
                 <button
                   type="button"
-                  onClick={() => setShareDocTarget({ title: `${previewData.title} (File ${previewData.activeIndex + 1})`, url: activePreviewFile.fileUrl })}
-                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer"
-                  title="Share Document on WhatsApp"
+                  onClick={(e) => handleDownloadFile(e, activePreviewFile.fileUrl, previewData.title)}
+                  className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-xl text-xs font-bold flex items-center gap-1 transition-colors border border-emerald-200"
+                  title="Download File"
                 >
-                  <WhatsAppIcon className="w-3.5 h-3.5 fill-white" />
-                  <span className="hidden sm:inline">Share</span>
+                  <Download className="w-3.5 h-3.5 text-emerald-600" />
+                  <span className="hidden sm:inline">Download</span>
                 </button>
+
                 <button
                   type="button"
                   onClick={closePreview}
-                  className="w-8 h-8 flex items-center justify-center rounded-xl bg-gray-200 text-gray-700 hover:bg-red-50 hover:text-red-600 font-bold cursor-pointer transition-colors"
-                  title="Close preview (Esc)"
+                  className="p-1.5 text-gray-400 hover:text-black hover:bg-gray-100 rounded-xl transition-colors cursor-pointer"
+                  title="Close Preview"
                 >
-                  ✕
+                  <X className="w-5 h-5" />
                 </button>
               </div>
             </div>
 
             {/* Modal Body with Viewer */}
-            <div className="flex-1 bg-gray-900/5 p-2 sm:p-4 flex items-center justify-center overflow-auto relative group">
+            <div className="flex-1 bg-slate-900 p-2 sm:p-3 flex items-center justify-center overflow-auto relative">
               {/* Previous Floating Button */}
               {previewData.files.length > 1 && previewData.activeIndex > 0 && (
                 <button
                   type="button"
                   onClick={() => setPreviewData(prev => ({ ...prev, activeIndex: prev.activeIndex - 1 }))}
-                  className="absolute left-4 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-white/95 hover:bg-white shadow-xl border border-gray-200 text-[#081326] flex items-center justify-center transition-all z-20 cursor-pointer hover:scale-105"
-                  title="Previous File"
+                  className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/95 hover:bg-white shadow-xl border border-gray-200 text-[#081326] flex items-center justify-center transition-all z-20 cursor-pointer hover:scale-105"
+                  title="Previous Attachment"
                 >
-                  <ChevronLeft className="w-6 h-6 stroke-[2.5]" />
+                  <ChevronLeft className="w-5 h-5 stroke-[2.5]" />
                 </button>
               )}
 
@@ -1434,49 +1401,26 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
                 <button
                   type="button"
                   onClick={() => setPreviewData(prev => ({ ...prev, activeIndex: prev.activeIndex + 1 }))}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-white/95 hover:bg-white shadow-xl border border-gray-200 text-[#081326] flex items-center justify-center transition-all z-20 cursor-pointer hover:scale-105"
-                  title="Next File"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/95 hover:bg-white shadow-xl border border-gray-200 text-[#081326] flex items-center justify-center transition-all z-20 cursor-pointer hover:scale-105"
+                  title="Next Attachment"
                 >
-                  <ChevronRight className="w-6 h-6 stroke-[2.5]" />
+                  <ChevronRight className="w-5 h-5 stroke-[2.5]" />
                 </button>
               )}
 
               {isPdf(activePreviewFile.fileUrl) ? (
-                <div className="w-full h-full flex flex-col bg-slate-900 rounded-2xl overflow-hidden relative shadow-inner">
-                  {/* Top Bar for reliable mobile and fullscreen viewing */}
-                  <div className="w-full bg-[#081326] text-white px-3 py-2 flex items-center justify-between gap-2 z-10 border-b border-gray-800">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <FileText className="w-4 h-4 text-[#f59e0b] shrink-0" />
-                      <span className="text-xs font-bold truncate max-w-[180px] sm:max-w-md">{previewData.title}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <a
-                        href={getAssetUrl(activePreviewFile.fileUrl)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="px-2.5 py-1 bg-[#f59e0b] hover:bg-[#d97706] text-[#081326] rounded-lg text-xs font-black flex items-center gap-1 shadow-sm transition-all"
-                      >
-                        <ExternalLink className="w-3.5 h-3.5" />
-                        <span>Open Fullscreen</span>
-                      </a>
-                    </div>
-                  </div>
-
-                  <div className="flex-1 w-full relative bg-gray-100 flex items-center justify-center">
-                    <iframe
-                      key={activePreviewFile.fileUrl}
-                      src={`https://docs.google.com/gview?embedded=true&url=${encodeURIComponent(getAssetUrl(activePreviewFile.fileUrl))}`}
-                      title={previewData.title}
-                      className="w-full h-full border-0 bg-white"
-                    />
-                  </div>
-                </div>
+                <PdfViewer
+                  key={activePreviewFile.fileUrl}
+                  url={getAssetUrl(activePreviewFile.fileUrl)}
+                  title={previewData.title}
+                  className="w-full h-full"
+                />
               ) : (
-                <img
+                <ImageViewer
                   key={activePreviewFile.fileUrl}
                   src={getAssetUrl(activePreviewFile.fileUrl)}
                   alt={previewData.title}
-                  className="max-h-full max-w-full object-contain rounded-2xl shadow-lg border border-gray-200 bg-white"
+                  className="w-full h-full"
                 />
               )}
             </div>
@@ -1505,258 +1449,314 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
         </div>
       )}
 
-      {/* WhatsApp Share Modal (Single Document) */}
-      {shareDocTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#081326]/60 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="relative bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-150">
-            <div className="flex justify-between items-center mb-4">
-              <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600">
-                  <WhatsAppIcon className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-black text-[#081326]">Share Document on WhatsApp</h3>
-                  <p className="text-[11px] text-gray-500 font-medium">Bankers and recipients can securely view and download directly online</p>
-                </div>
-              </div>
-              <button 
-                type="button" 
-                onClick={() => setShareDocTarget(null)} 
-                className="text-gray-400 hover:text-gray-600 cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="bg-gray-50 p-3.5 rounded-2xl border border-gray-200 space-y-2 mb-4">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-gray-500 font-medium">Document:</span>
-                <span className="font-bold text-[#081326] truncate max-w-[220px]">{shareDocTarget.title}</span>
-              </div>
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-gray-500 font-medium">Client:</span>
-                <span className="font-bold text-[#081326]">{client?.fullName || 'Client'}</span>
-              </div>
-            </div>
-
-            {/* WhatsApp & Business Share Actions */}
-            <div className="space-y-2.5">
-              {/* 1. Main Chooser Button (Opens App Selector with WhatsApp & WA Business) */}
-              <button
-                type="button"
-                onClick={() => {
-                  handleShareDocOnWhatsApp(shareDocTarget.title, shareDocTarget.url, null, 'chooser');
-                  setShareDocTarget(null);
-                }}
-                className="w-full py-3 px-4 bg-gradient-to-r from-emerald-600 to-teal-700 text-white rounded-2xl text-xs font-bold hover:from-emerald-700 hover:to-teal-800 transition-all flex items-center justify-center gap-2 shadow-md cursor-pointer"
-              >
-                <Share2 className="w-4 h-4 stroke-[2.5]" />
-                <span>Share (Select WhatsApp / WA Business)</span>
-              </button>
-
-              {/* 2. Direct Choice: WhatsApp Business vs Personal WhatsApp */}
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    handleShareDocOnWhatsApp(shareDocTarget.title, shareDocTarget.url, null, 'business');
-                    setShareDocTarget(null);
-                  }}
-                  className="py-2.5 px-3 bg-teal-50 border border-teal-300 text-teal-900 rounded-xl text-xs font-bold hover:bg-teal-100 transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
-                  title="Directly open WhatsApp Business"
-                >
-                  <WhatsAppBusinessIcon className="w-4 h-4 text-teal-700" />
-                  <span>WA Business</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    handleShareDocOnWhatsApp(shareDocTarget.title, shareDocTarget.url, null, 'personal');
-                    setShareDocTarget(null);
-                  }}
-                  className="py-2.5 px-3 bg-emerald-50 border border-emerald-300 text-emerald-900 rounded-xl text-xs font-bold hover:bg-emerald-100 transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
-                  title="Directly open Personal WhatsApp"
-                >
-                  <WhatsAppIcon className="w-4 h-4 text-emerald-600" />
-                  <span>Personal WA</span>
-                </button>
-              </div>
-
-              {/* 3. Direct chat with Client */}
-              {cleanMobile && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    handleShareDocOnWhatsApp(shareDocTarget.title, shareDocTarget.url, cleanMobile);
-                    setShareDocTarget(null);
-                  }}
-                  className="w-full py-2.5 px-4 bg-gray-50 text-[#081326] border border-gray-200 rounded-xl text-xs font-bold hover:bg-gray-100 transition-all flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  <WhatsAppIcon className="w-4 h-4 text-emerald-600" />
-                  <span>Direct Chat to Client ({cleanMobile})</span>
-                </button>
-              )}
-
-              {/* 4. Copy & Preview */}
-              <div className="flex gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={() => copyToClipboard(shareBundleUrl, setCopiedDocUrl)}
-                  className="flex-1 py-2 px-3 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer border border-gray-200"
-                >
-                  {copiedDocUrl ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5 text-gray-500" />}
-                  <span>{copiedDocUrl ? 'Link Copied!' : 'Copy Portal Link'}</span>
-                </button>
-                <a
-                  href={shareBundleUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="py-2 px-3 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer border border-gray-200"
-                >
-                  <ExternalLink className="w-3.5 h-3.5 text-gray-500" /> Open
-                </a>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Share All / Complete Case Documents Modal */}
-      {showShareBundleModal && (
+      {/* ---------------------------------------------------- */}
+      {/* 2. UPLOAD MODAL */}
+      {/* ---------------------------------------------------- */}
+      {showUploadModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#081326]/60 backdrop-blur-sm animate-in fade-in duration-150">
           <div className="relative bg-white rounded-3xl p-6 w-full max-w-lg shadow-2xl animate-in zoom-in-95 duration-150">
-            <div className="flex justify-between items-center mb-4">
+            <div className="flex items-center justify-between pb-4 border-b border-gray-100">
               <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600">
-                  <WhatsAppIcon className="w-5 h-5" />
+                <div className="w-10 h-10 rounded-2xl bg-amber-500/10 text-amber-600 flex items-center justify-center font-bold">
+                  <Upload className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-black text-[#081326]">Share All Documents</h3>
-                  <p className="text-xs text-gray-500 font-medium">All case files in one secure shareable link</p>
+                  <h3 className="text-base font-black text-[#081326]">Upload Client Document</h3>
+                  <p className="text-[11px] text-gray-400 font-medium">Single or multiple files supported (PDF, JPG, PNG)</p>
                 </div>
               </div>
-              <button 
-                type="button" 
-                onClick={() => setShowShareBundleModal(false)} 
-                className="text-gray-400 hover:text-gray-600 cursor-pointer"
+              <button
+                type="button"
+                onClick={() => setShowUploadModal(false)}
+                className="text-gray-400 hover:text-black p-1.5 rounded-lg cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="bg-amber-50/70 border border-amber-200/80 rounded-2xl p-3.5 mb-4 text-xs space-y-1.5">
-              <div className="flex justify-between font-bold text-gray-800">
-                <span>Client:</span>
-                <span>{client?.fullName}</span>
-              </div>
-              <div className="flex justify-between text-gray-600">
-                <span>Total Categories:</span>
-                <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">{sortedDocItems.length} Documents</span>
-              </div>
-              <p className="text-[11px] text-amber-900/80 pt-1 border-t border-amber-200/60 font-medium">
-                Bankers and recipients can securely preview, print, or download all documents directly online without logging in.
-              </p>
-            </div>
-
-            {/* Shareable Link Input */}
-            <div className="mb-4">
-              <label className="block text-xs font-bold text-gray-700 mb-1.5">
-                Secure View Link
-              </label>
-              <div className="flex gap-2">
+            <form onSubmit={handleSimpleUpload} className="space-y-4 pt-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  Document Name / Title <span className="text-red-500">*</span>
+                </label>
                 <input
                   type="text"
-                  readOnly
-                  value={shareBundleUrl}
-                  className="flex-1 px-3 py-2 text-xs bg-gray-50 border border-gray-200 rounded-xl text-gray-700 font-mono outline-none select-all"
+                  required
+                  placeholder="e.g. PAN Card, Salary Slip, Property Deed, Bank Statement..."
+                  value={customDocTitle}
+                  onChange={(e) => setCustomDocTitle(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold outline-none focus:border-amber-500 focus:bg-white transition-all"
                 />
-                <button
-                  type="button"
-                  onClick={() => copyToClipboard(shareBundleUrl, setCopiedLink)}
-                  className="px-3.5 py-2 bg-[#081326] text-white hover:bg-[#11203d] rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shrink-0"
-                >
-                  {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                  <span>{copiedLink ? 'Copied!' : 'Copy Link'}</span>
-                </button>
-              </div>
-            </div>
-
-            {/* WhatsApp & Business Share Actions */}
-            <div className="space-y-2.5">
-              {/* 1. Main Chooser Button */}
-              <button
-                type="button"
-                onClick={() => {
-                  handleShareSelectedOnWhatsApp(null, 'chooser');
-                  setShowShareBundleModal(false);
-                }}
-                className="w-full py-3 px-4 bg-gradient-to-r from-emerald-600 to-teal-700 text-white rounded-2xl text-xs font-bold hover:from-emerald-700 hover:to-teal-800 transition-all flex items-center justify-center gap-2 shadow-md cursor-pointer"
-              >
-                <Share2 className="w-4 h-4 stroke-[2.5]" />
-                <span>Share Complete Docs (Select App)</span>
-              </button>
-
-              {/* 2. Direct Choice: WhatsApp Business vs Personal WhatsApp */}
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    handleShareSelectedOnWhatsApp(null, 'business');
-                    setShowShareBundleModal(false);
-                  }}
-                  className="py-2.5 px-3 bg-teal-50 border border-teal-300 text-teal-900 rounded-xl text-xs font-bold hover:bg-teal-100 transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
-                  title="Directly open WhatsApp Business"
-                >
-                  <WhatsAppBusinessIcon className="w-4 h-4 text-teal-700" />
-                  <span>WhatsApp Business</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    handleShareSelectedOnWhatsApp(null, 'personal');
-                    setShowShareBundleModal(false);
-                  }}
-                  className="py-2.5 px-3 bg-emerald-50 border border-emerald-300 text-emerald-900 rounded-xl text-xs font-bold hover:bg-emerald-100 transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
-                  title="Directly open Personal WhatsApp"
-                >
-                  <WhatsAppIcon className="w-4 h-4 text-emerald-600" />
-                  <span>Personal WhatsApp</span>
-                </button>
               </div>
 
-              {/* 3. Direct chat with Client */}
-              {cleanMobile && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    handleShareSelectedOnWhatsApp(cleanMobile);
-                    setShowShareBundleModal(false);
-                  }}
-                  className="w-full py-2.5 px-4 bg-gray-50 text-[#081326] border border-gray-200 rounded-xl text-xs font-bold hover:bg-gray-100 transition-all flex items-center justify-center gap-2 cursor-pointer"
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  Document Notes (Optional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Verified original copy, 6 months statement..."
+                  value={customDocNotes}
+                  onChange={(e) => setCustomDocNotes(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-amber-500 focus:bg-white transition-all"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  Select File(s) <span className="text-red-500">*</span>
+                </label>
+                <div
+                  onClick={() => fileInputRef.current?.click()}
+                  className="border-2 border-dashed border-gray-300 hover:border-amber-500 rounded-2xl p-6 text-center cursor-pointer bg-slate-50/50 hover:bg-amber-50/30 transition-all space-y-2"
                 >
-                  <WhatsAppIcon className="w-4 h-4 text-emerald-600" />
-                  <span>Direct Chat to Client ({cleanMobile})</span>
-                </button>
+                  <Upload className="w-8 h-8 text-[#f59e0b] mx-auto" />
+                  <p className="text-xs font-bold text-gray-700">Click to browse or drag & drop files</p>
+                  <p className="text-[10px] text-gray-400">PDF, JPG, PNG, WEBP (Supports multiple files)</p>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    accept=".pdf,.jpg,.jpeg,.png,.webp"
+                    onChange={handleFileSelect}
+                    className="hidden"
+                  />
+                </div>
+              </div>
+
+              {/* Selected Files List */}
+              {selectedFiles.length > 0 && (
+                <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                  {selectedFiles.map((f, fIdx) => (
+                    <div key={fIdx} className="flex items-center justify-between p-2 bg-gray-50 rounded-xl text-xs border border-gray-200">
+                      <span className="truncate max-w-[280px] font-medium text-gray-700">{f.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveSelectedFile(fIdx)}
+                        className="text-red-500 hover:text-red-700 font-bold ml-2 cursor-pointer"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
               )}
 
-              {/* 4. Preview in New Tab */}
-              <div className="flex gap-2 pt-1">
-                <a
-                  href={shareBundleUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex-1 py-2 px-3 bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer border border-gray-200 text-center"
+              <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setShowUploadModal(false)}
+                  className="px-4 py-2 text-xs font-bold text-gray-600 hover:bg-gray-100 rounded-xl cursor-pointer"
                 >
-                  <ExternalLink className="w-3.5 h-3.5 text-gray-500" />
-                  <span>Open Link in New Tab (Preview Portal)</span>
-                </a>
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={uploading || selectedFiles.length === 0}
+                  className="px-5 py-2 bg-[#081326] text-white hover:bg-[#11203d] rounded-xl text-xs font-black shadow-md cursor-pointer disabled:opacity-40 flex items-center gap-2"
+                >
+                  {uploading && <Loader2 className="w-4 h-4 animate-spin text-amber-400" />}
+                  <span>{uploading ? 'Uploading...' : `Upload ${selectedFiles.length > 0 ? selectedFiles.length + ' File(s)' : ''}`}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ---------------------------------------------------- */}
+      {/* 3. EDIT DOCUMENT NOTE MODAL */}
+      {/* ---------------------------------------------------- */}
+      {editingNoteDoc && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#081326]/60 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="relative bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <StickyNote className="w-5 h-5 text-amber-600" />
+                <h3 className="text-sm font-black text-[#081326]">Document Note</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingNoteDoc(null)}
+                className="text-gray-400 hover:text-black p-1 rounded-lg"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-4 pt-3">
+              <p className="text-xs text-gray-500 font-medium">
+                Add special instructions, verification notes, or status for <strong>{editingNoteDoc.docName}</strong>:
+              </p>
+              <textarea
+                rows={4}
+                value={editingNoteDoc.text}
+                onChange={(e) => setEditingNoteDoc(prev => ({ ...prev, text: e.target.value }))}
+                placeholder="Enter note details..."
+                className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-amber-500 focus:bg-white transition-all resize-none"
+              />
+
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingNoteDoc(null)}
+                  className="px-4 py-2 text-xs font-bold text-gray-600 hover:bg-gray-100 rounded-xl cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={savingNote}
+                  onClick={() => handleSaveDocNote(editingNoteDoc.docName, editingNoteDoc.doc)}
+                  className="px-5 py-2 bg-[#081326] text-white hover:bg-[#11203d] rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-40"
+                >
+                  {savingNote && <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />}
+                  <span>{savingNote ? 'Saving...' : 'Save Note'}</span>
+                </button>
               </div>
             </div>
           </div>
         </div>
       )}
+
+      {/* ---------------------------------------------------- */}
+      {/* 4. SINGLE DOCUMENT SHARE MODAL (File vs Link) */}
+      {/* ---------------------------------------------------- */}
+      {shareDocModal && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-[#081326]/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div 
+            className="absolute inset-0"
+            onClick={() => setShareDocModal(null)}
+          />
+          <div className="relative bg-white w-full max-w-sm rounded-t-3xl sm:rounded-2xl p-5 shadow-2xl space-y-4 animate-in slide-in-from-bottom duration-200">
+            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+              <div className="min-w-0 flex-1">
+                <h3 className="text-sm font-black text-[#081326] truncate">Share {shareDocModal.name}</h3>
+                <p className="text-[11px] text-gray-400">Select sharing method</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShareDocModal(null)}
+                className="w-7 h-7 rounded-full bg-gray-100 text-gray-500 hover:text-black flex items-center justify-center text-xs font-bold cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-2.5">
+              <button
+                type="button"
+                onClick={() => handleShareSingleDocFile(shareDocModal)}
+                className="w-full p-3.5 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl text-left text-xs font-black text-amber-950 flex items-center gap-3 transition-colors cursor-pointer"
+              >
+                <FileText className="w-5 h-5 text-amber-600 shrink-0" />
+                <div>
+                  <p className="text-xs font-black text-[#081326]">Share File</p>
+                  <p className="text-[10px] text-gray-500 font-medium">Send actual document file (WhatsApp, Email, Drive...)</p>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const text = `📄 Document: ${shareDocModal.name}\nClient: ${client?.fullName || 'Client'}\n\n🔗 View securely on KTR Portal:\n${shareBundleUrl}`;
+                  navigator.clipboard.writeText(text);
+                  toast.success('Document link copied to clipboard!');
+                  window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
+                  setShareDocModal(null);
+                }}
+                className="w-full p-3.5 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl text-left text-xs font-black text-blue-950 flex items-center gap-3 transition-colors cursor-pointer"
+              >
+                <Share2 className="w-5 h-5 text-blue-600 shrink-0" />
+                <div>
+                  <p className="text-xs font-black text-[#081326]">Share Link</p>
+                  <p className="text-[10px] text-gray-500 font-medium">Share secure banker viewing link</p>
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ---------------------------------------------------- */}
+      {/* 5. TOP SHARE ALL CASE DOCUMENTS MODAL (File vs Link) */}
+      {/* ---------------------------------------------------- */}
+      {topShareModal && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-[#081326]/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div 
+            className="absolute inset-0"
+            onClick={() => setTopShareModal(false)}
+          />
+          <div className="relative bg-white w-full max-w-sm rounded-t-3xl sm:rounded-2xl p-5 shadow-2xl space-y-4 animate-in slide-in-from-bottom duration-200">
+            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+              <div className="min-w-0 flex-1">
+                <h3 className="text-sm font-black text-[#081326] truncate">Share Case Documents</h3>
+                <p className="text-[11px] text-gray-400">Select sharing method</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setTopShareModal(false)}
+                className="w-7 h-7 rounded-full bg-gray-100 text-gray-500 hover:text-black flex items-center justify-center text-xs font-bold cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-2.5">
+              <button
+                type="button"
+                onClick={() => handleShareAllFiles(sortedDocItems)}
+                className="w-full p-3.5 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl text-left text-xs font-black text-amber-950 flex items-center gap-3 transition-colors cursor-pointer"
+              >
+                <FileText className="w-5 h-5 text-amber-600 shrink-0" />
+                <div>
+                  <p className="text-xs font-black text-[#081326]">Share File(s)</p>
+                  <p className="text-[10px] text-gray-500 font-medium">Send actual document files to banker (WhatsApp, Email...)</p>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSharePortalLink}
+                className="w-full p-3.5 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl text-left text-xs font-black text-blue-950 flex items-center gap-3 transition-colors cursor-pointer"
+              >
+                <Share2 className="w-5 h-5 text-blue-600 shrink-0" />
+                <div>
+                  <p className="text-xs font-black text-[#081326]">Share Link</p>
+                  <p className="text-[10px] text-gray-500 font-medium">Share secure banker portal link</p>
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ---------------------------------------------------- */}
+      {/* 6. SMART PRINTING PROGRESS OVERLAY */}
+      {/* ---------------------------------------------------- */}
+      {printingProgress.active && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#081326]/75 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl p-6 shadow-2xl max-w-sm w-full text-center space-y-4 border border-amber-200">
+            <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-600 flex items-center justify-center mx-auto">
+              <Loader2 className="w-6 h-6 animate-spin" />
+            </div>
+            <div>
+              <h4 className="text-sm font-black text-[#081326]">Smart Print in Progress</h4>
+              <p className="text-xs text-gray-500 mt-1">{printingProgress.status}</p>
+            </div>
+            {printingProgress.total > 0 && (
+              <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+                <div 
+                  className="bg-amber-500 h-full transition-all duration-300"
+                  style={{ width: `${Math.round((printingProgress.current / printingProgress.total) * 100)}%` }}
+                />
+              </div>
+            )}
+            <p className="text-[10px] text-gray-400 font-medium">Auto-detecting Portrait / Landscape per page</p>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

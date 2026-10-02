@@ -11,7 +11,6 @@ import { getAssetUrl } from '../utils/url';
 import OverviewTab from '../components/client/OverviewTab';
 import DocumentRepositoryTab from '../components/client/DocumentRepositoryTab';
 import PendencyTab from '../components/client/PendencyTab';
-import DocumentsTab from '../components/client/DocumentsTab';
 
 const StatusBadge = ({ status, isDoc }) => {
   const styles = {
@@ -676,9 +675,9 @@ const Clients = () => {
               </div>
             </div>
 
-            {/* Standardized 5 Tabs: Overview | Documents | Pendency | Manage Docs | Edit History */}
+            {/* Standardized 4 Tabs: Overview | Documents | Pendency | Edit History */}
             <div className="flex gap-1 px-6 pt-4 border-b border-gray-100 bg-white overflow-x-auto scrollbar-hide">
-               {['Overview', 'Documents', 'Pendency', 'Manage Docs', 'Edit History'].map(tab => (
+               {['Overview', 'Documents', 'Pendency', 'Edit History'].map(tab => (
                   <button 
                     key={tab}
                     onClick={() => setPreviewTab(tab)}
@@ -705,10 +704,6 @@ const Clients = () => {
 
                {previewTab === 'Pendency' && (
                   <PendencyTab client={selectedClient} onRefresh={refreshSelectedClient} />
-               )}
-
-               {previewTab === 'Manage Docs' && (
-                  <DocumentsTab client={selectedClient} onRefresh={refreshSelectedClient} />
                )}
 
                {previewTab === 'Edit History' && (

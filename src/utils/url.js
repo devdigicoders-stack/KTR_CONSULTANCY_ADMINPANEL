@@ -1,11 +1,13 @@
 export const getAssetUrl = (path) => {
   if (!path) return '';
 
-  let cleanPath = path;
+  let cleanPath = String(path).trim();
 
-  // If path contains /uploads/, strip any leading domain (e.g. http://localhost:5000 or old domain)
+  // If path contains /uploads/ or uploads/, strip any leading domain (e.g. http://localhost:5000, old IPs, or staging domains)
   if (cleanPath.includes('/uploads/')) {
     cleanPath = cleanPath.substring(cleanPath.indexOf('/uploads/'));
+  } else if (cleanPath.includes('uploads/')) {
+    cleanPath = '/' + cleanPath.substring(cleanPath.indexOf('uploads/'));
   } else if (cleanPath.startsWith('http://') || cleanPath.startsWith('https://')) {
     return cleanPath;
   }
@@ -16,7 +18,6 @@ export const getAssetUrl = (path) => {
   if (apiBase) {
     serverBase = apiBase.replace(/\/api\/?$/, '');
   } else {
-    // Default fallback if no env variable set
     if (typeof window !== 'undefined') {
       if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
         serverBase = 'http://localhost:5000';
@@ -37,5 +38,5 @@ export const getPublicShareDocsUrl = (clientId) => {
   if (typeof window !== 'undefined') {
     return `${window.location.origin}/shared-docs/${clientId}`;
   }
-  return `https://ktrconsultants.in/shared-docs/${clientId}`;
+  return `https://admin.ktrconsultants.in/shared-docs/${clientId}`;
 };

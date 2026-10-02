@@ -10,7 +10,6 @@ import { useAuth } from '../context/AuthContext';
 import OverviewTab from '../components/client/OverviewTab';
 import DocumentRepositoryTab from '../components/client/DocumentRepositoryTab';
 import PendencyTab from '../components/client/PendencyTab';
-import DocumentsTab from '../components/client/DocumentsTab';
 
 const formatCurrency = (amount) => {
   if (!amount && amount !== 0) return '₹ 0';
@@ -51,7 +50,6 @@ const ClientDetails = () => {
     'Overview',
     'Documents',
     'Pendency',
-    'Manage Docs',
     'Edit History'
   ];
 
@@ -215,7 +213,6 @@ const ClientDetails = () => {
         {activeTab === 'Overview' && <OverviewTab client={client} />}
         {activeTab === 'Documents' && <DocumentRepositoryTab client={client} onRefresh={fetchClient} />}
         {activeTab === 'Pendency' && <PendencyTab client={client} onRefresh={fetchClient} />}
-        {activeTab === 'Manage Docs' && <DocumentsTab client={client} onRefresh={fetchClient} />}
         {activeTab === 'Edit History' && (
           <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm space-y-4">
             <h4 className="text-xs font-black text-[#081326] uppercase tracking-wider border-b border-gray-50 pb-3 flex items-center gap-2">
