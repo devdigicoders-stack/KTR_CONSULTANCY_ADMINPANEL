@@ -1,49 +1,14 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  ChevronRight, User, Phone, Briefcase, IndianRupee, FileCheck, 
-  CheckCircle2, Info, HeadphonesIcon, Check, ArrowRight, Shield
+  ChevronRight, User, Phone, Briefcase, IndianRupee, FileText, 
+  Info, HeadphonesIcon, Check, ArrowRight, FileCheck, StickyNote
 } from 'lucide-react';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 
-const inputCls = "w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-normal outline-none text-gray-800 hover:border-gray-300 focus:border-[#f59e0b] focus:bg-white transition-all";
+const inputCls = "w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs md:text-sm font-medium outline-none text-gray-800 hover:border-gray-300 focus:border-[#f59e0b] focus:bg-white transition-all";
 const labelCls = "text-xs font-bold text-gray-700 block mb-1";
-
-const professionOptions = [
-  '',
-  'Salaried',
-  'Self-Employed / Business',
-  'Professional (Dr / CA / Lawyer)',
-  'Trader / Retailer',
-  'Manufacturer',
-  'Contractor',
-  'Farmer / Agriculture',
-  'Retired',
-  'Other'
-];
-
-const caseTypeOptions = [
-  '',
-  'Home Loan',
-  'Personal Loan',
-  'Business Loan',
-  'Loan Against Property (LAP)',
-  'MSME / Commercial Loan',
-  'Car / Auto Loan',
-  'Education Loan',
-  'Balance Transfer & Top-up',
-  'Project Finance',
-  'Debt Consolidation',
-  'CIBIL Clearance / Score Repair',
-  'Other'
-];
-
-const statusOptions = [
-  'Pending',
-  'Approved',
-  'Rejected'
-];
 
 const AddNewClient = () => {
   const { user } = useAuth();
@@ -57,7 +22,7 @@ const AddNewClient = () => {
     occupation: '',
     loanAmount: '',
     caseType: '',
-    status: 'Pending'
+    caseNotes: ''
   });
 
   const handleChange = (e) => {
@@ -69,8 +34,8 @@ const AddNewClient = () => {
     setLoading(true);
     setMessage({ type: '', text: '' });
 
-    if (!formData.fullName.trim() || !formData.mobile.trim() || !formData.occupation || !formData.caseType) {
-      setMessage({ type: 'error', text: 'Please fill in all required fields.' });
+    if (!formData.fullName.trim() || !formData.mobile.trim() || !formData.occupation.trim() || !formData.caseType.trim()) {
+      setMessage({ type: 'error', text: 'Please fill in all required fields (Client Name, Mobile, Profession, Case Type).' });
       setLoading(false);
       return;
     }
@@ -79,18 +44,21 @@ const AddNewClient = () => {
       const submitData = new FormData();
       submitData.append('fullName', formData.fullName.trim());
       submitData.append('mobile', formData.mobile.trim());
-      submitData.append('occupation', formData.occupation);
+      submitData.append('occupation', formData.occupation.trim());
       submitData.append('loanAmount', formData.loanAmount || 0);
-      submitData.append('caseType', formData.caseType);
-      submitData.append('loanType', formData.caseType);
-      submitData.append('status', formData.status || 'Pending');
+      submitData.append('caseType', formData.caseType.trim());
+      submitData.append('loanType', formData.caseType.trim());
+      submitData.append('notes', formData.caseNotes.trim());
+      submitData.append('caseNotes', formData.caseNotes.trim());
+      // Status automatically set to Pending on creation
+      submitData.append('status', 'Pending');
 
       const res = await api.post('/clients/profile', submitData);
 
       if (res.data.success) {
-        setMessage({ type: 'success', text: 'Client added successfully! Redirecting...' });
+        setMessage({ type: 'success', text: 'Client case registered successfully! Redirecting...' });
         window.scrollTo(0, 0);
-        setTimeout(() => navigate('/clients'), 1200);
+        setTimeout(() => navigate('/clients'), 1000);
       }
     } catch (error) {
       setMessage({ type: 'error', text: error.response?.data?.message || 'Something went wrong while saving the client.' });
@@ -108,7 +76,7 @@ const AddNewClient = () => {
         <div className="flex items-center gap-2 text-xs font-medium text-gray-500">
           <span onClick={() => navigate('/clients')} className="hover:text-[#081326] cursor-pointer transition-colors">Clients</span>
           <ChevronRight className="w-3 h-3" />
-          <span className="text-gray-500 font-semibold">Initial Client Creation (Basic Details)</span>
+          <span className="text-gray-500 font-semibold">Staff Intake & Case Creation</span>
         </div>
       </div>
 
@@ -128,13 +96,18 @@ const AddNewClient = () => {
 
           <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-xs border border-gray-100 p-6 md:p-8 space-y-6">
             
-            <div className="border-b border-gray-100 pb-4">
-              <h3 className="font-black text-[#081326] text-base flex items-center gap-2">
-                <User className="w-5 h-5 text-[#f59e0b]" /> Client Information
-              </h3>
-              <p className="text-xs text-gray-400 font-medium mt-1">
-                Enter the basic information to create the client case. Documents and pendencies can be managed afterwards.
-              </p>
+            <div className="border-b border-gray-100 pb-4 flex items-center justify-between">
+              <div>
+                <h3 className="font-black text-[#081326] text-base flex items-center gap-2">
+                  <User className="w-5 h-5 text-[#f59e0b]" /> Client Information
+                </h3>
+                <p className="text-xs text-gray-400 font-medium mt-1">
+                  Enter basic client information to create a new case file. Initial status will automatically be set to <strong>Pending / In Process</strong>.
+                </p>
+              </div>
+              <span className="hidden sm:inline-flex px-3 py-1 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg text-xs font-black">
+                Default: Pending
+              </span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -172,29 +145,27 @@ const AddNewClient = () => {
                     required
                     maxLength={10}
                     placeholder="Enter 10-digit mobile number"
-                    className={`${inputCls} pl-10 font-bold`}
+                    className={`${inputCls} pl-10 font-bold tracking-wider`}
                   />
                 </div>
               </div>
 
-              {/* 3. Profession */}
+              {/* 3. Profession (Free text) */}
               <div className="flex flex-col">
                 <label className={labelCls}>
-                  Profession <span className="text-red-500">*</span>
+                  Profession / Profile <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
                   <Briefcase className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                  <select
+                  <input
+                    type="text"
                     name="occupation"
                     value={formData.occupation}
                     onChange={handleChange}
                     required
-                    className={`${inputCls} pl-10 cursor-pointer font-medium`}
-                  >
-                    {professionOptions.map(p => (
-                      <option key={p} value={p}>{p === '' ? 'Select Profession' : p}</option>
-                    ))}
-                  </select>
+                    placeholder="e.g. Senior Software Engineer, Cloth Merchant, Doctor"
+                    className={`${inputCls} pl-10`}
+                  />
                 </div>
               </div>
 
@@ -218,46 +189,41 @@ const AddNewClient = () => {
                 </div>
               </div>
 
-              {/* 5. Case Type */}
-              <div className="flex flex-col">
+              {/* 5. Case Type (Free text) */}
+              <div className="flex flex-col sm:col-span-2">
                 <label className={labelCls}>
-                  Case Type <span className="text-red-500">*</span>
+                  Case Type / Loan Requirement <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
                   <FileCheck className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                  <select
+                  <input
+                    type="text"
                     name="caseType"
                     value={formData.caseType}
                     onChange={handleChange}
                     required
-                    className={`${inputCls} pl-10 cursor-pointer font-medium`}
-                  >
-                    {caseTypeOptions.map(c => (
-                      <option key={c} value={c}>{c === '' ? 'Select Case Type' : c}</option>
-                    ))}
-                  </select>
+                    placeholder="e.g. Home Loan - Construction, LAP for Business Expansion, MSME Loan"
+                    className={`${inputCls} pl-10`}
+                  />
                 </div>
               </div>
 
-              {/* 6. Status */}
-              <div className="flex flex-col">
+              {/* 6. Case Notes (Large text box) */}
+              <div className="flex flex-col sm:col-span-2">
                 <label className={labelCls}>
-                  Case Status <span className="text-red-500">*</span>
+                  <span className="flex items-center gap-1.5">
+                    <StickyNote className="w-3.5 h-3.5 text-[#f59e0b]" />
+                    Case Notes / Important Details <span className="text-gray-400 font-normal">(Visible to staff for easy understanding)</span>
+                  </span>
                 </label>
-                <div className="relative">
-                  <CheckCircle2 className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                  <select
-                    name="status"
-                    value={formData.status}
-                    onChange={handleChange}
-                    required
-                    className={`${inputCls} pl-10 cursor-pointer font-bold`}
-                  >
-                    {statusOptions.map(s => (
-                      <option key={s} value={s}>{s}</option>
-                    ))}
-                  </select>
-                </div>
+                <textarea
+                  name="caseNotes"
+                  rows={4}
+                  value={formData.caseNotes}
+                  onChange={handleChange}
+                  placeholder="Enter important case details, background, customer requirements, income source remarks, CIBIL history, preferred bank/NBFC, or follow-up notes..."
+                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs md:text-sm font-normal outline-none text-gray-800 hover:border-gray-300 focus:border-[#f59e0b] focus:bg-white transition-all resize-y leading-relaxed"
+                />
               </div>
             </div>
 
@@ -265,7 +231,7 @@ const AddNewClient = () => {
             <div className="pt-4 border-t border-gray-100 flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4">
               <div className="flex items-center gap-2 text-xs text-gray-500">
                 <Info className="w-4 h-4 text-blue-500 shrink-0" />
-                <span>Basic details only. Additional documents and pendencies can be managed anytime.</span>
+                <span>Basic details only. Additional documents and pendencies can be managed after case creation.</span>
               </div>
               <div className="flex gap-3">
                 <button
@@ -296,20 +262,24 @@ const AddNewClient = () => {
               <div className="w-6 h-6 rounded bg-amber-50 text-amber-600 flex items-center justify-center shrink-0 border border-amber-100">
                 <Check className="w-3.5 h-3.5" />
               </div>
-              KTR Staff Principles
+              KTR Staff Workflow
             </h3>
             <ul className="flex flex-col gap-3 text-xs font-normal text-gray-600">
               <li className="flex gap-2 items-start">
                 <Check className="w-3.5 h-3.5 text-[#f59e0b] shrink-0 mt-0.5" />
-                <span><strong>Client Creation:</strong> Basic intake details only for quick filing.</span>
+                <span><strong>Quick Intake:</strong> Enter exact profession and loan requirements in free text.</span>
               </li>
               <li className="flex gap-2 items-start">
                 <Check className="w-3.5 h-3.5 text-[#f59e0b] shrink-0 mt-0.5" />
-                <span><strong>Documents:</strong> Upload documents in the organized Documents repository.</span>
+                <span><strong>Case Notes:</strong> Add vital background remarks for smooth team handoff.</span>
               </li>
               <li className="flex gap-2 items-start">
                 <Check className="w-3.5 h-3.5 text-[#f59e0b] shrink-0 mt-0.5" />
-                <span><strong>Pendency:</strong> Track continuous missing requirements without losing history.</span>
+                <span><strong>Auto Pending:</strong> All new cases start in <em>Pending / In Process</em> status.</span>
+              </li>
+              <li className="flex gap-2 items-start">
+                <Check className="w-3.5 h-3.5 text-[#f59e0b] shrink-0 mt-0.5" />
+                <span><strong>Case Management:</strong> Change status to Complete / Approved anytime from client view.</span>
               </li>
             </ul>
           </div>

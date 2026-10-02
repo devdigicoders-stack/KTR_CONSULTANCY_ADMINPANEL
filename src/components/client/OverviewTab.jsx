@@ -1,5 +1,5 @@
 import React from 'react';
-import { User, Phone, Briefcase, IndianRupee, FileCheck, CheckCircle2, Clock, AlertCircle, Edit } from 'lucide-react';
+import { User, Phone, Briefcase, IndianRupee, FileCheck, CheckCircle2, Clock, AlertCircle, Edit, StickyNote } from 'lucide-react';
 
 const OverviewTab = ({ client, onEditClick }) => {
   if (!client) return null;
@@ -26,6 +26,8 @@ const OverviewTab = ({ client, onEditClick }) => {
         return <span className="px-3 py-1 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg text-xs font-black">Pending</span>;
     }
   };
+
+  const caseNotesText = client.caseNotes || client.notes || '';
 
   return (
     <div className="flex flex-col xl:flex-row gap-6">
@@ -105,6 +107,30 @@ const OverviewTab = ({ client, onEditClick }) => {
               </div>
               <p className="text-base font-black text-[#081326]">{client.status || 'Pending'}</p>
             </div>
+          </div>
+
+          {/* Case Notes Section */}
+          <div className="mt-6 pt-5 border-t border-gray-100">
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="font-bold text-xs uppercase tracking-wider text-gray-500 flex items-center gap-1.5">
+                <StickyNote className="w-3.5 h-3.5 text-[#f59e0b]" /> Case Notes & Remarks
+              </h4>
+              {onEditClick && !caseNotesText && (
+                <button 
+                  onClick={onEditClick}
+                  className="text-[11px] text-[#f59e0b] hover:underline font-bold cursor-pointer"
+                >
+                  + Add Case Notes
+                </button>
+              )}
+            </div>
+            {caseNotesText ? (
+              <div className="p-4 bg-amber-50/40 border border-amber-200/70 rounded-xl text-xs text-gray-800 leading-relaxed whitespace-pre-wrap font-medium">
+                {caseNotesText}
+              </div>
+            ) : (
+              <p className="text-xs text-gray-400 italic">No case notes added during client registration.</p>
+            )}
           </div>
         </div>
 

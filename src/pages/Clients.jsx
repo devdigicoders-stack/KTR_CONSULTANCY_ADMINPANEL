@@ -71,6 +71,7 @@ const Clients = () => {
   const [selectedUploadFiles, setSelectedUploadFiles] = useState([]);
   const [isUploadingDocs, setIsUploadingDocs] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadStatusText, setUploadStatusText] = useState('');
   const [uploadError, setUploadError] = useState('');
 
   // Co-Applicant Modal State
@@ -175,6 +176,7 @@ const Clients = () => {
       caseType: selectedClient.caseType || selectedClient.loanType || '',
       occupation: selectedClient.occupation || '',
       addressLine1: selectedClient.addressLine1 || selectedClient.address || '',
+      notes: selectedClient.notes || selectedClient.caseNotes || '',
       status: selectedClient.status || 'Pending'
     });
     setShowEditContactModal(true);
@@ -254,8 +256,8 @@ const Clients = () => {
       return;
     }
 
-    // File size check — warn if any single file > 25MB
-    const MAX_FILE_MB = 25;
+    // File size check — allow up to 1GB per file (1024MB)
+    const MAX_FILE_MB = 1024;
     const oversized = selectedUploadFiles.filter(f => f.size > MAX_FILE_MB * 1024 * 1024);
     if (oversized.length > 0) {
       const names = oversized.map(f => `${f.name} (${(f.size / 1024 / 1024).toFixed(1)} MB)`).join(', ');
@@ -267,14 +269,22 @@ const Clients = () => {
       setIsUploadingDocs(true);
       setUploadProgress(0);
       setUploadError('');
+      setUploadStatusText('Preparing files for upload...');
 
-      // Upload files ONE BY ONE to avoid server timeout/size issues
+      // Upload files sequentially with progress tracking (supports 50-100+ files easily)
       const total = selectedUploadFiles.length;
       for (let i = 0; i < total; i++) {
         const file = selectedUploadFiles[i];
+        const fileSizeMB = (file.size / (1024 * 1024)).toFixed(1);
+        const fileNameTruncated = file.name.length > 25 ? file.name.substring(0, 22) + '...' : file.name;
+
+        setUploadStatusText(`Uploading file ${i + 1} of ${total}: ${fileNameTruncated} (${fileSizeMB} MB)...`);
+
         const formData = new FormData();
-        formData.append('docName', total > 1 ? `${uploadFormData.docName.trim()} (${i + 1}/${total})` : uploadFormData.docName.trim());
-        formData.append('documentName', total > 1 ? `${uploadFormData.docName.trim()} (${i + 1}/${total})` : uploadFormData.docName.trim());
+        const baseName = uploadFormData.docName.trim();
+        const finalName = total > 1 ? `${baseName} (${i + 1}/${total} - ${file.name})` : baseName;
+        formData.append('docName', finalName);
+        formData.append('documentName', finalName);
         formData.append('category', uploadFormData.category);
         if (uploadFormData.notes.trim()) {
           formData.append('notes', uploadFormData.notes.trim());
@@ -283,18 +293,19 @@ const Clients = () => {
 
         await api.post(`/clients/${uploadingForClient._id}/documents`, formData, {
           headers: { 'Content-Type': 'multipart/form-data' },
-          timeout: 120000, // 2 minutes per file
+          timeout: 600000, // 10 minutes per file (for large 100MB-500MB+ files)
           onUploadProgress: (progressEvent) => {
             if (progressEvent.total) {
-              // Overall progress across all files
-              const fileProgress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-              const overall = Math.round(((i * 100) + fileProgress) / total);
-              setUploadProgress(overall);
+              const filePercent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+              const overallPercent = Math.round(((i * 100) + filePercent) / total);
+              setUploadProgress(overallPercent);
+              setUploadStatusText(`Uploading file ${i + 1} of ${total}: ${fileNameTruncated} (${fileSizeMB} MB) - ${filePercent}%`);
             }
           }
         });
       }
 
+      setUploadStatusText('Upload completed successfully!');
       setShowUploadModal(false);
       setUploadingForClient(null);
       setSelectedUploadFiles([]);
@@ -306,11 +317,11 @@ const Clients = () => {
       console.error('Error uploading document:', err);
       let msg = 'Failed to upload documents.';
       if (err.code === 'ERR_NETWORK' || err.message === 'Network Error') {
-        msg = 'Network Error: File size bahot badi hai ya server se connection toot gaya. File compress karke dobara try karein.';
+        msg = 'Network Error: Server connection toot gaya ya Nginx body size limit (client_max_body_size) reach ho gaya. Server config me Nginx limit check karein.';
       } else if (err.code === 'ECONNABORTED') {
-        msg = 'Upload timeout: File bahot badi hai. File compress karke dobara try karein.';
+        msg = 'Upload timeout: File transfer me 10 minute se zyada samay laga. Network speed verify karein.';
       } else if (err.response?.status === 413) {
-        msg = 'File too large: Server ne reject kar diya. File ka size kam karke dobara try karein.';
+        msg = 'File Too Large (413): Web server ne badi file reject kar di. Server / Nginx client_max_body_size badhayein.';
       } else {
         msg = err.response?.data?.message || err.message || 'Failed to upload documents.';
       }
@@ -318,6 +329,7 @@ const Clients = () => {
     } finally {
       setIsUploadingDocs(false);
       setUploadProgress(0);
+      setUploadStatusText('');
     }
   };
 
@@ -879,6 +891,17 @@ const Clients = () => {
                 />
               </div>
 
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">Case Notes / Remarks</label>
+                <textarea 
+                  rows={3}
+                  value={contactFormData.notes || ''}
+                  onChange={(e) => setContactFormData({ ...contactFormData, notes: e.target.value, caseNotes: e.target.value })}
+                  placeholder="Important details about the case for easy understanding..."
+                  className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg outline-none focus:border-[#f59e0b] font-medium resize-y"
+                />
+              </div>
+
               <div className="flex gap-3 pt-3 border-t border-gray-100">
                 <button 
                   type="button" 
@@ -1002,7 +1025,6 @@ const Clients = () => {
                     type="file" 
                     id="front-doc-multi-file-input"
                     multiple
-                    accept="application/pdf,image/*,.doc,.docx,.xls,.xlsx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,*/*"
                     onChange={(e) => {
                       if (e.target.files) {
                         setSelectedUploadFiles(Array.from(e.target.files));
@@ -1045,13 +1067,13 @@ const Clients = () => {
               {isUploadingDocs && (
                 <div className="pt-2 pb-1">
                   <div className="flex justify-between items-center mb-1.5">
-                    <span className="text-[11px] font-bold text-[#081326]">
-                      {selectedUploadFiles.length > 1
-                        ? `Uploading file ${Math.min(Math.ceil((uploadProgress / 100) * selectedUploadFiles.length) + 1, selectedUploadFiles.length)} of ${selectedUploadFiles.length}...`
+                    <span className="text-[11px] font-bold text-[#081326] truncate max-w-[340px]">
+                      {uploadStatusText || (selectedUploadFiles.length > 1
+                        ? `Uploading files (${uploadProgress}%)...`
                         : 'Uploading file...'
-                      }
+                      )}
                     </span>
-                    <span className="text-[11px] font-bold text-[#f59e0b]">{uploadProgress}%</span>
+                    <span className="text-[11px] font-bold text-[#f59e0b] shrink-0 ml-2">{uploadProgress}%</span>
                   </div>
                   <div className="w-full bg-gray-100 rounded-full h-2.5 overflow-hidden">
                     <div
@@ -1063,7 +1085,7 @@ const Clients = () => {
                     />
                   </div>
                   <p className="text-[10px] text-gray-400 mt-1 font-medium">
-                    {uploadProgress < 100 ? 'Please wait, do not close this window...' : 'Saving to server...'}
+                    {uploadProgress < 100 ? 'Please wait, do not close this window while files are uploading...' : 'Saving to server database...'}
                   </p>
                 </div>
               )}
