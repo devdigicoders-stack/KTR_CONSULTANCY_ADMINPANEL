@@ -155,11 +155,11 @@ export default function ImageViewer({ src, alt = 'Document', className = '' }) {
           src={src}
           alt={alt}
           loading="lazy"
-          draggable={false}
-          className="max-h-[85vh] max-w-full object-contain rounded-lg shadow-2xl bg-white transition-transform duration-75 ease-out"
+          className="max-h-[85vh] max-w-full object-contain rounded-lg shadow-2xl bg-white select-none pointer-events-none"
           style={{
             transform: `translate(${position.x}px, ${position.y}px) scale(${scale}) rotate(${rotation}deg)`,
-            transformOrigin: 'center center'
+            transformOrigin: 'center center',
+            transition: isDragging ? 'none' : 'transform 0.1s ease-out'
           }}
         />
       </div>

@@ -16,7 +16,11 @@ import {
   MapPin,
   CreditCard,
   Receipt,
-  X
+  X,
+  Lock,
+  FileUp,
+  FileCheck2,
+  FolderTree
 } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -25,7 +29,7 @@ import api from '../api/axios';
 
 const Sidebar = ({ isMobileOpen, onClose }) => {
   const location = useLocation();
-  const { role, logout } = useAuth();
+  const { role, user, logout } = useAuth();
   const [pendingCount, setPendingCount] = useState(0);
   const [pendingAppsCount, setPendingAppsCount] = useState(0);
   const [enquiryUnreadCount, setEnquiryUnreadCount] = useState(0);
@@ -122,7 +126,7 @@ const Sidebar = ({ isMobileOpen, onClose }) => {
         clearInterval(interval6); 
       };
     }
-  }, [role, location.pathname]); // Refresh on route change to get updated counts
+  }, [role, location.pathname]);
 
   const allNavGroups = [
     {
@@ -133,14 +137,26 @@ const Sidebar = ({ isMobileOpen, onClose }) => {
       roles: ['admin']
     },
     {
-      title: 'CLIENT & DATA',
+      title: role === 'admin' ? 'CLIENT & DATA' : 'APPLICATIONS & FORMS',
       items: [
-        { name: role === 'admin' ? 'Clients' : 'My Application', icon: Users, path: '/clients' },
-        { name: 'Documents & Data', icon: FolderOpen, path: '/documents' },
+        { name: role === 'admin' ? 'Clients' : 'My Applications', icon: Users, path: '/clients' },
+        { name: 'Bank Forms & Others', icon: FolderOpen, path: '/bank-forms' },
+        { name: `${user?.name ? user.name.split(' ')[0] : 'My'} – Private`, icon: Lock, path: '/my-private-docs' },
+        { name: 'Create Form & Link', icon: FileCheck2, path: '/client-forms' },
+        { name: 'Request Documents', icon: FileUp, path: '/doc-requests' },
         ...(role === 'admin' ? [
+          { name: 'All Client Documents', icon: FolderTree, path: '/documents' },
           { name: 'CIBIL / Civil Score', icon: ShieldCheck, path: '/cibil' },
           { name: 'CIBIL Case Submissions', icon: FileText, path: '/cibil-cases' },
         ] : [])
+      ],
+      roles: ['admin', 'staff']
+    },
+    {
+      title: 'PAYMENTS & INVOICES',
+      items: [
+        { name: 'Create Payment Link', icon: CreditCard, path: '/payments/create' },
+        { name: 'Invoices & Payments', icon: Receipt, path: '/payments/invoices' },
       ],
       roles: ['admin', 'staff']
     },
@@ -152,14 +168,6 @@ const Sidebar = ({ isMobileOpen, onClose }) => {
         { name: 'Add / Edit Services', icon: PlusSquare, path: '/add-service' },
         { name: 'Property Assessments & Maps', icon: MapPin, path: '/property-assessments' },
         { name: 'Property Legal (Chain Deed)', icon: FileText, path: '/chain-deeds' },
-      ],
-      roles: ['admin']
-    },
-    {
-      title: 'PAYMENTS & INVOICES',
-      items: [
-        { name: 'Create Payment Link', icon: CreditCard, path: '/payments/create' },
-        { name: 'Invoices & Payments', icon: Receipt, path: '/payments/invoices' },
       ],
       roles: ['admin']
     },

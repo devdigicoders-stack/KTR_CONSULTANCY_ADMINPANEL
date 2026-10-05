@@ -50,7 +50,7 @@ const ClientDetails = () => {
     'Overview',
     'Documents',
     'Pendency',
-    'Edit History'
+    ...(user?.role === 'admin' ? ['Edit History'] : [])
   ];
 
   const getHeaderInfo = () => {

@@ -19,9 +19,11 @@ export default function PdfViewer({ url, title, className = '' }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Touch pinch-to-zoom refs
+  // Touch pinch-to-zoom and drag-pan refs
   const initialDistanceRef = useRef(null);
   const initialScaleRef = useRef(1);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartRef = useRef({ x: 0, y: 0, scrollLeft: 0, scrollTop: 0 });
 
   // Load PDF Document
   useEffect(() => {
@@ -126,7 +128,7 @@ export default function PdfViewer({ url, title, className = '' }) {
     return () => window.removeEventListener('resize', handleResize);
   }, [renderPage]);
 
-  // Touch Pinch-to-zoom handlers (Document only)
+  // Touch Pinch-to-zoom and Pan handlers (Document only)
   const handleTouchStart = (e) => {
     if (e.touches.length === 2) {
       const touch1 = e.touches[0];
@@ -136,6 +138,16 @@ export default function PdfViewer({ url, title, className = '' }) {
         touch2.clientY - touch1.clientY
       );
       initialScaleRef.current = scale;
+      setIsDragging(false);
+    } else if (e.touches.length === 1 && scale > 1 && scrollWrapperRef.current) {
+      const touch = e.touches[0];
+      setIsDragging(true);
+      dragStartRef.current = {
+        x: touch.clientX,
+        y: touch.clientY,
+        scrollLeft: scrollWrapperRef.current.scrollLeft,
+        scrollTop: scrollWrapperRef.current.scrollTop
+      };
     }
   };
 
@@ -149,8 +161,15 @@ export default function PdfViewer({ url, title, className = '' }) {
         touch2.clientY - touch1.clientY
       );
       const factor = currentDistance / initialDistanceRef.current;
-      const newScale = Math.min(Math.max(initialScaleRef.current * factor, 0.75), 3.5);
+      const newScale = Math.min(Math.max(initialScaleRef.current * factor, 0.75), 4.0);
       setScale(newScale);
+    } else if (e.touches.length === 1 && isDragging && scale > 1 && scrollWrapperRef.current) {
+      if (e.cancelable) e.preventDefault();
+      const touch = e.touches[0];
+      const deltaX = touch.clientX - dragStartRef.current.x;
+      const deltaY = touch.clientY - dragStartRef.current.y;
+      scrollWrapperRef.current.scrollLeft = dragStartRef.current.scrollLeft - deltaX;
+      scrollWrapperRef.current.scrollTop = dragStartRef.current.scrollTop - deltaY;
     }
   };
 
@@ -158,6 +177,37 @@ export default function PdfViewer({ url, title, className = '' }) {
     if (e.touches.length < 2) {
       initialDistanceRef.current = null;
     }
+    if (e.touches.length === 0) {
+      setIsDragging(false);
+    }
+  };
+
+  // Mouse pan handlers (Desktop)
+  const handleMouseDown = (e) => {
+    if (scale > 1 && scrollWrapperRef.current) {
+      e.preventDefault();
+      setIsDragging(true);
+      dragStartRef.current = {
+        x: e.clientX,
+        y: e.clientY,
+        scrollLeft: scrollWrapperRef.current.scrollLeft,
+        scrollTop: scrollWrapperRef.current.scrollTop
+      };
+    }
+  };
+
+  const handleMouseMove = (e) => {
+    if (isDragging && scale > 1 && scrollWrapperRef.current) {
+      e.preventDefault();
+      const deltaX = e.clientX - dragStartRef.current.x;
+      const deltaY = e.clientY - dragStartRef.current.y;
+      scrollWrapperRef.current.scrollLeft = dragStartRef.current.scrollLeft - deltaX;
+      scrollWrapperRef.current.scrollTop = dragStartRef.current.scrollTop - deltaY;
+    }
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
   };
 
   const handlePrev = (e) => {
@@ -172,7 +222,7 @@ export default function PdfViewer({ url, title, className = '' }) {
 
   const handleZoomIn = (e) => {
     e.stopPropagation();
-    setScale((s) => Math.min(s + 0.25, 3.5));
+    setScale((s) => Math.min(s + 0.25, 4.0));
   };
 
   const handleZoomOut = (e) => {
@@ -189,6 +239,10 @@ export default function PdfViewer({ url, title, className = '' }) {
     e.stopPropagation();
     setScale(1.0);
     setRotation(0);
+    if (scrollWrapperRef.current) {
+      scrollWrapperRef.current.scrollLeft = 0;
+      scrollWrapperRef.current.scrollTop = 0;
+    }
   };
 
   return (
@@ -196,25 +250,32 @@ export default function PdfViewer({ url, title, className = '' }) {
       ref={containerRef}
       className={`w-full bg-slate-900/95 rounded-xl overflow-hidden flex flex-col shadow-inner select-none ${className}`}
     >
-      {/* Viewer Main Body */}
+      {/* Viewer Main Body with 4-way pan and drag */}
       <div
         ref={scrollWrapperRef}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
         onTouchCancel={handleTouchEnd}
-        style={{ touchAction: scale > 1 ? 'pan-x pan-y' : 'pan-y' }}
-        className="relative w-full min-h-[350px] sm:min-h-[500px] flex items-center justify-center p-2 sm:p-4 overflow-auto"
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+        style={{ 
+          touchAction: scale > 1 ? 'none' : 'pan-y',
+          cursor: scale > 1 ? (isDragging ? 'grabbing' : 'grab') : 'default'
+        }}
+        className="relative w-full min-h-[350px] sm:min-h-[500px] overflow-auto p-2 sm:p-4 flex"
       >
         {loading && (
-          <div className="flex flex-col items-center gap-3 text-amber-400 py-12">
+          <div className="m-auto flex flex-col items-center gap-3 text-amber-400 py-12">
             <Loader2 className="w-8 h-8 animate-spin" />
             <p className="text-xs font-semibold text-gray-300">Rendering document...</p>
           </div>
         )}
 
         {error && (
-          <div className="flex flex-col items-center gap-3 p-6 text-center max-w-sm">
+          <div className="m-auto flex flex-col items-center gap-3 p-6 text-center max-w-sm">
             <div className="w-12 h-12 rounded-full bg-red-500/10 text-red-400 flex items-center justify-center">
               <AlertCircle className="w-6 h-6" />
             </div>
@@ -231,12 +292,14 @@ export default function PdfViewer({ url, title, className = '' }) {
           </div>
         )}
 
-        <canvas
-          ref={canvasRef}
-          className={`mx-auto rounded-lg shadow-2xl bg-white max-w-none transition-opacity duration-200 ${
-            loading || error ? 'hidden' : 'block'
-          }`}
-        />
+        <div className="m-auto flex items-center justify-center">
+          <canvas
+            ref={canvasRef}
+            className={`rounded-lg shadow-2xl bg-white max-w-none transition-opacity duration-200 ${
+              loading || error ? 'hidden' : 'block'
+            }`}
+          />
+        </div>
       </div>
 
       {/* Floating Bottom Controls (Page nav, Rotation & Zoom) */}

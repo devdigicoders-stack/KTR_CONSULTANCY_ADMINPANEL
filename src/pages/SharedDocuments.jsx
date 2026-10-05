@@ -528,6 +528,19 @@ const SharedDocuments = () => {
     );
   }
 
+  // Helper to normalize document titles and strip auto-increment suffixes like (1/6), (1 of 6), (1/2 - filename), - Page 1
+  const getNormalizedDocName = (rawName) => {
+    if (!rawName || typeof rawName !== 'string') return 'Document';
+    let clean = rawName.trim();
+    clean = clean.replace(/\s*\(\s*\d+\s*[\/of]\s*\d+[^)]*\)/gi, '');
+    clean = clean.replace(/\s*\(\s*(?:page|part|file)\s*\d+[^)]*\)/gi, '');
+    clean = clean.replace(/\s*-\s*page\s*\d+/gi, '');
+    clean = clean.replace(/\s*-\s*part\s*\d+/gi, '');
+    clean = clean.replace(/\s*-\s*file\s*\d+/gi, '');
+    clean = clean.replace(/\s*_\s*page\s*\d+/gi, '');
+    return clean.trim() || rawName.trim();
+  };
+
   // Assemble all available documents matching the main Documents repository
   const groupedDocsMap = new Map();
   const seenUrls = new Set();
@@ -547,13 +560,15 @@ const SharedDocuments = () => {
     if (!cd.fileUrl || seenUrls.has(cd.fileUrl)) return;
     seenUrls.add(cd.fileUrl);
 
-    const groupKey = (cd.name || 'Document').trim();
-    const docNotes = getNoteForDoc(groupKey, cd);
+    const rawName = (cd.name || 'Document').trim();
+    const groupKey = getNormalizedDocName(rawName);
+    const docNotes = getNoteForDoc(groupKey, cd) || getNoteForDoc(rawName, cd);
     const docEntry = {
       id: `cd_${cd._id || idx}`,
       docId: cd._id,
       name: groupKey,
       title: groupKey,
+      fileTitle: rawName,
       fileUrl: cd.fileUrl,
       docType: cd.docType || 'customDocument',
       category: cd.category || 'Uploaded File',
@@ -587,13 +602,15 @@ const SharedDocuments = () => {
       if (!fDoc.fileUrl || seenUrls.has(fDoc.fileUrl)) return;
       seenUrls.add(fDoc.fileUrl);
 
-      const groupKey = (fDoc.name || 'Folder Document').trim();
-      const docNotes = getNoteForDoc(groupKey, fDoc);
+      const rawName = (fDoc.name || 'Folder Document').trim();
+      const groupKey = getNormalizedDocName(rawName);
+      const docNotes = getNoteForDoc(groupKey, fDoc) || getNoteForDoc(rawName, fDoc);
       const docEntry = {
         id: `folderdoc_${f._id}_${fDoc._id || fIdx}`,
         docId: fDoc._id,
         name: groupKey,
         title: groupKey,
+        fileTitle: rawName,
         fileUrl: fDoc.fileUrl,
         docType: 'folderDocument',
         category: `Folder: ${f.folderName || f.name}`,
@@ -907,7 +924,7 @@ const SharedDocuments = () => {
                             </h3>
                             {hasMulti && (
                               <span className="text-[10px] font-bold bg-blue-50 text-blue-700 px-1.5 py-0.2 rounded border border-blue-200">
-                                {doc.files.length} Pages
+                                {doc.files.length} Files
                               </span>
                             )}
                           </div>

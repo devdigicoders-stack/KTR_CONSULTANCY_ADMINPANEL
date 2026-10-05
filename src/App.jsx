@@ -28,6 +28,11 @@ import Users from './pages/Users';
 import CreatePaymentLink from './pages/CreatePaymentLink';
 import Invoices from './pages/Invoices';
 import SharedDocuments from './pages/SharedDocuments';
+import BankFormsRepository from './pages/BankFormsRepository';
+import CreateClientForm from './pages/CreateClientForm';
+import RequestDocumentsForm from './pages/RequestDocumentsForm';
+import PublicClientForm from './pages/PublicClientForm';
+import PublicDocUpload from './pages/PublicDocUpload';
 
 // ProtectedRoute component
 const ProtectedRoute = ({ children }) => {
@@ -51,8 +56,10 @@ function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           
-          {/* Public Shared Client Documents Route (No login required) */}
+          {/* Public Shared Client Documents & Forms (No login required) */}
           <Route path="/shared-docs/:id" element={<SharedDocuments />} />
+          <Route path="/form/:id" element={<PublicClientForm />} />
+          <Route path="/upload-docs/:id" element={<PublicDocUpload />} />
           
           {/* Protected Routes */}
           <Route path="/" element={
@@ -65,7 +72,20 @@ function App() {
             <Route path="clients/new" element={<AddNewClient />} />
             <Route path="clients/edit/:id" element={<EditClient />} />
             <Route path="clients/:id" element={<ClientDetails />} />
-            <Route path="documents" element={<Documents />} />
+            
+            {/* Repository & Client Data Collection for Staff & Admin */}
+            <Route path="bank-forms" element={<BankFormsRepository defaultScope="common" />} />
+            <Route path="my-private-docs" element={<BankFormsRepository defaultScope="private" />} />
+            <Route path="client-forms" element={<CreateClientForm />} />
+            <Route path="doc-requests" element={<RequestDocumentsForm />} />
+
+            {/* Payments & Invoices (Accessible to Staff & Admin) */}
+            <Route path="payments" element={<Invoices />} />
+            <Route path="payments/create" element={<CreatePaymentLink />} />
+            <Route path="payments/invoices" element={<Invoices />} />
+
+            {/* Admin-Only Routes */}
+            <Route path="documents" element={<AdminRoute><Documents /></AdminRoute>} />
             <Route path="cibil" element={<AdminRoute><Cibil /></AdminRoute>} />
             <Route path="credit-info" element={<AdminRoute><CreditInfo /></AdminRoute>} />
             <Route path="services" element={<AdminRoute><Services /></AdminRoute>} />
@@ -78,12 +98,9 @@ function App() {
             <Route path="chain-deeds" element={<AdminRoute><ChainDeeds /></AdminRoute>} />
             <Route path="property-assessments" element={<AdminRoute><PropertyAssessments /></AdminRoute>} />
             <Route path="eligibility-checks" element={<AdminRoute><EligibilityChecks /></AdminRoute>} />
-            <Route path="payments" element={<AdminRoute><Invoices /></AdminRoute>} />
-            <Route path="payments/create" element={<AdminRoute><CreatePaymentLink /></AdminRoute>} />
-            <Route path="payments/invoices" element={<AdminRoute><Invoices /></AdminRoute>} />
             <Route path="reports" element={<AdminRoute><Reports /></AdminRoute>} />
             <Route path="profile" element={<Profile />} />
-            <Route path="users" element={<Users />} />
+            <Route path="users" element={<AdminRoute><Users /></AdminRoute>} />
           </Route>
           
           <Route path="*" element={<Navigate to="/" replace />} />

@@ -1,17 +1,19 @@
 import React, { useState } from 'react';
 import { 
   AlertCircle, CheckCircle2, Clock, PlusCircle, Check, X, 
-  RotateCcw, Trash2, Calendar, User, FileText, ArrowRight, Filter
+  RotateCcw, Trash2, Calendar, User, FileText, ChevronDown, ChevronUp, Share2, Copy
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import api from '../../api/axios';
 
 const PendencyTab = ({ client, onRefresh }) => {
   const pendencies = client?.pendencies || [];
   
-  const [filter, setFilter] = useState('All'); // 'All', 'Pending', 'Resolved'
   const [showAddModal, setShowAddModal] = useState(false);
   const [showResolveModal, setShowResolveModal] = useState(false);
   const [selectedPendency, setSelectedPendency] = useState(null);
+  const [showDetails, setShowDetails] = useState({});
+  const [showResolvedSection, setShowResolvedSection] = useState(false);
 
   // Add Form State
   const [title, setTitle] = useState('');
@@ -26,11 +28,9 @@ const PendencyTab = ({ client, onRefresh }) => {
   const pendingList = pendencies.filter(p => p.status !== 'Resolved');
   const resolvedList = pendencies.filter(p => p.status === 'Resolved');
 
-  const filteredPendencies = pendencies.filter(p => {
-    if (filter === 'Pending') return p.status !== 'Resolved';
-    if (filter === 'Resolved') return p.status === 'Resolved';
-    return true;
-  });
+  const toggleDetails = (id) => {
+    setShowDetails(prev => ({ ...prev, [id]: !prev[id] }));
+  };
 
   const handleAddSubmit = async (e) => {
     e.preventDefault();
@@ -46,11 +46,12 @@ const PendencyTab = ({ client, onRefresh }) => {
         setShowAddModal(false);
         setTitle('');
         setDescription('');
+        toast.success('Pendency added');
         if (onRefresh) onRefresh();
       }
     } catch (err) {
       console.error('Error adding pendency:', err);
-      alert('Failed to add pendency: ' + (err.response?.data?.message || err.message));
+      toast.error('Failed to add pendency');
     } finally {
       setSubmitting(false);
     }
@@ -77,11 +78,12 @@ const PendencyTab = ({ client, onRefresh }) => {
         setShowResolveModal(false);
         setSelectedPendency(null);
         setResolutionNotes('');
+        toast.success(`Pendency marked as ${resolveStatus}`);
         if (onRefresh) onRefresh();
       }
     } catch (err) {
       console.error('Error updating pendency:', err);
-      alert('Failed to update pendency: ' + (err.response?.data?.message || err.message));
+      toast.error('Failed to update pendency');
     } finally {
       setResolving(false);
     }
@@ -92,271 +94,255 @@ const PendencyTab = ({ client, onRefresh }) => {
     try {
       const res = await api.delete(`/clients/${client._id}/pendencies/${pendencyId}`);
       if (res.data.success) {
+        toast.success('Pendency removed');
         if (onRefresh) onRefresh();
       }
     } catch (err) {
       console.error('Error deleting pendency:', err);
-      alert('Failed to delete pendency');
+      toast.error('Failed to delete pendency');
     }
   };
 
+  const handleCopyPendingList = () => {
+    if (pendingList.length === 0) {
+      toast.error('No pending items to copy');
+      return;
+    }
+    const lines = pendingList.map((p, i) => `${i + 1}. ${p.title}${p.description ? ` (${p.description})` : ''}`).join('\n');
+    const text = `📋 Pending Requirements for: ${client?.fullName || 'Client'}\n\n${lines}\n\nPlease submit the required documents/details at earliest.\n- KTR Consultants`;
+    navigator.clipboard.writeText(text);
+    toast.success('Pending list copied to clipboard!');
+  };
+
+  const handleSharePendingWhatsApp = () => {
+    if (pendingList.length === 0) return;
+    const lines = pendingList.map((p, i) => `${i + 1}. ${p.title}${p.description ? ` (${p.description})` : ''}`).join('\n');
+    const text = `📋 *Pending Requirements for:* ${client?.fullName || 'Client'}\n\n${lines}\n\nPlease submit at earliest.\n- KTR Consultants`;
+    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
+  };
+
   return (
-    <div className="flex flex-col gap-6">
-      {/* Top Banner & Quick Stats */}
-      <div className="bg-white rounded-2xl p-5 sm:p-6 border border-gray-100 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+    <div className="flex flex-col gap-4">
+      {/* Top Banner & Actions */}
+      <div className="bg-white rounded-2xl p-4 sm:p-5 border border-gray-100 shadow-xs flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <div>
-          <h3 className="text-base font-black text-[#081326] flex items-center gap-2">
-            <Clock className="w-5 h-5 text-[#f59e0b]" /> Continuous Pendency Tracking
+          <h3 className="text-sm sm:text-base font-black text-[#081326] flex items-center gap-2">
+            <Clock className="w-4 h-4 text-[#f59e0b]" /> Continuous Pendency Tracking
           </h3>
-          <p className="text-xs text-gray-500 font-medium mt-1">
-            Track missing documents, requirements, and full resolution history across the entire case lifecycle.
+          <p className="text-[11px] text-gray-500 font-medium">
+            Pending requirements stay at the top. Resolved items move below.
           </p>
         </div>
 
-        <div className="flex items-center gap-3 w-full md:w-auto">
-          <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 px-3.5 py-2 rounded-xl">
-            <AlertCircle className="w-4 h-4 text-amber-600" />
-            <div>
-              <p className="text-[10px] text-amber-700 font-bold uppercase tracking-wider">Active Pendency</p>
-              <p className="text-sm font-black text-amber-900 leading-none">{pendingList.length}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 bg-green-50 border border-green-200 px-3.5 py-2 rounded-xl">
-            <CheckCircle2 className="w-4 h-4 text-green-600" />
-            <div>
-              <p className="text-[10px] text-green-700 font-bold uppercase tracking-wider">Resolved History</p>
-              <p className="text-sm font-black text-green-900 leading-none">{resolvedList.length}</p>
-            </div>
-          </div>
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          {pendingList.length > 0 && (
+            <>
+              <button
+                onClick={handleCopyPendingList}
+                className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer"
+                title="Copy formatted list for WhatsApp/Email"
+              >
+                <Copy className="w-3.5 h-3.5" /> Copy List
+              </button>
+              <button
+                onClick={handleSharePendingWhatsApp}
+                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer shadow-xs"
+                title="Share on WhatsApp"
+              >
+                <Share2 className="w-3.5 h-3.5" /> Share
+              </button>
+            </>
+          )}
           <button
             onClick={() => setShowAddModal(true)}
-            className="ml-auto md:ml-0 px-4 py-2.5 bg-[#081326] text-white hover:bg-[#11203d] rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-2 cursor-pointer shrink-0"
+            className="px-3.5 py-1.5 bg-[#081326] text-white hover:bg-[#11203d] rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer ml-auto sm:ml-0"
           >
-            <PlusCircle className="w-4 h-4 text-[#f59e0b]" /> + Add Pendency
+            <PlusCircle className="w-4 h-4 text-[#f59e0b]" /> + Add Requirement
           </button>
         </div>
       </div>
 
-      {/* Filter Tabs */}
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex gap-2 bg-gray-100 p-1 rounded-xl">
-          {[
-            { key: 'All', label: `All Pendencies (${pendencies.length})` },
-            { key: 'Pending', label: `Open / Active (${pendingList.length})` },
-            { key: 'Resolved', label: `Resolved History (${resolvedList.length})` }
-          ].map(tab => (
-            <button
-              key={tab.key}
-              onClick={() => setFilter(tab.key)}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                filter === tab.key
-                  ? 'bg-white text-[#081326] shadow-xs'
-                  : 'text-gray-500 hover:text-[#081326]'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
+      {/* 1. TOP SECTION: ACTIVE PENDING REQUIREMENTS */}
+      <div className="space-y-2.5">
+        <div className="flex items-center justify-between px-1">
+          <h4 className="text-xs font-black text-[#081326] uppercase tracking-wider flex items-center gap-1.5">
+            <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
+            <span>Pending Requirements ({pendingList.length})</span>
+          </h4>
         </div>
-      </div>
 
-      {/* Pendency Timeline List */}
-      <div className="space-y-4">
-        {filteredPendencies.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-gray-100 p-10 text-center shadow-sm">
-            <div className="w-12 h-12 rounded-full bg-amber-50 text-[#f59e0b] flex items-center justify-center mx-auto mb-3">
-              <Clock className="w-6 h-6" />
-            </div>
-            <h4 className="text-sm font-black text-[#081326] mb-1">No pendencies in this view</h4>
-            <p className="text-xs text-gray-400 font-medium mb-4">
-              {filter === 'Pending' 
-                ? 'All documents and requirements have been resolved for this client!' 
-                : 'No pendency records have been logged yet.'}
-            </p>
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="px-4 py-2 bg-[#081326] text-white rounded-xl text-xs font-bold hover:bg-[#11203d] transition-colors cursor-pointer inline-flex items-center gap-2"
-            >
-              <PlusCircle className="w-4 h-4 text-[#f59e0b]" /> Add New Pendency
-            </button>
+        {pendingList.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-green-100 p-6 text-center shadow-xs">
+            <CheckCircle2 className="w-8 h-8 text-green-600 mx-auto mb-2" />
+            <h5 className="text-xs font-black text-green-900">Zero Pending Items</h5>
+            <p className="text-[11px] text-gray-500 mt-0.5">All case documents and requirements are currently cleared.</p>
           </div>
         ) : (
-          filteredPendencies.slice().reverse().map((item, idx) => {
-            const isResolved = item.status === 'Resolved';
+          pendingList.map((item, idx) => {
+            const hasDetails = showDetails[item._id];
+
             return (
               <div 
                 key={item._id || idx}
-                className={`bg-white rounded-2xl border transition-all p-5 shadow-sm flex flex-col gap-4 ${
-                  isResolved 
-                    ? 'border-green-100 bg-green-50/10' 
-                    : 'border-amber-200 bg-white hover:border-amber-300 shadow-xs'
-                }`}
+                className="bg-white rounded-xl border border-amber-200/90 hover:border-amber-300 p-3.5 shadow-xs flex flex-col gap-2 transition-all"
               >
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                  <div className="flex items-start gap-3">
-                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border ${
-                      isResolved 
-                        ? 'bg-green-50 text-green-600 border-green-200' 
-                        : 'bg-amber-50 text-amber-600 border-amber-200'
-                    }`}>
-                      {isResolved ? <CheckCircle2 className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
+                <div className="flex items-start justify-between gap-2.5">
+                  <div className="flex items-start gap-2.5 flex-1">
+                    <div className="w-7 h-7 rounded-lg bg-amber-50 text-amber-600 border border-amber-200 flex items-center justify-center shrink-0 mt-0.5">
+                      <AlertCircle className="w-4 h-4" />
                     </div>
-                    <div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h4 className="text-sm font-black text-[#081326]">{item.title}</h4>
-                        <span className={`px-2.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider ${
-                          isResolved 
-                            ? 'bg-green-100 text-green-800' 
-                            : item.status === 'In Progress'
-                            ? 'bg-blue-100 text-blue-800'
-                            : 'bg-amber-100 text-amber-800'
-                        }`}>
-                          {item.status || 'Pending'}
-                        </span>
-                      </div>
+                    <div className="flex-1">
+                      <h4 className="text-xs sm:text-sm font-black text-[#081326] leading-snug">{item.title}</h4>
                       {item.description && (
-                        <p className="text-xs text-gray-600 font-medium mt-1 leading-relaxed">
-                          {item.description}
-                        </p>
+                        <p className="text-[11px] text-gray-600 font-medium mt-0.5 leading-relaxed">{item.description}</p>
                       )}
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 self-end sm:self-auto">
+                  <div className="flex items-center gap-1.5 shrink-0">
                     <button
                       onClick={() => handleOpenResolve(item)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs ${
-                        isResolved
-                          ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                          : 'bg-green-600 hover:bg-green-700 text-white'
-                      }`}
+                      className="px-2.5 py-1 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1 cursor-pointer shadow-xs"
+                      title="Mark as Resolved"
                     >
-                      {isResolved ? (
-                        <>
-                          <RotateCcw className="w-3 h-3" /> Update / Reopen
-                        </>
-                      ) : (
-                        <>
-                          <Check className="w-3.5 h-3.5" /> Mark Resolved
-                        </>
-                      )}
+                      <Check className="w-3.5 h-3.5 stroke-[3]" /> Mark Resolved
                     </button>
                     <button
                       onClick={() => handleDeletePendency(item._id)}
-                      className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
-                      title="Remove entry"
+                      className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                      title="Delete entry"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 </div>
 
-                {/* Metadata Tracking Row */}
-                <div className="pt-3 border-t border-gray-100 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-xs bg-gray-50/50 p-3 rounded-xl">
-                  <div className="flex items-center gap-2">
-                    <Calendar className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                    <div>
-                      <span className="text-[10px] text-gray-400 uppercase font-bold block">Date Added</span>
-                      <span className="font-bold text-gray-700">
-                        {item.addedAt ? new Date(item.addedAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'N/A'}
-                      </span>
-                    </div>
-                  </div>
+                {/* Details toggle */}
+                <div className="flex items-center justify-between pt-2 border-t border-gray-100 text-[10px] text-gray-400 font-medium">
+                  <span>Added: {item.addedAt ? new Date(item.addedAt).toLocaleDateString('en-IN') : 'Recent'}</span>
+                  <button
+                    onClick={() => toggleDetails(item._id)}
+                    className="text-[10px] font-bold text-gray-500 hover:text-[#081326] flex items-center gap-0.5 cursor-pointer"
+                  >
+                    {hasDetails ? <>Hide Details <ChevronUp className="w-3 h-3" /></> : <>Details / History <ChevronDown className="w-3 h-3" /></>}
+                  </button>
+                </div>
 
-                  <div className="flex items-center gap-2">
-                    <User className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                {hasDetails && (
+                  <div className="pt-2 border-t border-gray-100 grid grid-cols-2 gap-2 text-[10px] bg-gray-50/70 p-2 rounded-lg">
                     <div>
-                      <span className="text-[10px] text-gray-400 uppercase font-bold block">Added By</span>
+                      <span className="font-bold text-gray-400 block">Added By</span>
                       <span className="font-bold text-gray-700">{item.addedByName || 'Staff / Admin'}</span>
                     </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className={`w-3.5 h-3.5 shrink-0 ${isResolved ? 'text-green-600' : 'text-gray-300'}`} />
                     <div>
-                      <span className="text-[10px] text-gray-400 uppercase font-bold block">Date Resolved</span>
-                      <span className={`font-bold ${isResolved ? 'text-green-700' : 'text-gray-400 italic'}`}>
-                        {item.resolvedAt 
-                          ? new Date(item.resolvedAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) 
-                          : 'Pending resolution'}
+                      <span className="font-bold text-gray-400 block">Timestamp</span>
+                      <span className="font-bold text-gray-700">
+                        {item.addedAt ? new Date(item.addedAt).toLocaleString('en-IN') : 'N/A'}
                       </span>
                     </div>
                   </div>
-
-                  {item.resolutionNotes && (
-                    <div className="sm:col-span-2 md:col-span-3 pt-2 border-t border-gray-200/50 flex items-start gap-2">
-                      <FileText className="w-3.5 h-3.5 text-green-600 shrink-0 mt-0.5" />
-                      <p className="text-[11px] text-green-900 font-medium">
-                        <strong className="font-bold">Resolution Note:</strong> {item.resolutionNotes}
-                        {item.resolvedByName && <span className="text-green-700 ml-1 font-normal">({item.resolvedByName})</span>}
-                      </p>
-                    </div>
-                  )}
-                </div>
+                )}
               </div>
             );
           })
         )}
       </div>
 
+      {/* 2. BOTTOM SECTION: COMPACT RESOLVED / RECEIVED HISTORY */}
+      {resolvedList.length > 0 && (
+        <div className="mt-3 space-y-2">
+          <button
+            onClick={() => setShowResolvedSection(prev => !prev)}
+            className="w-full bg-gray-50 hover:bg-gray-100 p-3 rounded-xl border border-gray-200/70 flex items-center justify-between text-xs font-bold text-gray-700 transition-colors cursor-pointer"
+          >
+            <span className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-green-600" />
+              <span>Received / Resolved Requirements ({resolvedList.length})</span>
+            </span>
+            {showResolvedSection ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </button>
+
+          {showResolvedSection && (
+            <div className="space-y-2 pl-2">
+              {resolvedList.slice().reverse().map((item, idx) => (
+                <div key={item._id || idx} className="bg-white rounded-xl border border-green-100 p-3 shadow-xs flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 truncate">
+                    <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
+                    <span className="text-xs font-bold text-[#081326] truncate">{item.title}</span>
+                    {item.resolutionNotes && (
+                      <span className="text-[10px] text-gray-400 truncate italic">({item.resolutionNotes})</span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className="text-[10px] text-gray-400">
+                      {item.resolvedAt ? new Date(item.resolvedAt).toLocaleDateString('en-IN') : ''}
+                    </span>
+                    <button
+                      onClick={() => handleOpenResolve(item)}
+                      className="px-2 py-0.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded text-[10px] font-bold cursor-pointer"
+                      title="Reopen as pending"
+                    >
+                      Reopen
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Add Pendency Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-[#081326]/60 backdrop-blur-sm" onClick={() => setShowAddModal(false)}></div>
-          <div className="relative bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-base font-black text-[#081326] flex items-center gap-2">
-                <PlusCircle className="w-5 h-5 text-[#f59e0b]" /> Add New Pendency Requirement
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#081326]/70 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 animate-in fade-in zoom-in duration-200">
+            <div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-3">
+              <h3 className="font-black text-sm text-[#081326] flex items-center gap-2">
+                <PlusCircle className="w-4 h-4 text-[#f59e0b]" /> Add Case Pendency / Requirement
               </h3>
               <button onClick={() => setShowAddModal(false)} className="text-gray-400 hover:text-gray-600">
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
             <form onSubmit={handleAddSubmit} className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1">
-                  Pendency Requirement / Document *
-                </label>
+                <label className="block text-[11px] font-bold text-gray-500 mb-1.5">Requirement Title *</label>
                 <input
                   type="text"
-                  placeholder="e.g. 3 Months Salary Slips, 2 Years ITR, Electricity Bill"
+                  placeholder="e.g. 6 Months Bank Statement Required"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
+                  autoFocus
                   required
-                  className="w-full px-3.5 py-2.5 text-xs border border-gray-200 rounded-lg outline-none focus:border-amber-500 font-medium"
+                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold outline-none focus:border-[#f59e0b]"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1">
-                  Details / Instructions (Optional)
-                </label>
+                <label className="block text-[11px] font-bold text-gray-500 mb-1.5">Detailed Description / Instructions (Optional)</label>
                 <textarea
-                  placeholder="Specify details (e.g. Needs password for PDF or signed copy with computation)"
+                  rows="3"
+                  placeholder="e.g. Needs password-free PDF with latest salary credit transactions"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  rows={3}
-                  className="w-full px-3.5 py-2.5 text-xs border border-gray-200 rounded-lg outline-none focus:border-amber-500 font-medium"
-                />
+                  className="w-full px-3.5 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-[#f59e0b]"
+                ></textarea>
               </div>
 
-              <div className="bg-amber-50 p-3 rounded-xl border border-amber-200 text-[11px] text-amber-900 leading-relaxed font-medium">
-                ⚡ This pendency will be continuously logged with the current timestamp and staff signature in the client case record.
-              </div>
-
-              <div className="flex gap-3 pt-2">
+              <div className="flex gap-2 pt-2">
                 <button
                   type="button"
                   onClick={() => setShowAddModal(false)}
-                  className="flex-1 py-2.5 bg-gray-100 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-200 cursor-pointer"
+                  className="flex-1 py-2.5 border border-gray-200 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="flex-1 py-2.5 bg-[#081326] text-white rounded-xl text-xs font-bold hover:bg-[#11203d] disabled:opacity-50 cursor-pointer"
+                  className="flex-1 py-2.5 bg-[#081326] text-white rounded-xl text-xs font-bold hover:bg-[#11203d] disabled:opacity-60"
                 >
                   {submitting ? 'Adding...' : 'Save Pendency'}
                 </button>
@@ -366,69 +352,63 @@ const PendencyTab = ({ client, onRefresh }) => {
         </div>
       )}
 
-      {/* Resolve / Update Pendency Modal */}
+      {/* Resolve / Status Modal */}
       {showResolveModal && selectedPendency && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-[#081326]/60 backdrop-blur-sm" onClick={() => setShowResolveModal(false)}></div>
-          <div className="relative bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-base font-black text-[#081326] flex items-center gap-2">
-                <CheckCircle2 className="w-5 h-5 text-green-600" /> Update Pendency Status
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#081326]/70 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 animate-in fade-in zoom-in duration-200">
+            <div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-3">
+              <h3 className="font-black text-sm text-[#081326] flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-green-600" /> Update Pendency Status
               </h3>
               <button onClick={() => setShowResolveModal(false)} className="text-gray-400 hover:text-gray-600">
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
             <form onSubmit={handleResolveSubmit} className="space-y-4">
-              <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 text-xs">
-                <span className="text-[10px] text-gray-400 uppercase font-bold block mb-0.5">Pendency Item</span>
-                <p className="font-bold text-[#081326]">{selectedPendency.title}</p>
-                {selectedPendency.description && (
-                  <p className="text-gray-500 text-[11px] mt-1">{selectedPendency.description}</p>
-                )}
+              <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                <p className="text-xs font-black text-[#081326]">{selectedPendency.title}</p>
+                {selectedPendency.description && <p className="text-[11px] text-gray-500 mt-0.5">{selectedPendency.description}</p>}
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1">Status</label>
+                <label className="block text-[11px] font-bold text-gray-500 mb-1.5">Change Status</label>
                 <select
                   value={resolveStatus}
                   onChange={(e) => setResolveStatus(e.target.value)}
-                  className="w-full px-3.5 py-2.5 text-xs border border-gray-200 rounded-lg outline-none focus:border-blue-500 font-bold cursor-pointer"
+                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold outline-none focus:border-[#f59e0b]"
                 >
-                  <option value="Resolved">✅ Resolved (Document Received / Requirement Met)</option>
-                  <option value="In Progress">🔄 In Progress (Document Awaited from Client)</option>
-                  <option value="Pending">⏳ Pending (Open Requirement)</option>
+                  <option value="Resolved">Resolved / Received ✓</option>
+                  <option value="In Progress">In Progress</option>
+                  <option value="Pending">Pending / Open</option>
                 </select>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1">
-                  Resolution Remarks / Notes
-                </label>
-                <textarea
-                  placeholder="e.g. Received 3 months salary slips via WhatsApp and uploaded to Documents section."
+                <label className="block text-[11px] font-bold text-gray-500 mb-1.5">Resolution Notes (Optional)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Document received via email / verified"
                   value={resolutionNotes}
                   onChange={(e) => setResolutionNotes(e.target.value)}
-                  rows={3}
-                  className="w-full px-3.5 py-2.5 text-xs border border-gray-200 rounded-lg outline-none focus:border-blue-500 font-medium"
+                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-[#f59e0b]"
                 />
               </div>
 
-              <div className="flex gap-3 pt-2">
+              <div className="flex gap-2 pt-2">
                 <button
                   type="button"
                   onClick={() => setShowResolveModal(false)}
-                  className="flex-1 py-2.5 bg-gray-100 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-200 cursor-pointer"
+                  className="flex-1 py-2.5 border border-gray-200 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={resolving}
-                  className="flex-1 py-2.5 bg-green-600 text-white rounded-xl text-xs font-bold hover:bg-green-700 disabled:opacity-50 cursor-pointer shadow-sm"
+                  className="flex-1 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-xs font-bold shadow-xs disabled:opacity-60"
                 >
-                  {resolving ? 'Updating...' : 'Save Resolution'}
+                  {resolving ? 'Updating...' : 'Confirm Update'}
                 </button>
               </div>
             </form>

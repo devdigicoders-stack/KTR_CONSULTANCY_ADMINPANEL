@@ -3,8 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { 
   Users, UserCheck, UserMinus, FileWarning, Search, Eye, X, RefreshCcw, Download, 
   CheckCircle, Trash2, Edit, AlertTriangle, History, Clock, Phone, Mail, FileText, 
-  Briefcase, IndianRupee, FileCheck, AlertCircle, CheckCircle2, Upload, FileUp, Folder, UserPlus
+  Briefcase, IndianRupee, FileCheck, AlertCircle, CheckCircle2, Upload, FileUp, Folder, UserPlus,
+  Share2, Copy, Check, ChevronDown, ChevronUp, ArrowRight
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import { getAssetUrl } from '../utils/url';
@@ -82,6 +84,39 @@ const Clients = () => {
     fullName: '', mobile: '', occupation: '', panNumber: '',
     aadhaarNumber: '', motherName: '', addressLine1: '', city: '', state: '', pincode: ''
   });
+
+  // Pendency Popup Modal State
+  const [showPendencyModal, setShowPendencyModal] = useState(false);
+  const [pendencyModalClient, setPendencyModalClient] = useState(null);
+  const [copiedPendencyId, setCopiedPendencyId] = useState(null);
+
+  const handleOpenPendencyModal = (client, e) => {
+    if (e) e.stopPropagation();
+    setPendencyModalClient(client);
+    setShowPendencyModal(true);
+  };
+
+  const handleCopyPendencies = (client) => {
+    const active = (client?.pendencies || []).filter(p => p.status !== 'Resolved');
+    if (active.length === 0) {
+      toast.error('No active pendency to copy');
+      return;
+    }
+    const lines = active.map((p, i) => `${i + 1}. ${p.title}${p.description ? ` (${p.description})` : ''}`).join('\n');
+    const text = `📋 Pending Requirements for: ${client?.fullName || 'Client'}\n\n${lines}\n\nPlease submit the required documents at earliest.\n- KTR Consultants`;
+    navigator.clipboard.writeText(text);
+    setCopiedPendencyId(client._id);
+    toast.success('Pending list copied to clipboard!');
+    setTimeout(() => setCopiedPendencyId(null), 3000);
+  };
+
+  const handleSharePendencies = (client) => {
+    const active = (client?.pendencies || []).filter(p => p.status !== 'Resolved');
+    if (active.length === 0) return;
+    const lines = active.map((p, i) => `${i + 1}. ${p.title}${p.description ? ` (${p.description})` : ''}`).join('\n');
+    const text = `📋 *Pending Requirements for:* ${client?.fullName || 'Client'}\n\n${lines}\n\nPlease submit at earliest.\n- KTR Consultants`;
+    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
+  };
 
   const fetchClients = async () => {
     try {
@@ -281,9 +316,8 @@ const Clients = () => {
 
         const formData = new FormData();
         const baseName = uploadFormData.docName.trim();
-        const finalName = total > 1 ? `${baseName} (${i + 1}/${total} - ${file.name})` : baseName;
-        formData.append('docName', finalName);
-        formData.append('documentName', finalName);
+        formData.append('docName', baseName);
+        formData.append('documentName', baseName);
         formData.append('category', uploadFormData.category);
         if (uploadFormData.notes.trim()) {
           formData.append('notes', uploadFormData.notes.trim());
@@ -451,8 +485,106 @@ const Clients = () => {
             </div>
           </div>
 
-          {/* Table: Client Name, Mobile No., Profession, Loan Amount, Case Type, Current Pendency, Action, Status */}
-          <div className="overflow-x-auto scrollbar-hide">
+          {/* Mobile Cards View (Visible on phones for easy tap & navigation) */}
+          <div className="block md:hidden divide-y divide-gray-100">
+            {loading ? (
+              <div className="p-8 text-center text-xs font-bold text-gray-500">Loading clients...</div>
+            ) : filteredClients.length === 0 ? (
+              <div className="p-8 text-center text-xs font-bold text-gray-500">No client cases found.</div>
+            ) : (
+              filteredClients.map((client) => {
+                const activePendencies = (client.pendencies || []).filter(p => p.status !== 'Resolved');
+
+                return (
+                  <div 
+                    key={client._id}
+                    onClick={() => openPreview(client)}
+                    className="p-4 bg-white hover:bg-gray-50 active:bg-gray-100 transition-colors flex flex-col gap-3 cursor-pointer"
+                  >
+                    {/* Top Row: Avatar + Name + Status */}
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                        {client.photoUrl ? (
+                          <img src={getAssetUrl(client.photoUrl)} className="w-10 h-10 rounded-full object-cover shadow-sm border border-gray-100 shrink-0" alt="" />
+                        ) : (
+                          <div className="w-10 h-10 rounded-full bg-[#081326] text-white flex items-center justify-center font-bold text-xs shrink-0">
+                            {client.fullName ? client.fullName.substring(0, 2).toUpperCase() : 'CL'}
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <h4 className="text-sm font-black text-[#081326] truncate flex items-center gap-1.5">
+                            <span>{client.fullName}</span>
+                            <ArrowRight className="w-3.5 h-3.5 text-[#f59e0b] shrink-0" />
+                          </h4>
+                          <p className="text-xs text-gray-500 font-medium truncate mt-0.5">
+                            {client.mobile || 'No Mobile'} • <span className="font-bold text-gray-700">{client.occupation || 'General'}</span>
+                          </p>
+                        </div>
+                      </div>
+                      <StatusBadge status={client.status} isDoc={false} />
+                    </div>
+
+                    {/* Middle Row: Case Type + Loan Amount */}
+                    <div className="flex items-center justify-between bg-gray-50/80 p-2.5 rounded-xl text-xs border border-gray-100">
+                      <div>
+                        <span className="text-[10px] text-gray-400 font-bold uppercase block">Case Type</span>
+                        <span className="font-bold text-[#081326]">{client.caseType || client.loanType || 'General Loan'}</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[10px] text-gray-400 font-bold uppercase block">Loan Amount</span>
+                        <span className="font-black text-emerald-700">{formatCurrency(client.loanAmount)}</span>
+                      </div>
+                    </div>
+
+                    {/* Bottom Row: Pendency Badge + Quick Action Buttons */}
+                    <div className="flex items-center justify-between gap-2 pt-1">
+                      {activePendencies.length === 0 ? (
+                        <span className="text-[11px] font-bold text-green-700 bg-green-50 px-2.5 py-1 rounded-lg border border-green-100 flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3 text-green-600" /> No Pendency
+                        </span>
+                      ) : activePendencies.length === 1 ? (
+                        <button
+                          onClick={(e) => handleOpenPendencyModal(client, e)}
+                          className="text-[11px] font-bold text-amber-900 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200 flex items-center gap-1 truncate max-w-[170px]"
+                        >
+                          <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                          <span className="truncate">{activePendencies[0].title}</span>
+                        </button>
+                      ) : (
+                        <button
+                          onClick={(e) => handleOpenPendencyModal(client, e)}
+                          className="text-[11px] font-black text-amber-950 bg-amber-100/90 border border-amber-300 px-2.5 py-1 rounded-lg flex items-center gap-1 shrink-0"
+                        >
+                          <AlertCircle className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                          <span>{activePendencies.length} Pending → View</span>
+                        </button>
+                      )}
+
+                      <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          onClick={(e) => handleOpenUploadModal(client, e)}
+                          className="px-2.5 py-1 bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200 rounded-lg text-xs font-bold flex items-center gap-1"
+                          title="Add Docs"
+                        >
+                          <FileUp className="w-3 h-3" /> Add Docs
+                        </button>
+                        <button
+                          onClick={(e) => handleOpenCoApplicantModal(client, e)}
+                          className="px-2.5 py-1 bg-purple-50 text-purple-800 hover:bg-purple-100 border border-purple-200 rounded-lg text-xs font-bold"
+                          title="Co-Applicant"
+                        >
+                          {client.coApplicant?.fullName ? 'Co-App ✓' : 'Co-App'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* Desktop Table: Hidden on small mobile screens */}
+          <div className="hidden md:block overflow-x-auto scrollbar-hide">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-gray-50/50 text-[11px] font-black text-gray-500 border-b border-gray-100 tracking-wider">
@@ -481,8 +613,12 @@ const Clients = () => {
 
                     return (
                       <tr key={client._id} className="hover:bg-gray-50/80 transition-colors group">
-                        {/* 1. Client Name */}
-                        <td className="px-5 py-3.5 font-bold text-[#081326] whitespace-nowrap flex items-center gap-3">
+                        {/* 1. Client Name (Clickable) */}
+                        <td 
+                          onClick={() => openPreview(client)}
+                          className="px-5 py-3.5 font-bold text-[#081326] whitespace-nowrap flex items-center gap-3 cursor-pointer hover:text-[#f59e0b] transition-colors"
+                          title="Click to view complete client case details"
+                        >
                           {client.photoUrl ? (
                             <img src={getAssetUrl(client.photoUrl)} className="w-8 h-8 rounded-full object-cover shadow-sm" alt="" />
                           ) : (
@@ -491,7 +627,7 @@ const Clients = () => {
                             </div>
                           )}
                           <div>
-                            <span className="block font-bold text-[#081326]">{client.fullName}</span>
+                            <span className="block font-bold text-[#081326] group-hover:underline">{client.fullName}</span>
                           </div>
                         </td>
 
@@ -519,24 +655,30 @@ const Clients = () => {
                           </span>
                         </td>
 
-                        {/* 6. Current Pendency (Full Display) */}
-                        <td className="px-5 py-3.5 min-w-[220px]">
-                          {activePendencies.length > 0 ? (
-                            <div className="flex flex-col gap-1">
-                              {activePendencies.map((pendency, pIdx) => (
-                                <div 
-                                  key={pIdx}
-                                  className="flex items-center gap-1.5 bg-amber-50 border border-amber-200 text-amber-900 px-2.5 py-1 rounded-lg text-xs font-bold w-fit leading-snug whitespace-normal"
-                                >
-                                  <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                                  <span>{pendency.title}</span>
-                                </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-1 text-green-700 bg-green-50/70 border border-green-100 px-2 py-0.5 rounded-md text-[11px] font-bold w-fit">
+                        {/* 6. Current Pendency (Simplified + Clickable Popup) */}
+                        <td className="px-5 py-3.5 min-w-[180px]">
+                          {activePendencies.length === 0 ? (
+                            <div className="flex items-center gap-1 text-green-700 bg-green-50/70 border border-green-100 px-2.5 py-1 rounded-md text-[11px] font-bold w-fit">
                               <CheckCircle2 className="w-3 h-3 text-green-600 shrink-0" /> No Pendency
                             </div>
+                          ) : activePendencies.length === 1 ? (
+                            <div 
+                              onClick={(e) => handleOpenPendencyModal(client, e)}
+                              className="flex items-center gap-1.5 bg-amber-50 border border-amber-200 text-amber-900 px-2.5 py-1 rounded-lg text-xs font-bold w-fit cursor-pointer hover:bg-amber-100 transition-colors"
+                              title="Click to view/share requirements"
+                            >
+                              <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                              <span>{activePendencies[0].title}</span>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={(e) => handleOpenPendencyModal(client, e)}
+                              className="flex items-center gap-1.5 bg-amber-100/90 hover:bg-amber-200 border border-amber-300 text-amber-950 px-2.5 py-1 rounded-lg text-xs font-black w-fit cursor-pointer transition-colors shadow-xs"
+                              title="Click to view all requirements"
+                            >
+                              <AlertCircle className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                              <span>{activePendencies.length} Pending → View</span>
+                            </button>
                           )}
                         </td>
 
@@ -589,7 +731,7 @@ const Clients = () => {
                           </div>
                         </td>
 
-                        {/* 8. Status (Moved after Action) */}
+                        {/* 8. Status */}
                         <td className="px-5 py-3.5 whitespace-nowrap text-center">
                           <StatusBadge status={client.status} isDoc={false} />
                         </td>
@@ -617,19 +759,19 @@ const Clients = () => {
             
             {/* Header */}
             <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/80">
-              <h2 className="text-lg font-black text-[#081326] flex items-center gap-2">
+              <h2 className="text-base sm:text-lg font-black text-[#081326] flex items-center gap-2">
                 <Eye className="w-5 h-5 text-[#f59e0b] stroke-[2.5]" /> Client Case Review
               </h2>
-              <div className="flex gap-3">
+              <div className="flex gap-2">
                 <button 
                   onClick={() => navigate(`/clients/${selectedClient._id}`)}
-                  className="px-4 py-1.5 bg-[#081326] text-white rounded-lg text-xs font-bold hover:bg-[#11203d] transition-colors shadow-sm cursor-pointer"
+                  className="px-3.5 py-1.5 bg-[#081326] text-white rounded-lg text-xs font-bold hover:bg-[#11203d] transition-colors shadow-xs cursor-pointer"
                 >
-                  View Full Page
+                  Full Page
                 </button>
                 <button 
                   onClick={closePreview} 
-                  className="w-8 h-8 flex items-center justify-center bg-white border border-gray-200 text-gray-500 hover:text-red-500 hover:border-red-200 rounded-lg shadow-sm transition-colors cursor-pointer"
+                  className="w-8 h-8 flex items-center justify-center bg-white border border-gray-200 text-gray-500 hover:text-red-500 hover:border-red-200 rounded-lg shadow-xs transition-colors cursor-pointer"
                 >
                   <X className="w-4 h-4 stroke-[2.5]" />
                 </button>
@@ -1205,6 +1347,108 @@ const Clients = () => {
           </div>
         </div>
       )}
+      {/* Pendency Details Popup Modal with Copy & Share */}
+      {showPendencyModal && pendencyModalClient && (() => {
+        const active = (pendencyModalClient.pendencies || []).filter(p => p.status !== 'Resolved');
+        const resolved = (pendencyModalClient.pendencies || []).filter(p => p.status === 'Resolved');
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#081326]/70 backdrop-blur-xs">
+            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg p-6 animate-in fade-in zoom-in duration-200 space-y-4">
+              <div className="flex justify-between items-start border-b border-gray-100 pb-3">
+                <div>
+                  <h3 className="font-black text-sm text-[#081326] flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-amber-600" /> Pending Case Requirements
+                  </h3>
+                  <p className="text-xs text-gray-500 font-bold mt-0.5">
+                    Client: <span className="text-[#081326]">{pendencyModalClient.fullName}</span> ({pendencyModalClient.mobile || 'No Mobile'})
+                  </p>
+                </div>
+                <button 
+                  onClick={() => { setShowPendencyModal(false); setPendencyModalClient(null); }} 
+                  className="text-gray-400 hover:text-gray-600 p-1"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Active Requirements List */}
+              <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                <h4 className="text-[11px] font-black text-amber-900 uppercase tracking-wider">
+                  Pending Items ({active.length}):
+                </h4>
+                {active.length === 0 ? (
+                  <div className="p-3 bg-green-50 rounded-xl text-xs font-bold text-green-800 flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-green-600" />
+                    <span>No pending requirements. All items cleared!</span>
+                  </div>
+                ) : (
+                  active.map((p, idx) => (
+                    <div key={idx} className="p-3 bg-amber-50/70 border border-amber-200/90 rounded-xl flex items-start gap-2.5">
+                      <span className="w-5 h-5 rounded-full bg-amber-200/80 text-amber-950 text-[10px] font-black flex items-center justify-center shrink-0 mt-0.5">
+                        {idx + 1}
+                      </span>
+                      <div className="flex-1">
+                        <p className="text-xs font-black text-amber-950">{p.title}</p>
+                        {p.description && <p className="text-[11px] text-amber-800 font-medium mt-0.5">{p.description}</p>}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* Received / Resolved Section Below */}
+              {resolved.length > 0 && (
+                <div className="pt-2 border-t border-gray-100 space-y-1.5">
+                  <h4 className="text-[10px] font-black text-green-800 uppercase tracking-wider">
+                    Received / Resolved Items ({resolved.length}):
+                  </h4>
+                  <div className="space-y-1 max-h-28 overflow-y-auto pr-1">
+                    {resolved.map((r, idx) => (
+                      <div key={idx} className="p-2 bg-green-50/60 border border-green-100 rounded-lg flex items-center gap-2 text-xs">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-green-600 shrink-0" />
+                        <span className="text-green-950 font-bold truncate">{r.title}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Action Buttons: Copy, Share, View Case */}
+              <div className="flex flex-col sm:flex-row gap-2 pt-2 border-t border-gray-100">
+                <button
+                  onClick={() => handleCopyPendencies(pendencyModalClient)}
+                  disabled={active.length === 0}
+                  className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  {copiedPendencyId === pendencyModalClient._id ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
+                  <span>{copiedPendencyId === pendencyModalClient._id ? 'Copied!' : 'Copy List'}</span>
+                </button>
+
+                <button
+                  onClick={() => handleSharePendencies(pendencyModalClient)}
+                  disabled={active.length === 0}
+                  className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50"
+                >
+                  <Share2 className="w-4 h-4" />
+                  <span>Share on WhatsApp</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setShowPendencyModal(false);
+                    openPreview(pendencyModalClient);
+                  }}
+                  className="py-2.5 px-4 bg-[#081326] hover:bg-[#11203d] text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Eye className="w-4 h-4 text-[#f59e0b]" />
+                  <span>Open Case</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };
