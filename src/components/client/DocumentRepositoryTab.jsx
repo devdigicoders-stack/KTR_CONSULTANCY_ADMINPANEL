@@ -1035,6 +1035,120 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
 
   const activePreviewFile = previewData ? previewData.files[previewData.activeIndex] : null;
 
+  // Bulk Delete Handler
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [expandedDocGroups, setExpandedDocGroups] = useState({});
+
+  const toggleGroupExpand = (groupId) => {
+    setExpandedDocGroups(prev => ({ ...prev, [groupId]: !prev[groupId] }));
+  };
+
+  // Continuous View Scroll Observer to track active visible doc name
+  useEffect(() => {
+    if (viewMode !== 'continuous') return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const index = Number(entry.target.getAttribute('data-doc-index'));
+            if (!isNaN(index)) {
+              setActiveDocIndex(index);
+            }
+          }
+        });
+      },
+      {
+        root: null,
+        rootMargin: '-20% 0px -70% 0px',
+        threshold: 0
+      }
+    );
+
+    docRefs.current.forEach((el) => {
+      if (el) observer.observe(el);
+    });
+
+    return () => observer.disconnect();
+  }, [viewMode, sortedDocItems.length]);
+
+  // Bulk Delete Selected Documents
+  const handleBulkDelete = async () => {
+    if (selectedDocIds.length === 0) return;
+    const count = selectedDocIds.length;
+    if (!window.confirm(`Are you sure you want to delete ${count} selected document category(ies)? This cannot be undone.`)) {
+      return;
+    }
+
+    setBulkDeleting(true);
+    try {
+      const selectedDocs = sortedDocItems.filter(doc => selectedDocIds.includes(doc.id));
+      const itemsToDelete = [];
+
+      selectedDocs.forEach(doc => {
+        doc.files.forEach(f => {
+          itemsToDelete.push({
+            docType: f.docType || doc.docType,
+            docId: f.docId || f._id,
+            fileUrl: f.fileUrl,
+            docName: doc.name
+          });
+        });
+      });
+
+      await api.post(`/clients/${client._id}/documents/bulk-delete`, {
+        items: itemsToDelete
+      });
+
+      toast.success(`${count} document(s) deleted successfully`);
+      setSelectedDocIds([]);
+      if (onRefresh) await onRefresh();
+    } catch (err) {
+      console.error('Bulk delete failed:', err);
+      toast.error('Bulk delete failed: ' + (err.response?.data?.message || err.message));
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
+
+  // Bulk Download Selected
+  const handleBulkDownload = async () => {
+    const selected = sortedDocItems.filter(item => selectedDocIds.includes(item.id));
+    if (selected.length === 0) return;
+
+    toast.loading(`Downloading ${selected.length} document(s)...`, { id: 'bulk-dl' });
+    try {
+      for (const doc of selected) {
+        for (const file of doc.files) {
+          if (file.fileUrl) {
+            const fullUrl = getAssetUrl(file.fileUrl);
+            const a = document.createElement('a');
+            a.href = fullUrl;
+            a.download = `${doc.name}_${file.name || 'file'}`;
+            a.target = '_blank';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            await new Promise(r => setTimeout(r, 400));
+          }
+        }
+      }
+      toast.success('Download completed!', { id: 'bulk-dl' });
+    } catch (e) {
+      toast.error('Download error', { id: 'bulk-dl' });
+    }
+  };
+
+  // Helper to open upload modal targeting a specific existing category
+  const openUploadForExistingCategory = (categoryName) => {
+    setCustomDocTitle(categoryName);
+    setCustomDocNotes('');
+    setSelectedFiles([]);
+    setShowUploadModal(true);
+  };
+
+  const activeDoc = sortedDocItems[activeDocIndex] || sortedDocItems[0];
+
   return (
     <div className="space-y-6">
       {uploadError && (
@@ -1048,29 +1162,43 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
       {/* ---------------------------------------------------- */}
       {viewMode === 'continuous' ? (
         <div className="space-y-4 animate-in fade-in duration-150">
-          {/* Sticky Viewer Navigation Bar */}
-          <div className="sticky top-16 z-30 bg-white/95 backdrop-blur-md border border-gray-200/90 rounded-2xl p-3 shadow-xs flex items-center justify-between gap-2">
-            <button
-              type="button"
-              onClick={closeContinuousView}
-              className="px-3.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-[#081326] rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              <span>Back to List</span>
-            </button>
+          {/* SAFE TOP STICKY BAR: Shows only active doc name, auto-updates on scroll */}
+          <div className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-gray-200 shadow-sm px-4 py-2.5 flex items-center justify-between gap-3 -mx-4 sm:-mx-6 sm:px-6">
+            <div className="flex items-center gap-3 min-w-0 flex-1">
+              <button
+                type="button"
+                onClick={closeContinuousView}
+                className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-[#081326] rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                <span>Back</span>
+              </button>
 
-            <span className="text-xs font-bold text-gray-700 truncate">
-              Continuous Review ({sortedDocItems.length} Docs)
-            </span>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="px-2 py-0.5 bg-[#081326] text-amber-400 rounded-md text-[10px] font-mono font-bold shrink-0">
+                    Doc {activeDocIndex + 1}/{sortedDocItems.length}
+                  </span>
+                  <h2 className="text-xs sm:text-sm font-black text-[#081326] truncate">
+                    {activeDoc?.name || 'Document Review'}
+                  </h2>
+                  {activeDoc?.files?.length > 1 && (
+                    <span className="text-[10px] font-bold bg-blue-50 text-blue-700 px-1.5 py-0.2 rounded border border-blue-200 shrink-0">
+                      {activeDoc.files.length} Files
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
 
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 shrink-0">
               <button
                 type="button"
                 onClick={() => setTopShareModal(true)}
                 className="p-2 bg-gray-100 hover:bg-gray-200 text-[#081326] rounded-xl text-xs font-bold cursor-pointer transition-colors"
                 title="Share Documents"
               >
-                <Share2 className="w-3.5 h-3.5 text-gray-700" />
+                <Share2 className="w-4 h-4 text-gray-700" />
               </button>
               <button
                 type="button"
@@ -1078,13 +1206,13 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
                 className="p-2 bg-gray-100 hover:bg-gray-200 text-[#081326] rounded-xl text-xs font-bold cursor-pointer transition-colors"
                 title="Print All Documents"
               >
-                <Printer className="w-3.5 h-3.5 text-purple-600" />
+                <Printer className="w-4 h-4 text-purple-600" />
               </button>
             </div>
           </div>
 
           {/* Continuous Vertical Feed of All Documents & Pages */}
-          <div className="space-y-6">
+          <div className="space-y-6 pt-2">
             {sortedDocItems.map((doc, idx) => {
               const docFiles = doc.files || [{ title: doc.name, fileUrl: doc.fileUrl }];
 
@@ -1092,11 +1220,12 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
                 <div
                   key={doc.id || idx}
                   ref={(el) => (docRefs.current[idx] = el)}
+                  data-doc-index={idx}
                   id={`staff-doc-section-${idx}`}
-                  className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden scroll-mt-28"
+                  className="bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden scroll-mt-20"
                 >
                   {/* Document Section Header */}
-                  <div className="p-3.5 sm:p-4 bg-gray-50/90 border-b border-gray-100 flex items-center justify-between gap-2">
+                  <div className="p-3 sm:p-4 bg-gray-50/90 border-b border-gray-100 flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2.5 min-w-0 flex-1">
                       <span className="px-2 py-0.5 bg-[#081326] text-amber-400 rounded-md text-[11px] font-mono font-bold shrink-0">
                         #{idx + 1}
@@ -1122,6 +1251,14 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
 
                     {/* Quick Actions for this doc */}
                     <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => openUploadForExistingCategory(doc.name)}
+                        className="p-1.5 text-amber-700 hover:bg-amber-100 rounded-lg cursor-pointer transition-colors"
+                        title="Add more files to this document"
+                      >
+                        <PlusCircle className="w-4 h-4 text-amber-600" />
+                      </button>
                       <button
                         type="button"
                         onClick={(e) => handleDownloadFile(e, doc.files[0]?.fileUrl, doc.name)}
@@ -1152,52 +1289,45 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
                   {/* Render Document Files / Pages vertically in sequence */}
                   <div className="p-3 sm:p-4 bg-slate-100/50 space-y-4">
                     {docFiles.map((fileObj, fIdx) => (
-                      <div key={fIdx} className="space-y-2">
-                        {docFiles.length > 1 && (
-                          <div className="flex items-center justify-between text-[11px] font-bold text-gray-500 px-1">
-                            <span>File / Page {fIdx + 1} of {docFiles.length}</span>
+                      <div key={fIdx} className="space-y-2 bg-white p-2 sm:p-3 rounded-xl border border-gray-200 shadow-2xs">
+                        <div className="flex items-center justify-between text-[11px] font-bold text-gray-700 px-1">
+                          <span className="flex items-center gap-1.5 truncate">
+                            <span className="w-5 h-5 rounded-full bg-gray-100 text-gray-700 flex items-center justify-center text-[10px]">
+                              {fIdx + 1}
+                            </span>
+                            <span className="truncate">{fileObj.fileTitle || fileObj.name || `${doc.name} (File ${fIdx + 1})`}</span>
+                          </span>
+                          <div className="flex items-center gap-2 shrink-0">
+                            {docFiles.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteSingleFileInGroup(fileObj, doc.name)}
+                                className="text-red-500 hover:text-red-700 hover:bg-red-50 px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer transition-colors"
+                                title="Delete this single file"
+                              >
+                                Delete File
+                              </button>
+                            )}
                             <a
                               href={getAssetUrl(fileObj.fileUrl)}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-blue-600 hover:underline flex items-center gap-1"
+                              className="text-blue-600 hover:underline flex items-center gap-1 text-[11px]"
                             >
                               <ExternalLink className="w-3 h-3" /> Full View
                             </a>
                           </div>
-                        )}
+                        </div>
 
                         {isPdf(fileObj.fileUrl) ? (
-                          <div className="w-full bg-white rounded-xl overflow-hidden border border-gray-200 shadow-2xs">
-                            <div className="w-full bg-[#081326] text-white px-3 py-1.5 flex items-center justify-between text-[11px] font-bold">
-                              <span className="truncate">{fileObj.fileTitle || fileObj.name || doc.name} (PDF)</span>
-                              <a
-                                href={getAssetUrl(fileObj.fileUrl)}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="px-2 py-0.5 bg-amber-400 hover:bg-amber-300 text-[#081326] rounded text-[10px] font-black flex items-center gap-1"
-                              >
-                                <ExternalLink className="w-2.5 h-2.5" /> Open Tab
-                              </a>
-                            </div>
+                          <div className="w-full bg-white rounded-xl overflow-hidden border border-gray-200">
                             <PdfViewer
                               url={getAssetUrl(fileObj.fileUrl)}
                               title={fileObj.fileTitle || fileObj.name || doc.name}
                             />
                           </div>
                         ) : (
-                          <div className="w-full bg-white rounded-xl overflow-hidden border border-gray-200 shadow-2xs">
-                            <div className="w-full bg-[#081326] text-white px-3 py-1.5 flex items-center justify-between text-[11px] font-bold">
-                              <span className="truncate">{fileObj.fileTitle || fileObj.name || doc.name} (Image)</span>
-                              <a
-                                href={getAssetUrl(fileObj.fileUrl)}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="px-2 py-0.5 bg-amber-400 hover:bg-amber-300 text-[#081326] rounded text-[10px] font-black flex items-center gap-1"
-                              >
-                                <ExternalLink className="w-2.5 h-2.5" /> Open Tab
-                              </a>
-                            </div>
+                          <div className="w-full bg-white rounded-xl overflow-hidden border border-gray-200">
                             <ImageViewer
                               src={getAssetUrl(fileObj.fileUrl)}
                               alt={fileObj.fileTitle || fileObj.name || doc.name}
@@ -1213,7 +1343,7 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
           </div>
 
           {/* Bottom Back Button */}
-          <div className="text-center pt-4">
+          <div className="text-center pt-4 pb-8">
             <button
               type="button"
               onClick={closeContinuousView}
@@ -1235,7 +1365,7 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
                 <FileText className="w-5 h-5 text-[#f59e0b]" /> Client Documents
               </h3>
               <p className="text-xs text-gray-500 font-medium mt-0.5">
-                Upload, arrange serial order, preview, download, and share documents securely.
+                Upload, add more files, arrange serial order, preview, download, and share documents securely.
               </p>
             </div>
 
@@ -1316,252 +1446,348 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
             </div>
           </div>
 
-      {/* Multi-Select Toolbar (If 1 or more documents selected) */}
-      {selectedDocIds.length > 0 && (
-        <div className="bg-amber-500/10 border border-amber-300/80 rounded-2xl p-3 px-5 flex items-center justify-between gap-4 animate-in fade-in duration-150">
-          <div className="flex items-center gap-2 text-xs font-bold text-amber-950">
-            <CheckSquare className="w-4 h-4 text-amber-600" />
-            <span>{selectedDocIds.length} document{selectedDocIds.length > 1 ? 's' : ''} selected</span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                const selected = sortedDocItems.filter(item => selectedDocIds.includes(item.id));
-                handleSmartPrint(selected, `${client?.fullName || 'Client'} - Selected Documents`);
-              }}
-              className="px-3.5 py-1.5 bg-[#081326] hover:bg-[#11203d] text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs cursor-pointer transition-all"
-            >
-              <Printer className="w-3.5 h-3.5 text-amber-400" />
-              <span>Print Selected ({selectedDocIds.length})</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setSelectedDocIds([])}
-              className="px-3 py-1.5 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-xl text-xs font-bold cursor-pointer transition-all"
-            >
-              Deselect All
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Documents List */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between px-2 text-xs text-gray-400 font-bold">
-          <div className="flex items-center gap-2">
-            <button 
-              type="button"
-              onClick={toggleSelectAll}
-              className="flex items-center gap-1.5 text-gray-600 hover:text-gray-900 cursor-pointer"
-            >
-              {selectedDocIds.length === sortedDocItems.length && sortedDocItems.length > 0 ? (
+          {/* Multi-Select Toolbar (If 1 or more documents selected) */}
+          {selectedDocIds.length > 0 && (
+            <div className="bg-amber-500/10 border border-amber-300/80 rounded-2xl p-3 px-5 flex flex-wrap items-center justify-between gap-3 animate-in fade-in duration-150">
+              <div className="flex items-center gap-2 text-xs font-bold text-amber-950">
                 <CheckSquare className="w-4 h-4 text-amber-600" />
-              ) : (
-                <Square className="w-4 h-4 text-gray-400" />
-              )}
-              <span>Select All ({sortedDocItems.length})</span>
-            </button>
-          </div>
-          <span className="text-[11px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
-            Drag ☰ or use ▲ ▼ to arrange order
-          </span>
-        </div>
-
-        {displayedDocs.length === 0 ? (
-          <div className="bg-white rounded-3xl p-12 text-center border border-gray-100 shadow-xs space-y-3">
-            <div className="w-14 h-14 rounded-2xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center mx-auto">
-              <FileText className="w-7 h-7" />
-            </div>
-            <h4 className="text-sm font-black text-[#081326]">No Documents Added Yet</h4>
-            <p className="text-xs text-gray-400 max-w-sm mx-auto">
-              Click <strong>+ Add Docs</strong> button above to upload client files. Simply give a document name and select files.
-            </p>
-            <button
-              type="button"
-              onClick={() => setShowUploadModal(true)}
-              className="px-4 py-2 bg-[#081326] text-white hover:bg-[#11203d] rounded-xl text-xs font-bold inline-flex items-center gap-1.5 shadow-sm cursor-pointer"
-            >
-              <PlusCircle className="w-4 h-4 text-[#f59e0b]" /> + Add First Document
-            </button>
-          </div>
-        ) : (
-          displayedDocs.map((doc, index) => {
-            const isSelected = selectedDocIds.includes(doc.id);
-            const isFirst = index === 0;
-            const isLast = index === displayedDocs.length - 1;
-            const isBeingDragged = draggedIndex === index;
-            const isTouchTarget = touchHoverIndex === index && draggedIndex !== null && draggedIndex !== index;
-            const fileCount = doc.files?.length || 1;
-            const primaryUrl = doc.files?.[0]?.fileUrl || doc.fileUrl;
-
-            return (
-              <div
-                key={doc.id || index}
-                data-doc-index={index}
-                draggable
-                onDragStart={(e) => handleDragStart(e, index)}
-                onDragOver={(e) => handleDragOver(e, index)}
-                onDrop={(e) => handleDrop(e, index)}
-                className={`bg-white rounded-2xl border transition-all duration-200 shadow-xs ${
-                  isBeingDragged
-                    ? 'opacity-40 border-amber-400 scale-[0.98]'
-                    : isTouchTarget
-                    ? 'border-amber-500 bg-amber-50/40 ring-2 ring-amber-400/50'
-                    : isSelected
-                    ? 'border-amber-300 bg-amber-50/20'
-                    : 'border-gray-200/90 hover:border-gray-300'
-                }`}
-              >
-                <div className="p-3.5 sm:p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                  {/* Left: Drag Handle, Serial, Checkbox, Doc Info */}
-                  <div className="flex items-center gap-3 min-w-0 flex-1 w-full sm:w-auto">
-                    {/* Reorder Buttons & Touch Handle */}
-                    <div className="flex items-center gap-1 shrink-0">
-                      <button
-                        type="button"
-                        onTouchStart={(e) => handleTouchStart(e, index)}
-                        onTouchMove={handleTouchMove}
-                        onTouchEnd={handleTouchEnd}
-                        className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-gray-100 rounded-lg cursor-grab active:cursor-grabbing touch-none select-none transition-colors"
-                        title="Drag to Reorder Serial"
-                      >
-                        <GripVertical className="w-4 h-4" />
-                      </button>
-
-                      <div className="flex flex-col gap-0.5">
-                        <button
-                          type="button"
-                          onClick={() => handleMoveItem(index, 'up')}
-                          disabled={isFirst || savingOrder}
-                          className="p-0.5 text-gray-400 hover:text-[#081326] disabled:opacity-20 transition-colors"
-                          title="Move Up"
-                        >
-                          <ArrowUp className="w-3 h-3" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleMoveItem(index, 'down')}
-                          disabled={isLast || savingOrder}
-                          className="p-0.5 text-gray-400 hover:text-[#081326] disabled:opacity-20 transition-colors"
-                          title="Move Down"
-                        >
-                          <ArrowDown className="w-3 h-3" />
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Checkbox */}
-                    <button
-                      type="button"
-                      onClick={() => toggleSelectDoc(doc.id)}
-                      className="text-gray-400 hover:text-amber-600 shrink-0 cursor-pointer"
-                    >
-                      {isSelected ? (
-                        <CheckSquare className="w-4 h-4 text-amber-600" />
-                      ) : (
-                        <Square className="w-4 h-4 text-gray-300" />
-                      )}
-                    </button>
-
-                    {/* Serial Tag */}
-                    <span className="px-2 py-0.5 bg-[#081326] text-amber-400 rounded-md text-[11px] font-mono font-bold shrink-0">
-                      #{index + 1}
-                    </span>
-
-                    {/* Document Name & Badges */}
-                    <div 
-                      className="min-w-0 flex-1 cursor-pointer"
-                      onClick={() => openContinuousView(index)}
-                    >
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h4 className="text-xs sm:text-sm font-black text-[#081326] hover:text-amber-600 transition-colors truncate">
-                          {doc.name}
-                        </h4>
-                        {fileCount > 1 && (
-                          <span className="text-[10px] font-bold bg-blue-50 text-blue-700 px-1.5 py-0.2 rounded border border-blue-200">
-                            {fileCount} Files
-                          </span>
-                        )}
-                        <span className="text-[10px] font-medium bg-gray-100 text-gray-600 px-1.5 py-0.2 rounded">
-                          {isPdf(primaryUrl) ? 'PDF' : 'IMAGE'}
-                        </span>
-                      </div>
-
-                      {/* Notes snippet */}
-                      {doc.notes && (
-                        <p className="text-[11px] text-amber-700 font-medium truncate mt-0.5">
-                          Note: {doc.notes}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Right: Quick Action Buttons (Eye, Share, Print, Download, Note, Delete) */}
-                  <div className="flex items-center gap-1 shrink-0 w-full sm:w-auto justify-end pt-2 sm:pt-0 border-t sm:border-t-0 border-gray-100">
-                    <button
-                      type="button"
-                      onClick={() => openContinuousView(index)}
-                      className="p-1.5 text-gray-600 hover:text-amber-600 hover:bg-gray-100 rounded-lg cursor-pointer transition-colors"
-                      title="Preview Document"
-                    >
-                      <Eye className="w-4 h-4" />
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setShareDocModal(doc)}
-                      className="p-1.5 text-gray-600 hover:text-blue-600 hover:bg-gray-100 rounded-lg cursor-pointer transition-colors"
-                      title="Share Document (File / Link)"
-                    >
-                      <Share2 className="w-4 h-4" />
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleSmartPrint([doc], `${doc.name} - ${client?.fullName || 'Client'}`)}
-                      className="p-1.5 text-gray-600 hover:text-purple-600 hover:bg-gray-100 rounded-lg cursor-pointer transition-colors"
-                      title="Smart Print Document"
-                    >
-                      <Printer className="w-4 h-4" />
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={(e) => handleDownloadFile(e, primaryUrl, doc.name)}
-                      className="p-1.5 text-gray-600 hover:text-emerald-600 hover:bg-gray-100 rounded-lg cursor-pointer transition-colors"
-                      title="Download File"
-                    >
-                      <Download className="w-4 h-4" />
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setEditingNoteDoc({ docName: doc.name, text: doc.notes || '', doc })}
-                      className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-gray-100 rounded-lg cursor-pointer transition-colors"
-                      title="Add / Edit Note"
-                    >
-                      <StickyNote className="w-4 h-4" />
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteGroup(doc)}
-                      className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg cursor-pointer transition-colors"
-                      title="Delete Document"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
+                <span>{selectedDocIds.length} document{selectedDocIds.length > 1 ? 's' : ''} selected</span>
               </div>
-            );
-          })
-        )}
-      </div>
-    </>
-  )}
+
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={handleBulkDownload}
+                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs cursor-pointer transition-all"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Download Selected</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const selected = sortedDocItems.filter(item => selectedDocIds.includes(item.id));
+                    handleSmartPrint(selected, `${client?.fullName || 'Client'} - Selected Documents`);
+                  }}
+                  className="px-3 py-1.5 bg-[#081326] hover:bg-[#11203d] text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs cursor-pointer transition-all"
+                >
+                  <Printer className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Print Selected</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleBulkDelete}
+                  disabled={bulkDeleting}
+                  className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs cursor-pointer transition-all disabled:opacity-50"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>{bulkDeleting ? 'Deleting...' : 'Delete Selected'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedDocIds([])}
+                  className="px-3 py-1.5 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-xl text-xs font-bold cursor-pointer transition-all"
+                >
+                  Deselect All
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Documents List */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between px-2 text-xs text-gray-400 font-bold">
+              <div className="flex items-center gap-2">
+                <button 
+                  type="button"
+                  onClick={toggleSelectAll}
+                  className="flex items-center gap-1.5 text-gray-600 hover:text-gray-900 cursor-pointer"
+                >
+                  {selectedDocIds.length === sortedDocItems.length && sortedDocItems.length > 0 ? (
+                    <CheckSquare className="w-4 h-4 text-amber-600" />
+                  ) : (
+                    <Square className="w-4 h-4 text-gray-400" />
+                  )}
+                  <span>Select All ({sortedDocItems.length})</span>
+                </button>
+              </div>
+              <span className="text-[11px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
+                Drag ☰ or use ▲ ▼ to arrange order
+              </span>
+            </div>
+
+            {displayedDocs.length === 0 ? (
+              <div className="bg-white rounded-3xl p-12 text-center border border-gray-100 shadow-xs space-y-3">
+                <div className="w-14 h-14 rounded-2xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center mx-auto">
+                  <FileText className="w-7 h-7" />
+                </div>
+                <h4 className="text-sm font-black text-[#081326]">No Documents Added Yet</h4>
+                <p className="text-xs text-gray-400 max-w-sm mx-auto">
+                  Click <strong>+ Add Docs</strong> button above to upload client files. Simply give a document name and select files.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setShowUploadModal(true)}
+                  className="px-4 py-2 bg-[#081326] text-white hover:bg-[#11203d] rounded-xl text-xs font-bold inline-flex items-center gap-1.5 shadow-sm cursor-pointer"
+                >
+                  <PlusCircle className="w-4 h-4 text-[#f59e0b]" /> + Add First Document
+                </button>
+              </div>
+            ) : (
+              displayedDocs.map((doc, index) => {
+                const isSelected = selectedDocIds.includes(doc.id);
+                const isFirst = index === 0;
+                const isLast = index === displayedDocs.length - 1;
+                const isBeingDragged = draggedIndex === index;
+                const isTouchTarget = touchHoverIndex === index && draggedIndex !== null && draggedIndex !== index;
+                const fileCount = doc.files?.length || 1;
+                const primaryUrl = doc.files?.[0]?.fileUrl || doc.fileUrl;
+                const isExpanded = expandedDocGroups[doc.id];
+
+                return (
+                  <div
+                    key={doc.id || index}
+                    data-doc-index={index}
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, index)}
+                    onDragOver={(e) => handleDragOver(e, index)}
+                    onDrop={(e) => handleDrop(e, index)}
+                    className={`bg-white rounded-2xl border transition-all duration-200 shadow-xs overflow-hidden ${
+                      isBeingDragged
+                        ? 'opacity-40 border-amber-400 scale-[0.98]'
+                        : isTouchTarget
+                        ? 'border-amber-500 bg-amber-50/40 ring-2 ring-amber-400/50'
+                        : isSelected
+                        ? 'border-amber-300 bg-amber-50/20'
+                        : 'border-gray-200/90 hover:border-gray-300'
+                    }`}
+                  >
+                    <div className="p-3.5 sm:p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                      {/* Left: Drag Handle, Serial, Checkbox, Doc Info */}
+                      <div className="flex items-center gap-3 min-w-0 flex-1 w-full sm:w-auto">
+                        {/* Reorder Buttons & Touch Handle */}
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            onTouchStart={(e) => handleTouchStart(e, index)}
+                            onTouchMove={handleTouchMove}
+                            onTouchEnd={handleTouchEnd}
+                            className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-gray-100 rounded-lg cursor-grab active:cursor-grabbing touch-none select-none transition-colors"
+                            title="Drag to Reorder Serial"
+                          >
+                            <GripVertical className="w-4 h-4" />
+                          </button>
+
+                          <div className="flex flex-col gap-0.5">
+                            <button
+                              type="button"
+                              onClick={() => handleMoveItem(index, 'up')}
+                              disabled={isFirst || savingOrder}
+                              className="p-0.5 text-gray-400 hover:text-[#081326] disabled:opacity-20 transition-colors"
+                              title="Move Up"
+                            >
+                              <ArrowUp className="w-3 h-3" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleMoveItem(index, 'down')}
+                              disabled={isLast || savingOrder}
+                              className="p-0.5 text-gray-400 hover:text-[#081326] disabled:opacity-20 transition-colors"
+                              title="Move Down"
+                            >
+                              <ArrowDown className="w-3 h-3" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Checkbox */}
+                        <button
+                          type="button"
+                          onClick={() => toggleSelectDoc(doc.id)}
+                          className="text-gray-400 hover:text-amber-600 shrink-0 cursor-pointer"
+                        >
+                          {isSelected ? (
+                            <CheckSquare className="w-4 h-4 text-amber-600" />
+                          ) : (
+                            <Square className="w-4 h-4 text-gray-300" />
+                          )}
+                        </button>
+
+                        {/* Serial Tag */}
+                        <span className="px-2 py-0.5 bg-[#081326] text-amber-400 rounded-md text-[11px] font-mono font-bold shrink-0">
+                          #{index + 1}
+                        </span>
+
+                        {/* Document Name & Badges */}
+                        <div 
+                          className="min-w-0 flex-1 cursor-pointer"
+                          onClick={() => openContinuousView(index)}
+                        >
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h4 className="text-xs sm:text-sm font-black text-[#081326] hover:text-amber-600 transition-colors truncate">
+                              {doc.name}
+                            </h4>
+                            {fileCount > 1 && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleGroupExpand(doc.id);
+                                }}
+                                className="text-[10px] font-bold bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full border border-blue-200 hover:bg-blue-100 transition-colors"
+                              >
+                                {fileCount} Files {isExpanded ? '▲' : '▼'}
+                              </button>
+                            )}
+                            <span className="text-[10px] font-medium bg-gray-100 text-gray-600 px-1.5 py-0.2 rounded">
+                              {isPdf(primaryUrl) ? 'PDF' : 'IMAGE'}
+                            </span>
+                          </div>
+
+                          {/* Notes snippet */}
+                          {doc.notes && (
+                            <p className="text-[11px] text-amber-700 font-medium truncate mt-0.5">
+                              Note: {doc.notes}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Right: Quick Action Buttons (Add more files, Eye, Share, Print, Download, Note, Delete) */}
+                      <div className="flex items-center gap-1 shrink-0 w-full sm:w-auto justify-end pt-2 sm:pt-0 border-t sm:border-t-0 border-gray-100">
+                        <button
+                          type="button"
+                          onClick={() => openUploadForExistingCategory(doc.name)}
+                          className="p-1.5 text-amber-700 hover:bg-amber-50 rounded-lg cursor-pointer transition-colors"
+                          title="Add more files to this category"
+                        >
+                          <PlusCircle className="w-4 h-4 text-amber-600" />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => openContinuousView(index)}
+                          className="p-1.5 text-gray-600 hover:text-amber-600 hover:bg-gray-100 rounded-lg cursor-pointer transition-colors"
+                          title="Preview Document"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setShareDocModal(doc)}
+                          className="p-1.5 text-gray-600 hover:text-blue-600 hover:bg-gray-100 rounded-lg cursor-pointer transition-colors"
+                          title="Share Document (File / Link)"
+                        >
+                          <Share2 className="w-4 h-4" />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleSmartPrint([doc], `${doc.name} - ${client?.fullName || 'Client'}`)}
+                          className="p-1.5 text-gray-600 hover:text-purple-600 hover:bg-gray-100 rounded-lg cursor-pointer transition-colors"
+                          title="Smart Print Document"
+                        >
+                          <Printer className="w-4 h-4" />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={(e) => handleDownloadFile(e, primaryUrl, doc.name)}
+                          className="p-1.5 text-gray-600 hover:text-emerald-600 hover:bg-gray-100 rounded-lg cursor-pointer transition-colors"
+                          title="Download File"
+                        >
+                          <Download className="w-4 h-4" />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setEditingNoteDoc({ docName: doc.name, text: doc.notes || '', doc })}
+                          className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-gray-100 rounded-lg cursor-pointer transition-colors"
+                          title="Add / Edit Note"
+                        >
+                          <StickyNote className="w-4 h-4" />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteGroup(doc)}
+                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg cursor-pointer transition-colors"
+                          title="Delete Category"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Sub-files accordion for multi-file documents */}
+                    {(isExpanded || fileCount > 1) && (
+                      <div className="bg-gray-50/80 px-4 py-2.5 border-t border-gray-100 space-y-1.5">
+                        <div className="text-[10px] font-black text-gray-500 uppercase tracking-wider mb-1 flex items-center justify-between">
+                          <span>Attached Files ({fileCount})</span>
+                          <button
+                            type="button"
+                            onClick={() => openUploadForExistingCategory(doc.name)}
+                            className="text-amber-700 hover:underline font-bold text-[10px] flex items-center gap-1"
+                          >
+                            + Add File to {doc.name}
+                          </button>
+                        </div>
+                        {doc.files.map((fileObj, fIdx) => (
+                          <div
+                            key={fIdx}
+                            className="flex items-center justify-between p-2 bg-white rounded-xl border border-gray-200 text-xs hover:border-gray-300"
+                          >
+                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                              <span className="w-5 h-5 rounded-md bg-gray-100 text-gray-600 font-mono font-bold flex items-center justify-center text-[10px] shrink-0">
+                                {fIdx + 1}
+                              </span>
+                              <span className="font-medium text-gray-800 truncate">
+                                {fileObj.fileTitle || fileObj.name || `File ${fIdx + 1}`}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-1 shrink-0">
+                              <a
+                                href={getAssetUrl(fileObj.fileUrl)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                                title="Open File"
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />
+                              </a>
+                              <button
+                                type="button"
+                                onClick={(e) => handleDownloadFile(e, fileObj.fileUrl, `${doc.name}_file_${fIdx + 1}`)}
+                                className="p-1 text-gray-600 hover:bg-gray-100 rounded"
+                                title="Download File"
+                              >
+                                <Download className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteSingleFileInGroup(fileObj, doc.name)}
+                                className="p-1 text-red-500 hover:bg-red-50 rounded"
+                                title="Delete Single File"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </>
+      )}
 
       {/* ---------------------------------------------------- */}
       {/* 1. DOCUMENT PREVIEW MODAL (With PDF.js & ImageViewer) */}
@@ -1761,7 +1987,7 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
                 >
                   <Upload className="w-8 h-8 text-[#f59e0b] mx-auto" />
                   <p className="text-xs font-bold text-gray-700">Click to browse or drag & drop files</p>
-                  <p className="text-[10px] text-gray-400">PDF, JPG, PNG, WEBP (Supports multiple files)</p>
+                  <p className="text-[10px] text-gray-400">PDF, JPG, PNG, WEBP (Selecting more files will append to list)</p>
                   <input
                     ref={fileInputRef}
                     type="file"
@@ -1776,6 +2002,16 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
               {/* Selected Files List */}
               {selectedFiles.length > 0 && (
                 <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                  <div className="text-[10px] font-bold text-gray-500 flex justify-between px-1">
+                    <span>Queue ({selectedFiles.length} files selected):</span>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedFiles([])}
+                      className="text-red-500 hover:underline"
+                    >
+                      Clear All
+                    </button>
+                  </div>
                   {selectedFiles.map((f, fIdx) => (
                     <div key={fIdx} className="flex items-center justify-between p-2 bg-gray-50 rounded-xl text-xs border border-gray-200">
                       <span className="truncate max-w-[280px] font-medium text-gray-700">{f.name}</span>
@@ -1908,7 +2144,8 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
               <button
                 type="button"
                 onClick={() => {
-                  const text = `📄 Document: ${shareDocModal.name}\nClient: ${client?.fullName || 'Client'}\n\n🔗 View securely on KTR Portal:\n${shareBundleUrl}`;
+                  const loanAmountFormatted = client?.loanAmount ? `₹${Number(client.loanAmount).toLocaleString('en-IN')}` : 'As Applicable';
+                  const text = `KTR Consultants – Client Documents\n\nClient: ${client?.fullName || 'Client'}\nLoan Amount: ${loanAmountFormatted}\nCase Type: ${client?.loanType || 'Loan Application'}\nProfession: ${client?.occupation || client?.employmentType || 'Salaried'}\n\nReview documents here:\n${shareBundleUrl}`;
                   navigator.clipboard.writeText(text);
                   toast.success('Document link copied to clipboard!');
                   window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
@@ -1966,13 +2203,31 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
 
               <button
                 type="button"
-                onClick={handleSharePortalLink}
+                onClick={() => {
+                  const loanAmountFormatted = client?.loanAmount ? `₹${Number(client.loanAmount).toLocaleString('en-IN')}` : 'As Applicable';
+                  const text = `KTR Consultants – Client Documents\n\nClient: ${client?.fullName || 'Client'}\nLoan Amount: ${loanAmountFormatted}\nCase Type: ${client?.loanType || 'Loan Application'}\nProfession: ${client?.occupation || client?.employmentType || 'Salaried'}\n\nReview documents here:\n${shareBundleUrl}`;
+                  if (navigator.share) {
+                    navigator.share({
+                      title: `KTR Consultants – ${client?.fullName || 'Client'} Documents`,
+                      text,
+                      url: shareBundleUrl
+                    }).catch(() => {
+                      navigator.clipboard.writeText(text);
+                      window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
+                    });
+                  } else {
+                    navigator.clipboard.writeText(text);
+                    toast.success('WhatsApp share message copied!');
+                    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
+                  }
+                  setTopShareModal(false);
+                }}
                 className="w-full p-3.5 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl text-left text-xs font-black text-blue-950 flex items-center gap-3 transition-colors cursor-pointer"
               >
                 <Share2 className="w-5 h-5 text-blue-600 shrink-0" />
                 <div>
                   <p className="text-xs font-black text-[#081326]">Share Link</p>
-                  <p className="text-[10px] text-gray-500 font-medium">Share secure banker portal link</p>
+                  <p className="text-[10px] text-gray-500 font-medium">Share professional formatted message + short link</p>
                 </div>
               </button>
             </div>

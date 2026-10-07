@@ -43,6 +43,20 @@ const formatCurrency = (amount) => {
   });
 };
 
+const calculateAge = (dobString) => {
+  if (!dobString) return '';
+  try {
+    const dob = new Date(dobString);
+    if (isNaN(dob.getTime())) return '';
+    const birthYear = dob.getFullYear();
+    const currentYear = new Date().getFullYear();
+    const age = currentYear - birthYear;
+    return age >= 0 ? age : '';
+  } catch (e) {
+    return '';
+  }
+};
+
 const Clients = () => {
   const { role } = useAuth();
   const navigate = useNavigate();
@@ -512,8 +526,18 @@ const Clients = () => {
                           </div>
                         )}
                         <div className="min-w-0">
-                          <h4 className="text-sm font-black text-[#081326] truncate flex items-center gap-1.5">
+                          <h4 className="text-sm font-black text-[#081326] truncate flex items-center gap-1.5 flex-wrap">
                             <span>{client.fullName}</span>
+                            {(client.age || client.dob) && (
+                              <span className="text-[11px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">
+                                ({client.age || calculateAge(client.dob)} Yrs)
+                              </span>
+                            )}
+                            {client.applicants && client.applicants.length > 1 && (
+                              <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-1.5 py-0.2 rounded border border-blue-200">
+                                {client.applicants.length} Applicants
+                              </span>
+                            )}
                             <ArrowRight className="w-3.5 h-3.5 text-[#f59e0b] shrink-0" />
                           </h4>
                           <p className="text-xs text-gray-500 font-medium truncate mt-0.5">
@@ -627,7 +651,19 @@ const Clients = () => {
                             </div>
                           )}
                           <div>
-                            <span className="block font-bold text-[#081326] group-hover:underline">{client.fullName}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-[#081326] group-hover:underline">{client.fullName}</span>
+                              {(client.age || client.dob) && (
+                                <span className="text-[11px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">
+                                  ({client.age || calculateAge(client.dob)} Yrs)
+                                </span>
+                              )}
+                              {client.applicants && client.applicants.length > 1 && (
+                                <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-1.5 py-0.2 rounded border border-blue-200">
+                                  {client.applicants.length} Applicants
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </td>
 

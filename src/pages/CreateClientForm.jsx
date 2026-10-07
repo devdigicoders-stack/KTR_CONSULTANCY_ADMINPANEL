@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { 
   FileText, Plus, Trash2, Link as LinkIcon, Share2, Copy, Check, 
-  User, Phone, Sparkles, CheckCircle2, Clock, Eye, AlertCircle, RefreshCw, X, ChevronRight
+  User, Phone, Sparkles, CheckCircle2, Clock, Eye, AlertCircle, RefreshCw, X, ChevronRight, Layers, UploadCloud
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
@@ -209,14 +210,51 @@ const CreateClientForm = () => {
   return (
     <div className="flex flex-col space-y-6 pb-12 max-w-[1600px] mx-auto">
       {/* Top Banner */}
-      <div className="bg-white rounded-2xl p-5 sm:p-6 border border-gray-100 shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h2 className="text-xl font-black text-[#081326] flex items-center gap-2">
-            <FileText className="w-6 h-6 text-[#f59e0b]" /> Create Form & Generate Link
-          </h2>
-          <p className="text-xs text-gray-500 font-medium mt-1">
-            Build custom data collection forms with required/optional fields and file uploads. Client submissions automatically update or register clients in My Applications.
-          </p>
+      <div className="bg-white rounded-2xl p-5 sm:p-6 border border-gray-100 shadow-xs space-y-4">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div>
+            <h2 className="text-xl font-black text-[#081326] flex items-center gap-2">
+              <FileText className="w-6 h-6 text-[#f59e0b]" /> Create Form & Generate Link
+            </h2>
+            <p className="text-xs text-gray-500 font-medium mt-1">
+              Build custom data collection forms with required/optional fields and file uploads. Client submissions automatically update or register clients in My Applications.
+            </p>
+          </div>
+        </div>
+
+        {/* Section Navigation Tabs */}
+        <div className="flex items-center gap-2 pt-2 border-t border-gray-100 overflow-x-auto scrollbar-hide">
+          <Link
+            to="/template-forms"
+            className="px-4 py-2 rounded-xl text-xs font-bold text-gray-600 hover:bg-gray-100 transition-colors shrink-0 flex items-center gap-1.5"
+          >
+            <Layers className="w-3.5 h-3.5 text-gray-400" />
+            <span>1. Template Forms</span>
+          </Link>
+
+          <Link
+            to="/client-forms"
+            className="px-4 py-2 rounded-xl text-xs font-black bg-[#081326] text-white shadow-xs shrink-0 flex items-center gap-1.5"
+          >
+            <FileText className="w-3.5 h-3.5 text-[#f59e0b]" />
+            <span>2. Create Form Link</span>
+          </Link>
+
+          <Link
+            to="/doc-requests"
+            className="px-4 py-2 rounded-xl text-xs font-bold text-gray-600 hover:bg-gray-100 transition-colors shrink-0 flex items-center gap-1.5"
+          >
+            <UploadCloud className="w-3.5 h-3.5 text-gray-400" />
+            <span>3. Request Documents</span>
+          </Link>
+
+          <Link
+            to="/filled-forms"
+            className="px-4 py-2 rounded-xl text-xs font-bold text-gray-600 hover:bg-gray-100 transition-colors shrink-0 flex items-center gap-1.5"
+          >
+            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+            <span>4. Filled Forms (Submissions)</span>
+          </Link>
         </div>
       </div>
 

@@ -31,6 +31,8 @@ import SharedDocuments from './pages/SharedDocuments';
 import BankFormsRepository from './pages/BankFormsRepository';
 import CreateClientForm from './pages/CreateClientForm';
 import RequestDocumentsForm from './pages/RequestDocumentsForm';
+import TemplateForms from './pages/TemplateForms';
+import FilledForms from './pages/FilledForms';
 import PublicClientForm from './pages/PublicClientForm';
 import PublicDocUpload from './pages/PublicDocUpload';
 
@@ -56,9 +58,12 @@ function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           
-          {/* Public Shared Client Documents & Forms (No login required) */}
+          {/* Public Shared Client Documents & Forms (Clean Short URLs + Legacy URLs) */}
+          <Route path="/s/:id" element={<SharedDocuments />} />
           <Route path="/shared-docs/:id" element={<SharedDocuments />} />
+          <Route path="/f/:id" element={<PublicClientForm />} />
           <Route path="/form/:id" element={<PublicClientForm />} />
+          <Route path="/u/:id" element={<PublicDocUpload />} />
           <Route path="/upload-docs/:id" element={<PublicDocUpload />} />
           
           {/* Protected Routes */}
@@ -76,8 +81,10 @@ function App() {
             {/* Repository & Client Data Collection for Staff & Admin */}
             <Route path="bank-forms" element={<BankFormsRepository defaultScope="common" />} />
             <Route path="my-private-docs" element={<BankFormsRepository defaultScope="private" />} />
+            <Route path="template-forms" element={<TemplateForms />} />
             <Route path="client-forms" element={<CreateClientForm />} />
             <Route path="doc-requests" element={<RequestDocumentsForm />} />
+            <Route path="filled-forms" element={<FilledForms />} />
 
             {/* Payments & Invoices (Accessible to Staff & Admin) */}
             <Route path="payments" element={<Invoices />} />

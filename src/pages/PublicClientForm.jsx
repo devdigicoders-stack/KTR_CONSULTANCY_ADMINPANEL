@@ -2,10 +2,24 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { 
   FileText, ShieldCheck, CheckCircle2, AlertCircle, Upload, Check, 
-  ArrowRight, RefreshCw, Lock, Building, Phone, Mail, User
+  ArrowRight, RefreshCw, Lock, Building, Phone, Mail, User, Plus, X
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../api/axios';
+
+const calculateAge = (dobString) => {
+  if (!dobString) return '';
+  try {
+    const dob = new Date(dobString);
+    if (isNaN(dob.getTime())) return '';
+    const birthYear = dob.getFullYear();
+    const currentYear = new Date().getFullYear();
+    const age = currentYear - birthYear;
+    return age >= 0 ? age : '';
+  } catch (e) {
+    return '';
+  }
+};
 
 const PublicClientForm = () => {
   const { id } = useParams();
@@ -14,7 +28,8 @@ const PublicClientForm = () => {
   const [error, setError] = useState('');
 
   const [formData, setFormData] = useState({});
-  const [uploadedFiles, setUploadedFiles] = useState({});
+  // fieldId -> Array of Files
+  const [uploadedFilesMap, setUploadedFilesMap] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submissionSuccess, setSubmissionSuccess] = useState(null);
 
@@ -28,7 +43,6 @@ const PublicClientForm = () => {
           const config = res.data.data;
           setFormConfig(config);
 
-          // Pre-fill initial form state
           const initial = {
             fullName: config.clientName || '',
             mobile: config.clientMobile || ''
@@ -49,11 +63,41 @@ const PublicClientForm = () => {
   }, [id]);
 
   const handleInputChange = (fieldId, value) => {
-    setFormData(prev => ({ ...prev, [fieldId]: value }));
+    setFormData(prev => {
+      const updated = { ...prev, [fieldId]: value };
+      if (fieldId === 'dob') {
+        const calculatedAge = calculateAge(value);
+        if (calculatedAge !== '') {
+          updated.age = calculatedAge;
+        }
+      }
+      return updated;
+    });
   };
 
-  const handleFileChange = (fieldId, file) => {
-    setUploadedFiles(prev => ({ ...prev, [fieldId]: file }));
+  const handleFileSelect = (fieldId, e) => {
+    const incoming = Array.from(e.target.files || []);
+    if (incoming.length === 0) return;
+
+    setUploadedFilesMap(prev => {
+      const existing = prev[fieldId] || [];
+      const existingKeys = new Set(existing.map(f => `${f.name}_${f.size}_${f.lastModified}`));
+      const fresh = incoming.filter(f => !existingKeys.has(`${f.name}_${f.size}_${f.lastModified}`));
+      return {
+        ...prev,
+        [fieldId]: [...existing, ...fresh]
+      };
+    });
+  };
+
+  const handleRemoveFile = (fieldId, fileIndex) => {
+    setUploadedFilesMap(prev => {
+      const list = prev[fieldId] || [];
+      return {
+        ...prev,
+        [fieldId]: list.filter((_, i) => i !== fileIndex)
+      };
+    });
   };
 
   const handleSubmit = async (e) => {
@@ -63,11 +107,13 @@ const PublicClientForm = () => {
     // Validate required fields
     for (const f of formConfig.fields || []) {
       if (f.required) {
-        if (f.type === 'file' && !uploadedFiles[f.id]) {
-          toast.error(`Please upload ${f.label}`);
-          return;
-        }
-        if (f.type !== 'file' && (!formData[f.id] || !formData[f.id].toString().trim())) {
+        if (f.type === 'file') {
+          const files = uploadedFilesMap[f.id] || [];
+          if (files.length === 0) {
+            toast.error(`Please upload at least one file for ${f.label}`);
+            return;
+          }
+        } else if (!formData[f.id] || !formData[f.id].toString().trim()) {
           toast.error(`Please fill in ${f.label}`);
           return;
         }
@@ -80,17 +126,20 @@ const PublicClientForm = () => {
 
       // Append text data
       Object.keys(formData).forEach(key => {
-        submitPayload.append(key, formData[key]);
+        if (formData[key] !== undefined && formData[key] !== null) {
+          submitPayload.append(key, formData[key]);
+        }
       });
 
-      // Append files
-      Object.keys(uploadedFiles).forEach(fieldId => {
-        const file = uploadedFiles[fieldId];
-        if (file) {
-          const fieldDef = (formConfig.fields || []).find(f => f.id === fieldId);
-          const mappedKey = fieldDef?.mappedDocType || fieldId;
+      // Append files (multi-file support)
+      Object.keys(uploadedFilesMap).forEach(fieldId => {
+        const files = uploadedFilesMap[fieldId] || [];
+        const fieldDef = (formConfig.fields || []).find(f => f.id === fieldId);
+        const mappedKey = fieldDef?.mappedDocType || fieldId;
+
+        files.forEach(file => {
           submitPayload.append(mappedKey, file);
-        }
+        });
       });
 
       const res = await api.post(`/forms/public/${id}/submit`, submitPayload, {
@@ -208,12 +257,20 @@ const PublicClientForm = () => {
           <form onSubmit={handleSubmit} className="space-y-4">
             {(formConfig.fields || []).map((field, idx) => {
               const value = formData[field.id] !== undefined ? formData[field.id] : (formData[field.mappedField] || '');
+              const files = uploadedFilesMap[field.id] || [];
 
               return (
                 <div key={field.id || idx} className="space-y-1.5">
-                  <label className="block text-xs font-black text-[#081326]">
-                    {field.label} {field.required && <span className="text-red-500">*</span>}
-                  </label>
+                  <div className="flex items-center justify-between">
+                    <label className="block text-xs font-black text-[#081326]">
+                      {field.label} {field.required && <span className="text-red-500">*</span>}
+                    </label>
+                    {field.id === 'dob' && formData.dob && (
+                      <span className="text-[11px] font-black text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                        Age: {calculateAge(formData.dob)} Yrs
+                      </span>
+                    )}
+                  </div>
 
                   {field.type === 'textarea' ? (
                     <textarea
@@ -225,22 +282,40 @@ const PublicClientForm = () => {
                       className="w-full px-4 py-3 bg-gray-50/70 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-[#f59e0b] focus:bg-white transition-all"
                     ></textarea>
                   ) : field.type === 'file' ? (
-                    <div className="border-2 border-dashed border-gray-200 hover:border-[#f59e0b] rounded-2xl p-4 text-center bg-gray-50/50 hover:bg-amber-50/30 transition-all cursor-pointer relative">
-                      <input
-                        type="file"
-                        required={field.required}
-                        onChange={(e) => handleFileChange(field.id, e.target.files?.[0])}
-                        className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                      />
-                      <Upload className="w-6 h-6 text-gray-400 mx-auto mb-1.5" />
-                      <p className="text-xs font-bold text-[#081326]">
-                        {uploadedFiles[field.id]?.name ? (
-                          <span className="text-emerald-700 font-black">✓ {uploadedFiles[field.id].name}</span>
-                        ) : (
-                          <span>Click or tap to upload file (PDF / Image)</span>
-                        )}
-                      </p>
-                      <p className="text-[10px] text-gray-400 mt-0.5">Maximum file size: 100MB</p>
+                    <div className="space-y-2">
+                      {files.length > 0 && (
+                        <div className="space-y-1.5">
+                          {files.map((f, fIdx) => (
+                            <div key={fIdx} className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between text-xs">
+                              <div className="flex items-center gap-2 truncate">
+                                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                                <span className="font-bold text-emerald-950 truncate">{f.name}</span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveFile(field.id, fIdx)}
+                                className="p-1 text-red-500 hover:bg-red-100 rounded cursor-pointer"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      <div className="border-2 border-dashed border-gray-200 hover:border-[#f59e0b] rounded-2xl p-4 text-center bg-gray-50/50 hover:bg-amber-50/30 transition-all cursor-pointer relative">
+                        <input
+                          type="file"
+                          multiple
+                          onChange={(e) => handleFileSelect(field.id, e)}
+                          className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                        />
+                        <Upload className="w-6 h-6 text-gray-400 mx-auto mb-1.5" />
+                        <p className="text-xs font-bold text-[#081326]">
+                          {files.length > 0 ? '+ Add More Files' : 'Click or tap to upload file (PDF / Images)'}
+                        </p>
+                        <p className="text-[10px] text-gray-400 mt-0.5">Selecting additional files appends to queue</p>
+                      </div>
                     </div>
                   ) : (
                     <input
@@ -260,28 +335,22 @@ const PublicClientForm = () => {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full py-4 bg-[#081326] text-white hover:bg-[#11203d] rounded-2xl text-xs sm:text-sm font-black transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
+                className="w-full py-3.5 bg-[#081326] text-white rounded-xl text-xs font-black hover:bg-[#11203d] transition-all flex items-center justify-center gap-2 shadow-lg cursor-pointer disabled:opacity-60"
               >
                 {isSubmitting ? (
                   <>
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>Submitting Your Details...</span>
+                    <RefreshCw className="w-4 h-4 animate-spin text-[#f59e0b]" />
+                    <span>Submitting Details...</span>
                   </>
                 ) : (
                   <>
-                    <span>Submit Verified Details</span>
+                    <span>Submit Client Information</span>
                     <ArrowRight className="w-4 h-4 text-[#f59e0b]" />
                   </>
                 )}
               </button>
             </div>
           </form>
-        </div>
-
-        {/* Security Footer Note */}
-        <div className="text-center text-[11px] text-gray-400 font-medium flex items-center justify-center gap-2">
-          <Lock className="w-3.5 h-3.5" />
-          <span>All submitted records are encrypted and protected under KTR Privacy Policy.</span>
         </div>
       </div>
     </div>

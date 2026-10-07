@@ -3,7 +3,8 @@ import { useLocation } from 'react-router-dom';
 import { 
   Folder, FolderPlus, FileText, Upload, Plus, Search, Eye, Download, 
   Share2, Copy, Check, Trash2, Edit3, Filter, StickyNote, FileSpreadsheet, 
-  Image as ImageIcon, AlertCircle, RefreshCw, X, ChevronRight, Lock, Users
+  Image as ImageIcon, AlertCircle, RefreshCw, X, ChevronRight, Lock, Users,
+  CheckSquare, Square
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../api/axios';
@@ -26,14 +27,19 @@ const BankFormsRepository = ({ defaultScope = 'common' }) => {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Multi-Selection State
+  const [selectedItemIds, setSelectedItemIds] = useState([]);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+
   // Modals
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showNewFolderModal, setShowNewFolderModal] = useState(false);
-  const [showEditItemModal, setShowEditItemModal] = useState(null);
+  const [showRenameFolderModal, setShowRenameFolderModal] = useState(null);
   const [previewDoc, setPreviewDoc] = useState(null);
 
   // Form States
   const [newFolderName, setNewFolderName] = useState('');
+  const [renameFolderName, setRenameFolderName] = useState('');
   const [uploadFolder, setUploadFolder] = useState('General');
   const [uploadDocName, setUploadDocName] = useState('');
   const [uploadNotes, setUploadNotes] = useState('');
@@ -74,20 +80,88 @@ const BankFormsRepository = ({ defaultScope = 'common' }) => {
   useEffect(() => {
     fetchFolders();
     fetchItems();
+    setSelectedItemIds([]);
   }, [scope, selectedFolder]);
 
-  const handleCreateFolder = (e) => {
+  // Create permanent folder
+  const handleCreateFolder = async (e) => {
     e.preventDefault();
-    if (!newFolderName.trim()) return;
     const clean = newFolderName.trim();
-    if (!folders.includes(clean)) {
-      setFolders(prev => [...prev, clean]);
-      setSelectedFolder(clean);
-      setUploadFolder(clean);
+    if (!clean) return;
+
+    try {
+      const res = await api.post('/repository/folders', { name: clean, scope });
+      if (res.data.success) {
+        toast.success(`Folder "${clean}" created!`);
+        await fetchFolders();
+        setSelectedFolder(clean);
+        setUploadFolder(clean);
+        setNewFolderName('');
+        setShowNewFolderModal(false);
+      }
+    } catch (err) {
+      console.error('Create folder error:', err);
+      toast.error(err.response?.data?.message || 'Failed to create folder');
     }
-    setNewFolderName('');
-    setShowNewFolderModal(false);
-    toast.success(`Folder "${clean}" ready!`);
+  };
+
+  // Rename folder
+  const handleRenameFolder = async (e) => {
+    e.preventDefault();
+    if (!showRenameFolderModal || !renameFolderName.trim()) return;
+    const oldName = showRenameFolderModal;
+    const newName = renameFolderName.trim();
+
+    try {
+      const res = await api.put('/repository/folders/rename', {
+        oldName,
+        newName,
+        scope
+      });
+      if (res.data.success) {
+        toast.success(`Folder renamed to "${newName}"`);
+        if (selectedFolder === oldName) setSelectedFolder(newName);
+        if (uploadFolder === oldName) setUploadFolder(newName);
+        setShowRenameFolderModal(null);
+        setRenameFolderName('');
+        await fetchFolders();
+        await fetchItems();
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to rename folder');
+    }
+  };
+
+  // Delete folder
+  const handleDeleteFolder = async (folderName) => {
+    if (!window.confirm(`Delete folder "${folderName}" and all its contents?`)) return;
+    try {
+      const res = await api.delete(`/repository/folders/${encodeURIComponent(folderName)}?scope=${scope}`);
+      if (res.data.success) {
+        toast.success(`Folder "${folderName}" deleted`);
+        if (selectedFolder === folderName) setSelectedFolder('All');
+        await fetchFolders();
+        await fetchItems();
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to delete folder');
+    }
+  };
+
+  // Append new files without wiping previous selection
+  const handleFileSelect = (e) => {
+    const incoming = Array.from(e.target.files || []);
+    if (incoming.length === 0) return;
+
+    setSelectedFiles(prev => {
+      const existing = new Set(prev.map(f => `${f.name}_${f.size}_${f.lastModified}`));
+      const fresh = incoming.filter(f => !existing.has(`${f.name}_${f.size}_${f.lastModified}`));
+      return [...prev, ...fresh];
+    });
+  };
+
+  const handleRemoveFileFromQueue = (index) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleUploadSubmit = async (e) => {
@@ -119,8 +193,8 @@ const BankFormsRepository = ({ defaultScope = 'common' }) => {
         setSelectedFiles([]);
         setUploadDocName('');
         setUploadNotes('');
-        fetchFolders();
-        fetchItems();
+        await fetchFolders();
+        await fetchItems();
       }
     } catch (err) {
       console.error('Upload error:', err);
@@ -136,10 +210,94 @@ const BankFormsRepository = ({ defaultScope = 'common' }) => {
       const res = await api.delete(`/repository/items/${id}`);
       if (res.data.success) {
         toast.success('Document deleted');
+        setSelectedItemIds(prev => prev.filter(i => i !== id));
         fetchItems();
       }
     } catch (err) {
       toast.error('Failed to delete document');
+    }
+  };
+
+  // Bulk Delete
+  const handleBulkDelete = async () => {
+    if (selectedItemIds.length === 0) return;
+    if (!window.confirm(`Delete ${selectedItemIds.length} selected document(s)?`)) return;
+
+    setIsBulkDeleting(true);
+    try {
+      const res = await api.post('/repository/items/bulk-delete', {
+        itemIds: selectedItemIds
+      });
+      if (res.data.success) {
+        toast.success(`${selectedItemIds.length} file(s) deleted`);
+        setSelectedItemIds([]);
+        fetchItems();
+      }
+    } catch (err) {
+      toast.error('Failed to delete selected files');
+    } finally {
+      setIsBulkDeleting(false);
+    }
+  };
+
+  // Bulk Download
+  const handleBulkDownload = async () => {
+    const selected = items.filter(i => selectedItemIds.includes(i._id));
+    if (selected.length === 0) return;
+
+    toast.loading(`Downloading ${selected.length} file(s)...`, { id: 'bulk-repo-dl' });
+    try {
+      for (const item of selected) {
+        const fullUrl = getAssetUrl(item.fileUrl);
+        const a = document.createElement('a');
+        a.href = fullUrl;
+        a.download = item.name;
+        a.target = '_blank';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        await new Promise(r => setTimeout(r, 400));
+      }
+      toast.success('Downloaded!', { id: 'bulk-repo-dl' });
+    } catch (e) {
+      toast.error('Download error', { id: 'bulk-repo-dl' });
+    }
+  };
+
+  // Bulk Share
+  const handleBulkShare = async () => {
+    const selected = items.filter(i => selectedItemIds.includes(i._id));
+    if (selected.length === 0) return;
+
+    const text = `📁 KTR Consultants – Repository Documents (${selected.length} files)\n\n` +
+      selected.map((item, idx) => `${idx + 1}. ${item.name} (${item.folderName})\n🔗 ${getAssetUrl(item.fileUrl)}`).join('\n\n');
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'KTR Repository Documents',
+          text
+        });
+        return;
+      } catch (e) {}
+    }
+
+    navigator.clipboard.writeText(text);
+    toast.success('Document links copied to clipboard!');
+    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
+  };
+
+  const toggleSelectItem = (id) => {
+    setSelectedItemIds(prev =>
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedItemIds.length === filteredItems.length && filteredItems.length > 0) {
+      setSelectedItemIds([]);
+    } else {
+      setSelectedItemIds(filteredItems.map(i => i._id));
     }
   };
 
@@ -153,17 +311,22 @@ const BankFormsRepository = ({ defaultScope = 'common' }) => {
 
   const handleShareFile = async (item) => {
     const fullUrl = getAssetUrl(item.fileUrl);
+    const text = `📄 KTR Consultants - Document\n\nName: ${item.name}\nFolder: ${item.folderName}\n${item.notes ? `Note: ${item.notes}\n` : ''}\n🔗 View file:\n${fullUrl}`;
+    
     if (navigator.share) {
       try {
         await navigator.share({
           title: item.name,
-          text: `Document: ${item.name} (${item.folderName})\n${item.notes ? `Note: ${item.notes}\n` : ''}`,
+          text,
           url: fullUrl
         });
         return;
       } catch (e) {}
     }
-    handleCopyLink(item.fileUrl, item._id);
+    
+    navigator.clipboard.writeText(text);
+    toast.success('Share link copied!');
+    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
   };
 
   const filteredItems = items.filter(item => {
@@ -228,7 +391,10 @@ const BankFormsRepository = ({ defaultScope = 'common' }) => {
             <FolderPlus className="w-4 h-4 text-gray-600" /> + New Folder
           </button>
           <button
-            onClick={() => setShowUploadModal(true)}
+            onClick={() => {
+              setSelectedFiles([]);
+              setShowUploadModal(true);
+            }}
             className="px-4 py-2 bg-[#081326] text-white hover:bg-[#11203d] rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-2 cursor-pointer"
           >
             <Upload className="w-4 h-4 text-[#f59e0b]" /> Upload Files
@@ -250,18 +416,32 @@ const BankFormsRepository = ({ defaultScope = 'common' }) => {
             All Folders ({items.length})
           </button>
           {folders.map(f => (
-            <button
-              key={f}
-              onClick={() => setSelectedFolder(f)}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer ${
-                selectedFolder === f
-                  ? 'bg-[#f59e0b] text-[#081326] font-black shadow-xs'
-                  : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
-              }`}
-            >
-              <Folder className="w-3.5 h-3.5" />
-              <span>{f}</span>
-            </button>
+            <div key={f} className="flex items-center group relative">
+              <button
+                onClick={() => setSelectedFolder(f)}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer ${
+                  selectedFolder === f
+                    ? 'bg-[#f59e0b] text-[#081326] font-black shadow-xs'
+                    : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+                }`}
+              >
+                <Folder className="w-3.5 h-3.5" />
+                <span>{f}</span>
+              </button>
+              {f !== 'General' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowRenameFolderModal(f);
+                    setRenameFolderName(f);
+                  }}
+                  className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-amber-600 ml-0.5 transition-opacity"
+                  title="Rename folder"
+                >
+                  <Edit3 className="w-3 h-3" />
+                </button>
+              )}
+            </div>
           ))}
         </div>
 
@@ -276,6 +456,69 @@ const BankFormsRepository = ({ defaultScope = 'common' }) => {
           />
         </div>
       </div>
+
+      {/* Bulk Action Bar */}
+      {selectedItemIds.length > 0 && (
+        <div className="bg-amber-500/10 border border-amber-300 rounded-2xl p-3 px-5 flex flex-wrap items-center justify-between gap-3 animate-in fade-in duration-150">
+          <div className="flex items-center gap-2 text-xs font-bold text-amber-950">
+            <CheckSquare className="w-4 h-4 text-amber-600" />
+            <span>{selectedItemIds.length} file(s) selected</span>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={handleBulkShare}
+              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs cursor-pointer transition-all"
+            >
+              <Share2 className="w-3.5 h-3.5" />
+              <span>Share Selected</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleBulkDownload}
+              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs cursor-pointer transition-all"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Download Selected</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleBulkDelete}
+              disabled={isBulkDeleting}
+              className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs cursor-pointer transition-all disabled:opacity-50"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>{isBulkDeleting ? 'Deleting...' : 'Delete Selected'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedItemIds([])}
+              className="px-3 py-1.5 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-xl text-xs font-bold cursor-pointer transition-all"
+            >
+              Deselect All
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Select All Checkbox Header */}
+      {filteredItems.length > 0 && (
+        <div className="flex items-center justify-between px-2 text-xs text-gray-400 font-bold">
+          <button
+            type="button"
+            onClick={toggleSelectAll}
+            className="flex items-center gap-1.5 text-gray-600 hover:text-gray-900 cursor-pointer"
+          >
+            {selectedItemIds.length === filteredItems.length && filteredItems.length > 0 ? (
+              <CheckSquare className="w-4 h-4 text-amber-600" />
+            ) : (
+              <Square className="w-4 h-4 text-gray-400" />
+            )}
+            <span>Select All ({filteredItems.length})</span>
+          </button>
+        </div>
+      )}
 
       {/* Grid of Items */}
       {loading ? (
@@ -302,16 +545,32 @@ const BankFormsRepository = ({ defaultScope = 'common' }) => {
           {filteredItems.map(item => {
             const isPdf = item.fileUrl.toLowerCase().endsWith('.pdf') || item.fileType === 'pdf';
             const isImg = /\.(jpg|jpeg|png|webp|gif)$/i.test(item.fileUrl) || item.fileType === 'image';
+            const isSelected = selectedItemIds.includes(item._id);
 
             return (
               <div 
                 key={item._id}
-                className="bg-white rounded-2xl border border-gray-100 hover:border-[#f59e0b] shadow-xs hover:shadow-md transition-all flex flex-col justify-between overflow-hidden group"
+                className={`bg-white rounded-2xl border transition-all flex flex-col justify-between overflow-hidden group shadow-xs ${
+                  isSelected ? 'border-amber-400 bg-amber-50/20' : 'border-gray-200/90 hover:border-[#f59e0b]'
+                }`}
               >
                 <div className="p-4 flex flex-col gap-3">
                   <div className="flex items-start justify-between gap-2">
-                    <div className="w-10 h-10 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center shrink-0">
-                      {getFileIcon(item.fileType, item.fileUrl)}
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => toggleSelectItem(item._id)}
+                        className="text-gray-400 hover:text-amber-600 cursor-pointer"
+                      >
+                        {isSelected ? (
+                          <CheckSquare className="w-4 h-4 text-amber-600" />
+                        ) : (
+                          <Square className="w-4 h-4 text-gray-300" />
+                        )}
+                      </button>
+                      <div className="w-9 h-9 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center shrink-0">
+                        {getFileIcon(item.fileType, item.fileUrl)}
+                      </div>
                     </div>
                     <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-gray-100 text-gray-600 truncate max-w-[120px]">
                       {item.folderName}
@@ -368,7 +627,7 @@ const BankFormsRepository = ({ defaultScope = 'common' }) => {
 
                   {(role === 'admin' || item.createdBy?._id === user?.id || item.createdBy === user?.id) && (
                     <button
-                      onClick={() => handleDeleteDeleteItem(item._id, item.name)}
+                      onClick={() => handleDeleteItem(item._id, item.name)}
                       className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-600 transition-colors cursor-pointer"
                       title="Delete File"
                     >
@@ -474,17 +733,38 @@ const BankFormsRepository = ({ defaultScope = 'common' }) => {
               </div>
 
               <div>
-                <label className="block text-[11px] font-bold text-gray-500 mb-1.5">Select Files (PDF, Images, Excel)</label>
+                <label className="block text-[11px] font-bold text-gray-500 mb-1.5">Select Files (Selecting more will append)</label>
                 <input
                   type="file"
                   multiple
-                  onChange={(e) => setSelectedFiles(Array.from(e.target.files || []))}
+                  onChange={handleFileSelect}
                   className="w-full text-xs text-gray-500 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-[#081326] file:text-white hover:file:bg-[#11203d] cursor-pointer"
                 />
                 {selectedFiles.length > 0 && (
-                  <p className="text-[11px] text-emerald-600 font-bold mt-1">
-                    ✓ {selectedFiles.length} file(s) selected
-                  </p>
+                  <div className="mt-2 space-y-1 max-h-32 overflow-y-auto pr-1">
+                    <div className="flex justify-between items-center text-[11px] font-bold text-gray-500">
+                      <span>{selectedFiles.length} file(s) staged:</span>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedFiles([])}
+                        className="text-red-500 hover:underline"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                    {selectedFiles.map((f, fIdx) => (
+                      <div key={fIdx} className="flex items-center justify-between p-1.5 bg-gray-50 rounded-lg text-xs border border-gray-200">
+                        <span className="truncate max-w-[260px] font-medium text-gray-700">{f.name}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveFileFromQueue(fIdx)}
+                          className="text-red-500 hover:text-red-700 font-bold ml-2"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
 
@@ -498,11 +778,11 @@ const BankFormsRepository = ({ defaultScope = 'common' }) => {
                 </button>
                 <button
                   type="submit"
-                  disabled={isUploading}
+                  disabled={isUploading || selectedFiles.length === 0}
                   className="flex-1 py-2.5 bg-[#081326] text-white rounded-xl text-xs font-bold hover:bg-[#11203d] flex items-center justify-center gap-1.5 disabled:opacity-60"
                 >
                   {isUploading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5 text-[#f59e0b]" />}
-                  <span>{isUploading ? 'Uploading...' : 'Upload Now'}</span>
+                  <span>{isUploading ? 'Uploading...' : `Upload ${selectedFiles.length > 0 ? selectedFiles.length + ' File(s)' : ''}`}</span>
                 </button>
               </div>
             </form>
@@ -527,6 +807,7 @@ const BankFormsRepository = ({ defaultScope = 'common' }) => {
                 <label className="block text-[11px] font-bold text-gray-500 mb-1.5">Folder Name</label>
                 <input
                   type="text"
+                  required
                   placeholder="e.g. HDFC Bank Kit"
                   value={newFolderName}
                   onChange={(e) => setNewFolderName(e.target.value)}
@@ -547,6 +828,57 @@ const BankFormsRepository = ({ defaultScope = 'common' }) => {
                   className="flex-1 py-2 bg-[#081326] text-white rounded-xl text-xs font-bold hover:bg-[#11203d]"
                 >
                   Create
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Rename Folder Modal */}
+      {showRenameFolderModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#081326]/70 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="font-black text-sm text-[#081326] flex items-center gap-2">
+                <Edit3 className="w-4 h-4 text-[#f59e0b]" /> Rename Folder
+              </h3>
+              <button onClick={() => setShowRenameFolderModal(null)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <form onSubmit={handleRenameFolder} className="space-y-4">
+              <div>
+                <label className="block text-[11px] font-bold text-gray-500 mb-1.5">New Folder Name</label>
+                <input
+                  type="text"
+                  required
+                  value={renameFolderName}
+                  onChange={(e) => setRenameFolderName(e.target.value)}
+                  autoFocus
+                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold outline-none focus:border-[#f59e0b]"
+                />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleDeleteFolder(showRenameFolderModal)}
+                  className="py-2 px-3 bg-red-50 text-red-600 border border-red-200 rounded-xl text-xs font-bold hover:bg-red-100"
+                >
+                  Delete
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowRenameFolderModal(null)}
+                  className="flex-1 py-2 border border-gray-200 text-gray-700 rounded-xl text-xs font-bold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2 bg-[#081326] text-white rounded-xl text-xs font-bold hover:bg-[#11203d]"
+                >
+                  Save
                 </button>
               </div>
             </form>

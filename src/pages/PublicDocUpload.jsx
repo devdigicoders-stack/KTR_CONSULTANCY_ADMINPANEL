@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { 
   UploadCloud, ShieldCheck, CheckCircle2, AlertCircle, Upload, Check, 
-  ArrowRight, RefreshCw, Lock, FileText, X
+  ArrowRight, RefreshCw, Lock, FileText, X, Plus
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../api/axios';
@@ -13,7 +13,8 @@ const PublicDocUpload = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const [uploadedFiles, setUploadedFiles] = useState({});
+  // Mapping: docName -> Array of Files [File, File...]
+  const [uploadedFilesMap, setUploadedFilesMap] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submissionSuccess, setSubmissionSuccess] = useState(null);
 
@@ -39,15 +40,29 @@ const PublicDocUpload = () => {
     if (id) fetchRequest();
   }, [id]);
 
-  const handleFileChange = (docName, file) => {
-    setUploadedFiles(prev => ({ ...prev, [docName]: file }));
+  const handleFilesSelect = (docName, e) => {
+    const incoming = Array.from(e.target.files || []);
+    if (incoming.length === 0) return;
+
+    setUploadedFilesMap(prev => {
+      const existing = prev[docName] || [];
+      const existingKeys = new Set(existing.map(f => `${f.name}_${f.size}_${f.lastModified}`));
+      const fresh = incoming.filter(f => !existingKeys.has(`${f.name}_${f.size}_${f.lastModified}`));
+      return {
+        ...prev,
+        [docName]: [...existing, ...fresh]
+      };
+    });
   };
 
-  const handleRemoveFile = (docName) => {
-    setUploadedFiles(prev => {
-      const copy = { ...prev };
-      delete copy[docName];
-      return copy;
+  const handleRemoveSingleFile = (docName, fileIndex) => {
+    setUploadedFilesMap(prev => {
+      const list = prev[docName] || [];
+      const updated = list.filter((_, i) => i !== fileIndex);
+      return {
+        ...prev,
+        [docName]: updated
+      };
     });
   };
 
@@ -56,16 +71,18 @@ const PublicDocUpload = () => {
     if (!requestConfig) return;
 
     // Check if required docs are uploaded
-    const requiredDocs = (requestConfig.requestedDocs || []).filter(d => d.required);
-    for (const d of requiredDocs) {
-      if (!uploadedFiles[d.name]) {
-        toast.error(`Please upload ${d.name}`);
+    const requestedDocs = requestConfig.requestedDocs || [];
+    for (const d of requestedDocs) {
+      const files = uploadedFilesMap[d.name] || [];
+      if (d.required && files.length === 0) {
+        toast.error(`Please upload at least one file for "${d.name}"`);
         return;
       }
     }
 
-    if (Object.keys(uploadedFiles).length === 0) {
-      toast.error('Please select at least one document to upload');
+    const totalUploadedCount = Object.values(uploadedFilesMap).reduce((acc, curr) => acc + (curr?.length || 0), 0);
+    if (totalUploadedCount === 0) {
+      toast.error('Please select at least one document file to upload');
       return;
     }
 
@@ -73,13 +90,14 @@ const PublicDocUpload = () => {
       setIsSubmitting(true);
       const submitPayload = new FormData();
 
-      Object.keys(uploadedFiles).forEach(docName => {
-        const file = uploadedFiles[docName];
-        if (file) {
-          const docDef = (requestConfig.requestedDocs || []).find(d => d.name === docName);
-          const mappedKey = docDef?.docType && docDef.docType !== 'custom' ? docDef.docType : 'customDocs';
+      Object.keys(uploadedFilesMap).forEach(docName => {
+        const files = uploadedFilesMap[docName] || [];
+        const docDef = requestedDocs.find(d => d.name === docName);
+        const mappedKey = docDef?.docType && docDef.docType !== 'custom' ? docDef.docType : 'customDocs';
+        
+        files.forEach(file => {
           submitPayload.append(mappedKey, file);
-        }
+        });
       });
 
       const res = await api.post(`/forms/public/${id}/submit`, submitPayload, {
@@ -93,7 +111,7 @@ const PublicDocUpload = () => {
       }
     } catch (err) {
       console.error('Document upload error:', err);
-      toast.error(err.response?.data?.message || 'Failed to upload documents. Please check your network.');
+      toast.error(err.response?.data?.message || 'Failed to upload documents. Please check your connection.');
     } finally {
       setIsSubmitting(false);
     }
@@ -198,10 +216,10 @@ const PublicDocUpload = () => {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {requestedDocs.map((doc, idx) => {
-              const file = uploadedFiles[doc.name];
+              const files = uploadedFilesMap[doc.name] || [];
 
               return (
-                <div key={idx} className="p-4 bg-gray-50/70 border border-gray-200 rounded-2xl space-y-2">
+                <div key={idx} className="p-4 bg-gray-50/70 border border-gray-200 rounded-2xl space-y-3">
                   <div className="flex items-center justify-between gap-2">
                     <div>
                       <h4 className="text-xs font-black text-[#081326]">
@@ -218,35 +236,43 @@ const PublicDocUpload = () => {
                     </span>
                   </div>
 
-                  {file ? (
-                    <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between">
-                      <div className="flex items-center gap-2 truncate">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                        <span className="text-xs font-bold text-emerald-900 truncate">{file.name}</span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveFile(doc.name)}
-                        className="p-1 text-gray-400 hover:text-red-500 rounded"
-                        title="Remove file"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="border-2 border-dashed border-gray-200 hover:border-[#f59e0b] rounded-xl p-3.5 text-center bg-white hover:bg-amber-50/20 transition-all cursor-pointer relative">
-                      <input
-                        type="file"
-                        onChange={(e) => handleFileChange(doc.name, e.target.files?.[0])}
-                        className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                      />
-                      <div className="flex items-center justify-center gap-2">
-                        <Upload className="w-4 h-4 text-[#f59e0b]" />
-                        <span className="text-xs font-bold text-gray-700">Choose / Tap to select file</span>
-                      </div>
-                      <p className="text-[9px] text-gray-400 mt-0.5">PDF or clear scanned photos (up to 100MB)</p>
+                  {/* Staged files list */}
+                  {files.length > 0 && (
+                    <div className="space-y-1.5">
+                      {files.map((file, fIdx) => (
+                        <div key={fIdx} className="p-2.5 bg-emerald-50/80 border border-emerald-200 rounded-xl flex items-center justify-between text-xs">
+                          <div className="flex items-center gap-2 truncate">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                            <span className="font-bold text-emerald-950 truncate">{file.name}</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveSingleFile(doc.name, fIdx)}
+                            className="p-1 text-red-500 hover:bg-red-100 rounded cursor-pointer"
+                            title="Remove this file"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
                     </div>
                   )}
+
+                  {/* Upload button area: allows adding more files to batch */}
+                  <div className="border-2 border-dashed border-gray-200 hover:border-[#f59e0b] rounded-xl p-3 text-center bg-white hover:bg-amber-50/20 transition-all cursor-pointer relative">
+                    <input
+                      type="file"
+                      multiple
+                      onChange={(e) => handleFilesSelect(doc.name, e)}
+                      className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                    />
+                    <div className="flex items-center justify-center gap-2">
+                      <Upload className="w-4 h-4 text-[#f59e0b]" />
+                      <span className="text-xs font-bold text-gray-700">
+                        {files.length > 0 ? '+ Add More Files' : 'Select File(s) (PDF or Scanned Images)'}
+                      </span>
+                    </div>
+                  </div>
                 </div>
               );
             })}
@@ -255,28 +281,22 @@ const PublicDocUpload = () => {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full py-4 bg-[#081326] text-white hover:bg-[#11203d] rounded-2xl text-xs sm:text-sm font-black transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
+                className="w-full py-3.5 bg-[#081326] text-white rounded-xl text-xs font-black hover:bg-[#11203d] transition-all flex items-center justify-center gap-2 shadow-lg cursor-pointer disabled:opacity-60"
               >
                 {isSubmitting ? (
                   <>
-                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <RefreshCw className="w-4 h-4 animate-spin text-[#f59e0b]" />
                     <span>Uploading Documents...</span>
                   </>
                 ) : (
                   <>
-                    <UploadCloud className="w-4 h-4 text-[#f59e0b]" />
-                    <span>Upload & Submit Documents</span>
+                    <span>Submit & Upload All Documents</span>
+                    <ArrowRight className="w-4 h-4 text-[#f59e0b]" />
                   </>
                 )}
               </button>
             </div>
           </form>
-        </div>
-
-        {/* Security Footer Note */}
-        <div className="text-center text-[11px] text-gray-400 font-medium flex items-center justify-center gap-2">
-          <Lock className="w-3.5 h-3.5" />
-          <span>Encrypted 256-bit bank-grade transmission to KTR Consultants.</span>
         </div>
       </div>
     </div>

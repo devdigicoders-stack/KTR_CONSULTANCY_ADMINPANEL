@@ -1,13 +1,15 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.mjs?url';
-import { Loader2, AlertCircle, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, ExternalLink, RotateCw } from 'lucide-react';
+import { 
+  Loader2, AlertCircle, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, 
+  ExternalLink, RotateCw, RefreshCw, Move
+} from 'lucide-react';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
-export default function PdfViewer({ url, title, className = '' }) {
+export default function PdfViewer({ url, title = 'PDF Document', className = '' }) {
   const containerRef = useRef(null);
-  const scrollWrapperRef = useRef(null);
   const canvasRef = useRef(null);
   const renderTaskRef = useRef(null);
 
@@ -16,16 +18,18 @@ export default function PdfViewer({ url, title, className = '' }) {
   const [numPages, setNumPages] = useState(0);
   const [scale, setScale] = useState(1.0);
   const [rotation, setRotation] = useState(0);
+  const [position, setPosition] = useState({ x: 0, y: 0 });
   const [loading, setLoading] = useState(true);
+  const [rendering, setRendering] = useState(false);
   const [error, setError] = useState(null);
 
-  // Touch pinch-to-zoom and drag-pan refs
+  // Drag pan & touch pinch refs
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartRef = useRef({ x: 0, y: 0 });
   const initialDistanceRef = useRef(null);
   const initialScaleRef = useRef(1);
-  const [isDragging, setIsDragging] = useState(false);
-  const dragStartRef = useRef({ x: 0, y: 0, scrollLeft: 0, scrollTop: 0 });
 
-  // Load PDF Document
+  // Reset transform when URL changes
   useEffect(() => {
     let isCancelled = false;
 
@@ -41,6 +45,7 @@ export default function PdfViewer({ url, title, className = '' }) {
     setCurrentPage(1);
     setScale(1.0);
     setRotation(0);
+    setPosition({ x: 0, y: 0 });
 
     const loadingTask = pdfjsLib.getDocument({
       url,
@@ -72,54 +77,70 @@ export default function PdfViewer({ url, title, className = '' }) {
     };
   }, [url]);
 
-  // Render Page to Canvas
+  // Reset position when changing pages or resetting
+  const handleReset = (e) => {
+    e?.stopPropagation();
+    setScale(1.0);
+    setRotation(0);
+    setPosition({ x: 0, y: 0 });
+  };
+
+  // Render Page to Canvas with High Crisp DPI
   const renderPage = useCallback(async () => {
     if (!pdfDoc || !canvasRef.current || !containerRef.current) return;
 
     try {
       if (renderTaskRef.current) {
-        renderTaskRef.current.cancel();
+        try {
+          renderTaskRef.current.cancel();
+        } catch (e) {}
       }
 
+      setRendering(true);
       const page = await pdfDoc.getPage(currentPage);
       const canvas = canvasRef.current;
       if (!canvas) return;
-      const ctx = canvas.getContext('2d');
+      const ctx = canvas.getContext('2d', { alpha: false });
 
-      const containerWidth = containerRef.current.clientWidth || 600;
+      const containerWidth = containerRef.current.clientWidth || 700;
       const unscaledViewport = page.getViewport({ scale: 1, rotation });
       
-      const autoScale = ((containerWidth - 24) / unscaledViewport.width) * scale;
-      const pixelRatio = window.devicePixelRatio || 1;
-      const viewport = page.getViewport({ scale: autoScale, rotation });
+      // Calculate fit scale (fits nicely in container)
+      const padding = 16;
+      const fitWidth = Math.max(containerWidth - padding * 2, 320);
+      const baseScale = fitWidth / unscaledViewport.width;
 
-      canvas.width = Math.floor(viewport.width * pixelRatio);
-      canvas.height = Math.floor(viewport.height * pixelRatio);
-      canvas.style.width = `${Math.floor(viewport.width)}px`;
-      canvas.style.height = `${Math.floor(viewport.height)}px`;
+      // Use higher pixel ratio for razor-sharp text when zooming into details
+      const pixelRatio = Math.min(window.devicePixelRatio || 1, 2.5);
+      const renderViewport = page.getViewport({ scale: baseScale * pixelRatio, rotation });
 
-      const transform = pixelRatio !== 1 ? [pixelRatio, 0, 0, pixelRatio, 0, 0] : null;
+      canvas.width = Math.floor(renderViewport.width);
+      canvas.height = Math.floor(renderViewport.height);
+      canvas.style.width = `${Math.floor(unscaledViewport.width * baseScale)}px`;
+      canvas.style.height = `${Math.floor(unscaledViewport.height * baseScale)}px`;
 
       const renderContext = {
         canvasContext: ctx,
-        transform: transform,
-        viewport: viewport,
+        viewport: renderViewport,
       };
 
       const task = page.render(renderContext);
       renderTaskRef.current = task;
       await task.promise;
+      setRendering(false);
     } catch (err) {
       if (err?.name !== 'RenderingCancelledException') {
         console.error('PDF Page render error:', err);
+        setRendering(false);
       }
     }
-  }, [pdfDoc, currentPage, scale, rotation]);
+  }, [pdfDoc, currentPage, rotation]);
 
   useEffect(() => {
     renderPage();
   }, [renderPage]);
 
+  // Resize listener
   useEffect(() => {
     const handleResize = () => {
       renderPage();
@@ -128,9 +149,13 @@ export default function PdfViewer({ url, title, className = '' }) {
     return () => window.removeEventListener('resize', handleResize);
   }, [renderPage]);
 
-  // Touch Pinch-to-zoom and Pan handlers (Document only)
+  // ----------------------------------------------------
+  // TOUCH & MOUSE 4-DIRECTION FREE PANNING & ZOOM
+  // ----------------------------------------------------
+
   const handleTouchStart = (e) => {
     if (e.touches.length === 2) {
+      // Pinch-to-zoom
       const touch1 = e.touches[0];
       const touch2 = e.touches[1];
       initialDistanceRef.current = Math.hypot(
@@ -139,21 +164,20 @@ export default function PdfViewer({ url, title, className = '' }) {
       );
       initialScaleRef.current = scale;
       setIsDragging(false);
-    } else if (e.touches.length === 1 && scale > 1 && scrollWrapperRef.current) {
+    } else if (e.touches.length === 1) {
+      // 1-finger 4-way pan (allowed at any scale or when zoomed)
       const touch = e.touches[0];
       setIsDragging(true);
       dragStartRef.current = {
-        x: touch.clientX,
-        y: touch.clientY,
-        scrollLeft: scrollWrapperRef.current.scrollLeft,
-        scrollTop: scrollWrapperRef.current.scrollTop
+        x: touch.clientX - position.x,
+        y: touch.clientY - position.y
       };
     }
   };
 
   const handleTouchMove = (e) => {
     if (e.touches.length === 2 && initialDistanceRef.current) {
-      if (e.cancelable) e.preventDefault(); // Stop outer browser viewport zoom!
+      if (e.cancelable) e.preventDefault();
       const touch1 = e.touches[0];
       const touch2 = e.touches[1];
       const currentDistance = Math.hypot(
@@ -161,15 +185,17 @@ export default function PdfViewer({ url, title, className = '' }) {
         touch2.clientY - touch1.clientY
       );
       const factor = currentDistance / initialDistanceRef.current;
-      const newScale = Math.min(Math.max(initialScaleRef.current * factor, 0.75), 4.0);
+      const newScale = Math.min(Math.max(initialScaleRef.current * factor, 0.8), 4.5);
       setScale(newScale);
-    } else if (e.touches.length === 1 && isDragging && scale > 1 && scrollWrapperRef.current) {
-      if (e.cancelable) e.preventDefault();
+    } else if (e.touches.length === 1 && isDragging) {
+      if (scale > 1) {
+        if (e.cancelable) e.preventDefault(); // Stop outer page scroll while panning zoomed document
+      }
       const touch = e.touches[0];
-      const deltaX = touch.clientX - dragStartRef.current.x;
-      const deltaY = touch.clientY - dragStartRef.current.y;
-      scrollWrapperRef.current.scrollLeft = dragStartRef.current.scrollLeft - deltaX;
-      scrollWrapperRef.current.scrollTop = dragStartRef.current.scrollTop - deltaY;
+      setPosition({
+        x: touch.clientX - dragStartRef.current.x,
+        y: touch.clientY - dragStartRef.current.y
+      });
     }
   };
 
@@ -179,80 +205,137 @@ export default function PdfViewer({ url, title, className = '' }) {
     }
     if (e.touches.length === 0) {
       setIsDragging(false);
+      if (scale <= 1) {
+        setPosition({ x: 0, y: 0 });
+      }
     }
   };
 
   // Mouse pan handlers (Desktop)
   const handleMouseDown = (e) => {
-    if (scale > 1 && scrollWrapperRef.current) {
-      e.preventDefault();
-      setIsDragging(true);
-      dragStartRef.current = {
-        x: e.clientX,
-        y: e.clientY,
-        scrollLeft: scrollWrapperRef.current.scrollLeft,
-        scrollTop: scrollWrapperRef.current.scrollTop
-      };
-    }
+    e.preventDefault();
+    setIsDragging(true);
+    dragStartRef.current = {
+      x: e.clientX - position.x,
+      y: e.clientY - position.y
+    };
   };
 
   const handleMouseMove = (e) => {
-    if (isDragging && scale > 1 && scrollWrapperRef.current) {
+    if (isDragging) {
       e.preventDefault();
-      const deltaX = e.clientX - dragStartRef.current.x;
-      const deltaY = e.clientY - dragStartRef.current.y;
-      scrollWrapperRef.current.scrollLeft = dragStartRef.current.scrollLeft - deltaX;
-      scrollWrapperRef.current.scrollTop = dragStartRef.current.scrollTop - deltaY;
+      setPosition({
+        x: e.clientX - dragStartRef.current.x,
+        y: e.clientY - dragStartRef.current.y
+      });
     }
   };
 
   const handleMouseUp = () => {
     setIsDragging(false);
+    if (scale <= 1) {
+      setPosition({ x: 0, y: 0 });
+    }
   };
 
-  const handlePrev = (e) => {
-    e.stopPropagation();
-    if (currentPage > 1) setCurrentPage((p) => p - 1);
+  // Trackpad / Wheel 2-finger panning and Ctrl-wheel zoom
+  const handleWheel = (e) => {
+    if (e.ctrlKey || e.metaKey) {
+      // Zoom in / out
+      e.preventDefault();
+      const zoomFactor = e.deltaY < 0 ? 1.15 : 0.85;
+      setScale((s) => {
+        const next = Math.min(Math.max(s * zoomFactor, 0.8), 4.5);
+        if (next <= 1) setPosition({ x: 0, y: 0 });
+        return next;
+      });
+    } else if (scale > 1) {
+      // Pan 4-way freely
+      e.preventDefault();
+      setPosition((prev) => ({
+        x: prev.x - e.deltaX,
+        y: prev.y - e.deltaY
+      }));
+    }
   };
 
-  const handleNext = (e) => {
-    e.stopPropagation();
-    if (currentPage < numPages) setCurrentPage((p) => p + 1);
+  // Navigation handlers
+  const handlePrevPage = (e) => {
+    e?.stopPropagation();
+    if (currentPage > 1) {
+      setCurrentPage((p) => p - 1);
+      setPosition({ x: 0, y: 0 });
+    }
+  };
+
+  const handleNextPage = (e) => {
+    e?.stopPropagation();
+    if (currentPage < numPages) {
+      setCurrentPage((p) => p + 1);
+      setPosition({ x: 0, y: 0 });
+    }
   };
 
   const handleZoomIn = (e) => {
-    e.stopPropagation();
-    setScale((s) => Math.min(s + 0.25, 4.0));
+    e?.stopPropagation();
+    setScale((s) => Math.min(s + 0.3, 4.5));
   };
 
   const handleZoomOut = (e) => {
-    e.stopPropagation();
-    setScale((s) => Math.max(s - 0.25, 0.75));
+    e?.stopPropagation();
+    setScale((s) => {
+      const next = Math.max(s - 0.3, 0.8);
+      if (next <= 1) setPosition({ x: 0, y: 0 });
+      return next;
+    });
   };
 
   const handleRotate = (e) => {
-    e.stopPropagation();
+    e?.stopPropagation();
     setRotation((r) => (r + 90) % 360);
-  };
-
-  const handleReset = (e) => {
-    e.stopPropagation();
-    setScale(1.0);
-    setRotation(0);
-    if (scrollWrapperRef.current) {
-      scrollWrapperRef.current.scrollLeft = 0;
-      scrollWrapperRef.current.scrollTop = 0;
-    }
+    setPosition({ x: 0, y: 0 });
   };
 
   return (
     <div
       ref={containerRef}
-      className={`w-full bg-slate-900/95 rounded-xl overflow-hidden flex flex-col shadow-inner select-none ${className}`}
+      className={`w-full bg-slate-900 rounded-2xl overflow-hidden flex flex-col shadow-inner select-none relative ${className}`}
     >
-      {/* Viewer Main Body with 4-way pan and drag */}
+      {/* Top Floating Helper / Status Bar */}
+      <div className="bg-slate-950/80 backdrop-blur-md px-3 py-2 border-b border-white/10 flex items-center justify-between text-xs text-gray-300 z-20">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="font-bold text-amber-400 truncate text-[11px] sm:text-xs">
+            {title}
+          </span>
+          {numPages > 1 && (
+            <span className="px-2 py-0.5 bg-white/10 rounded-full text-[10px] font-mono font-bold text-gray-200 shrink-0">
+              Page {currentPage} of {numPages}
+            </span>
+          )}
+        </div>
+
+        {/* Quick Zoom Pill & Open Direct */}
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="text-[10px] font-mono text-gray-400">
+            {Math.round(scale * 100)}%
+          </span>
+          <a
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-2 py-0.5 bg-amber-400/90 hover:bg-amber-400 text-slate-950 rounded-lg text-[10px] font-black flex items-center gap-1 transition-colors"
+            title="Open PDF in new browser tab"
+          >
+            <ExternalLink className="w-2.5 h-2.5" /> Full Tab
+          </a>
+        </div>
+      </div>
+
+      {/* Main Document Canvas Viewport with Free 4-Direction Panning */}
       <div
-        ref={scrollWrapperRef}
+        className={`relative w-full min-h-[380px] sm:min-h-[520px] flex items-center justify-center p-2 sm:p-4 overflow-hidden touch-none ${
+          scale > 1 ? (isDragging ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-default'
+        }`}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
@@ -261,16 +344,12 @@ export default function PdfViewer({ url, title, className = '' }) {
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
-        style={{ 
-          touchAction: scale > 1 ? 'none' : 'pan-y',
-          cursor: scale > 1 ? (isDragging ? 'grabbing' : 'grab') : 'default'
-        }}
-        className="relative w-full min-h-[350px] sm:min-h-[500px] overflow-auto p-2 sm:p-4 flex"
+        onWheel={handleWheel}
       >
         {loading && (
-          <div className="m-auto flex flex-col items-center gap-3 text-amber-400 py-12">
+          <div className="m-auto flex flex-col items-center gap-3 text-amber-400 py-16">
             <Loader2 className="w-8 h-8 animate-spin" />
-            <p className="text-xs font-semibold text-gray-300">Rendering document...</p>
+            <p className="text-xs font-semibold text-gray-300">Loading document...</p>
           </div>
         )}
 
@@ -292,93 +371,126 @@ export default function PdfViewer({ url, title, className = '' }) {
           </div>
         )}
 
-        <div className="m-auto flex items-center justify-center">
+        {/* Rendered PDF Page with 2D Transform Matrix */}
+        <div
+          style={{
+            transform: `translate3d(${position.x}px, ${position.y}px, 0px) scale(${scale})`,
+            transformOrigin: 'center center',
+            transition: isDragging ? 'none' : 'transform 0.1s ease-out'
+          }}
+          className={`flex items-center justify-center pointer-events-none transition-opacity duration-200 ${
+            loading || error ? 'opacity-0' : 'opacity-100'
+          }`}
+        >
           <canvas
             ref={canvasRef}
-            className={`rounded-lg shadow-2xl bg-white max-w-none transition-opacity duration-200 ${
-              loading || error ? 'hidden' : 'block'
-            }`}
+            className="rounded-lg shadow-2xl bg-white max-w-none block ring-1 ring-black/20"
           />
         </div>
-      </div>
 
-      {/* Floating Bottom Controls (Page nav, Rotation & Zoom) */}
-      {!loading && !error && (
-        <div className="bg-slate-950/90 border-t border-slate-800/80 px-3 py-2 flex items-center justify-between gap-2 text-white">
-          {/* Page navigation */}
-          {numPages > 1 ? (
-            <div className="flex items-center gap-1.5">
+        {/* Multi-page Navigation Floating Arrows */}
+        {numPages > 1 && (
+          <>
+            {currentPage > 1 && (
               <button
                 type="button"
-                onClick={handlePrev}
+                onClick={handlePrevPage}
+                className="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-slate-950/80 hover:bg-amber-400 text-white hover:text-slate-950 border border-white/20 flex items-center justify-center transition-all z-20 cursor-pointer shadow-lg hover:scale-105"
+                title="Previous Page"
+              >
+                <ChevronLeft className="w-5 h-5 stroke-[2.5]" />
+              </button>
+            )}
+
+            {currentPage < numPages && (
+              <button
+                type="button"
+                onClick={handleNextPage}
+                className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-slate-950/80 hover:bg-amber-400 text-white hover:text-slate-950 border border-white/20 flex items-center justify-center transition-all z-20 cursor-pointer shadow-lg hover:scale-105"
+                title="Next Page"
+              >
+                <ChevronRight className="w-5 h-5 stroke-[2.5]" />
+              </button>
+            )}
+          </>
+        )}
+
+        {/* Zoom & Pan Hint */}
+        {scale > 1 && (
+          <div className="absolute top-12 left-3 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-full text-[10px] text-amber-300 font-bold flex items-center gap-1.5 border border-white/10 z-10 pointer-events-none">
+            <Move className="w-3 h-3" />
+            <span>Drag in any direction to explore</span>
+          </div>
+        )}
+      </div>
+
+      {/* Bottom Floating Interactive Toolbar */}
+      <div className="bg-slate-950/90 backdrop-blur-md px-4 py-2 border-t border-white/10 flex items-center justify-between gap-2 z-20">
+        {/* Page Nav */}
+        <div className="flex items-center gap-1">
+          {numPages > 1 && (
+            <>
+              <button
+                type="button"
+                onClick={handlePrevPage}
                 disabled={currentPage <= 1}
-                className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-30 disabled:hover:bg-slate-800 transition-colors text-xs font-bold"
+                className="p-1.5 text-gray-300 hover:text-white hover:bg-white/10 disabled:opacity-30 rounded-lg cursor-pointer transition-colors"
                 title="Previous Page"
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
-              <span className="text-[11px] font-mono font-bold px-2 py-0.5 bg-slate-800 rounded-md">
+              <span className="text-[11px] font-mono font-bold text-gray-300 px-1">
                 {currentPage} / {numPages}
               </span>
               <button
                 type="button"
-                onClick={handleNext}
+                onClick={handleNextPage}
                 disabled={currentPage >= numPages}
-                className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-30 disabled:hover:bg-slate-800 transition-colors text-xs font-bold"
+                className="p-1.5 text-gray-300 hover:text-white hover:bg-white/10 disabled:opacity-30 rounded-lg cursor-pointer transition-colors"
                 title="Next Page"
               >
                 <ChevronRight className="w-4 h-4" />
               </button>
-            </div>
-          ) : (
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={handleRotate}
-                className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 transition-colors text-xs font-bold flex items-center gap-1"
-                title="Rotate 90°"
-              >
-                <RotateCw className="w-3.5 h-3.5 text-amber-400" />
-                <span className="text-[10px] hidden sm:inline">Rotate</span>
-              </button>
-            </div>
+            </>
           )}
-
-          {/* Zoom controls */}
-          <div className="flex items-center gap-1">
-            {scale !== 1 && (
-              <button
-                type="button"
-                onClick={handleReset}
-                className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-[10px] font-bold text-gray-300 transition-colors mr-1"
-              >
-                Reset
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={handleZoomOut}
-              disabled={scale <= 0.75}
-              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-30 transition-colors text-xs font-bold"
-              title="Zoom Out"
-            >
-              <ZoomOut className="w-3.5 h-3.5" />
-            </button>
-            <span className="text-[10px] font-mono text-gray-400 min-w-[36px] text-center">
-              {Math.round(scale * 100)}%
-            </span>
-            <button
-              type="button"
-              onClick={handleZoomIn}
-              disabled={scale >= 3.5}
-              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-30 transition-colors text-xs font-bold"
-              title="Zoom In"
-            >
-              <ZoomIn className="w-3.5 h-3.5" />
-            </button>
-          </div>
         </div>
-      )}
+
+        {/* Zoom & Tool Buttons */}
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={handleZoomOut}
+            className="p-1.5 text-gray-300 hover:text-white hover:bg-white/10 rounded-lg cursor-pointer transition-colors"
+            title="Zoom Out"
+          >
+            <ZoomOut className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onClick={handleZoomIn}
+            className="p-1.5 text-gray-300 hover:text-white hover:bg-white/10 rounded-lg cursor-pointer transition-colors"
+            title="Zoom In"
+          >
+            <ZoomIn className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onClick={handleRotate}
+            className="p-1.5 text-gray-300 hover:text-white hover:bg-white/10 rounded-lg cursor-pointer transition-colors"
+            title="Rotate 90°"
+          >
+            <RotateCw className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onClick={handleReset}
+            className="px-2 py-1 text-[11px] font-bold text-amber-400 hover:bg-amber-400/20 rounded-lg cursor-pointer transition-colors"
+            title="Fit to Screen (Reset)"
+          >
+            Reset
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

@@ -10,6 +10,7 @@ import { useAuth } from '../context/AuthContext';
 import OverviewTab from '../components/client/OverviewTab';
 import DocumentRepositoryTab from '../components/client/DocumentRepositoryTab';
 import PendencyTab from '../components/client/PendencyTab';
+import ClientFormsTab from '../components/client/ClientFormsTab';
 
 const formatCurrency = (amount) => {
   if (!amount && amount !== 0) return '₹ 0';
@@ -49,6 +50,7 @@ const ClientDetails = () => {
   const tabs = [
     'Overview',
     'Documents',
+    'Forms & Submissions',
     'Pendency',
     ...(user?.role === 'admin' ? ['Edit History'] : [])
   ];
@@ -57,6 +59,7 @@ const ClientDetails = () => {
     switch(activeTab) {
       case 'Overview': return { title: 'Client Overview', breadcrumb: 'Overview' };
       case 'Documents': return { title: 'Document Repository & Quick Index', breadcrumb: 'Documents' };
+      case 'Forms & Submissions': return { title: 'Filled Forms & Client Submissions', breadcrumb: 'Forms & Submissions' };
       case 'Pendency': return { title: 'Continuous Pendency Tracking & History', breadcrumb: 'Pendency' };
       case 'Manage Docs': return { title: 'Manage Custom Folders & Backups', breadcrumb: 'Manage Docs' };
       case 'Edit History': return { title: 'Audit Trail & Edit History Log', breadcrumb: 'Edit History' };
@@ -148,12 +151,24 @@ const ClientDetails = () => {
               {getInitials(client.fullName)}
             </div>
             <div>
-              <div className="flex items-center gap-3 mb-2">
-                <h2 className="text-2xl font-black text-[#081326]">{client.fullName}</h2>
+              <div className="flex items-center gap-3 mb-2 flex-wrap">
+                <h2 className="text-2xl font-black text-[#081326]">
+                  {client.fullName}
+                  {(client.age || (client.dob ? (new Date().getFullYear() - new Date(client.dob).getFullYear()) : null)) !== null && (
+                    <span className="text-base text-gray-500 font-bold ml-2">
+                      ({client.age || (new Date().getFullYear() - new Date(client.dob).getFullYear())} Yrs)
+                    </span>
+                  )}
+                </h2>
                 <span className={`${client.status === 'Approved' ? 'text-green-600 bg-green-50' : client.status === 'Rejected' ? 'text-red-500 bg-red-50' : 'text-orange-500 bg-orange-50'} px-2.5 py-1 rounded-md font-bold flex items-center gap-1.5 text-xs`}>
                   <span className={`w-1.5 h-1.5 rounded-full ${client.status === 'Approved' ? 'bg-green-500' : client.status === 'Rejected' ? 'bg-red-500' : 'bg-orange-500'}`}></span>
                   {client.status || 'Pending'}
                 </span>
+                {client.applicants && client.applicants.length > 1 && (
+                  <span className="bg-blue-50 text-blue-700 border border-blue-200 px-2.5 py-1 rounded-md font-bold text-xs">
+                    {client.applicants.length} Applicants
+                  </span>
+                )}
                 {activePendencies.length > 0 && (
                   <span className="bg-amber-50 text-amber-800 border border-amber-200 px-2.5 py-1 rounded-md font-bold text-xs flex items-center gap-1">
                     <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
@@ -212,6 +227,7 @@ const ClientDetails = () => {
       <div className="flex-1">
         {activeTab === 'Overview' && <OverviewTab client={client} />}
         {activeTab === 'Documents' && <DocumentRepositoryTab client={client} onRefresh={fetchClient} />}
+        {activeTab === 'Forms & Submissions' && <ClientFormsTab client={client} />}
         {activeTab === 'Pendency' && <PendencyTab client={client} onRefresh={fetchClient} />}
         {activeTab === 'Edit History' && (
           <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm space-y-4">

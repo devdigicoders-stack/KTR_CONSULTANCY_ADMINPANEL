@@ -20,7 +20,9 @@ import {
   Lock,
   FileUp,
   FileCheck2,
-  FolderTree
+  FolderTree,
+  Layers,
+  CheckCircle2
 } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -140,10 +142,12 @@ const Sidebar = ({ isMobileOpen, onClose }) => {
       title: role === 'admin' ? 'CLIENT & DATA' : 'APPLICATIONS & FORMS',
       items: [
         { name: role === 'admin' ? 'Clients' : 'My Applications', icon: Users, path: '/clients' },
-        { name: 'Bank Forms & Others', icon: FolderOpen, path: '/bank-forms' },
-        { name: `${user?.name ? user.name.split(' ')[0] : 'My'} – Private`, icon: Lock, path: '/my-private-docs' },
+        { name: 'Template Forms', icon: Layers, path: '/template-forms' },
         { name: 'Create Form & Link', icon: FileCheck2, path: '/client-forms' },
         { name: 'Request Documents', icon: FileUp, path: '/doc-requests' },
+        { name: 'Filled Forms', icon: CheckCircle2, path: '/filled-forms' },
+        { name: 'Bank Forms & Others', icon: FolderOpen, path: '/bank-forms' },
+        { name: `${user?.name ? user.name.split(' ')[0] : 'My'} – Private`, icon: Lock, path: '/my-private-docs' },
         ...(role === 'admin' ? [
           { name: 'All Client Documents', icon: FolderTree, path: '/documents' },
           { name: 'CIBIL / Civil Score', icon: ShieldCheck, path: '/cibil' },
