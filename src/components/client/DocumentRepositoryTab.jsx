@@ -554,7 +554,6 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
       }
 
       const res = await api.post(`/clients/${client._id}/documents`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
         timeout: 180000
       });
 
@@ -927,6 +926,15 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
     setTopShareModal(false);
   };
 
+  const getDocMimeType = (url) => {
+    const clean = (url || '').toLowerCase().split('?')[0];
+    if (clean.endsWith('.pdf')) return 'application/pdf';
+    if (clean.endsWith('.png')) return 'image/png';
+    if (clean.endsWith('.webp')) return 'image/webp';
+    if (clean.endsWith('.svg')) return 'image/svg+xml';
+    return 'image/jpeg';
+  };
+
   // Share all case files via native chooser
   const handleShareAllFiles = async (docsToShare) => {
     const allFiles = [];
@@ -951,13 +959,17 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
       const fileObjects = [];
       for (const item of allFiles.slice(0, 10)) {
         const fullUrl = getAssetUrl(item.fileUrl);
-        const fileName = (item.title || 'document').replace(/[^a-zA-Z0-9_-]/g, '_') + (item.fileUrl.toLowerCase().endsWith('.pdf') ? '.pdf' : '.jpg');
+        const mimeType = getDocMimeType(item.fileUrl);
+        const ext = mimeType === 'application/pdf' ? '.pdf' : (mimeType === 'image/png' ? '.png' : (mimeType === 'image/webp' ? '.webp' : '.jpg'));
+        const fileName = (item.title || 'document').replace(/[^a-zA-Z0-9_-]/g, '_') + ext;
         const res = await fetch(fullUrl);
-        const blob = await res.blob();
-        fileObjects.push(new File([blob], fileName, { type: blob.type || 'application/octet-stream' }));
+        if (res.ok) {
+          const blob = await res.blob();
+          fileObjects.push(new File([blob], fileName, { type: mimeType }));
+        }
       }
 
-      if (navigator.canShare && navigator.canShare({ files: fileObjects })) {
+      if (fileObjects.length > 0 && navigator.canShare && navigator.canShare({ files: fileObjects })) {
         toast.dismiss('share-all-toast');
         await navigator.share({
           files: fileObjects,
@@ -968,6 +980,11 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
         return;
       }
     } catch (err) {
+      if (err.name === 'AbortError') {
+        toast.dismiss('share-all-toast');
+        setTopShareModal(false);
+        return;
+      }
       console.log('Native all-files share not supported or dismissed', err);
     }
 
@@ -981,31 +998,59 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
     const fileUrl = primaryFile.fileUrl;
     if (!fileUrl) return;
     const fullUrl = getAssetUrl(fileUrl);
-    const fileName = docItem.name.replace(/[^a-zA-Z0-9_-]/g, '_') + (fileUrl.toLowerCase().endsWith('.pdf') ? '.pdf' : '.jpg');
+    const mimeType = getDocMimeType(fileUrl);
+    const ext = mimeType === 'application/pdf' ? '.pdf' : (mimeType === 'image/png' ? '.png' : (mimeType === 'image/webp' ? '.webp' : '.jpg'));
+    const safeName = (docItem.name || 'document').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const fileName = `${safeName}${ext}`;
 
     toast.loading('Preparing file for sharing...', { id: 'share-file-toast' });
 
     try {
       const response = await fetch(fullUrl);
-      const blob = await response.blob();
-      const file = new File([blob], fileName, { type: blob.type || 'application/octet-stream' });
+      if (response.ok) {
+        const blob = await response.blob();
+        const file = new File([blob], fileName, { type: mimeType });
 
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          toast.dismiss('share-file-toast');
+          await navigator.share({
+            files: [file],
+            title: docItem.name,
+            text: `${docItem.name} - ${client?.fullName || 'Client'}`
+          });
+          setShareDocModal(null);
+          return;
+        }
+      }
+    } catch (err) {
+      if (err.name === 'AbortError') {
         toast.dismiss('share-file-toast');
-        await navigator.share({
-          files: [file],
-          title: docItem.name,
-          text: `${docItem.name} - ${client?.fullName || 'Client'}`
-        });
         setShareDocModal(null);
         return;
       }
-    } catch (err) {
       console.log('Native file share not supported or cancelled', err);
     }
 
     toast.dismiss('share-file-toast');
-    const text = `📄 Document: ${docItem.name}\nClient: ${client?.fullName || 'Client'}\n\n🔗 View securely on KTR Portal:\n${shareBundleUrl}`;
+    const text = `📄 Document: ${docItem.name}\nClient: ${client?.fullName || 'Client'}\n\n🔗 View / Download:\n${fullUrl}\n\nPortal: ${shareBundleUrl}`;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `${docItem.name} - ${client?.fullName || 'Client'}`,
+          text: text,
+          url: fullUrl
+        });
+        setShareDocModal(null);
+        return;
+      } catch (err) {
+        if (err.name === 'AbortError') {
+          setShareDocModal(null);
+          return;
+        }
+      }
+    }
+
     navigator.clipboard.writeText(text);
     toast.success('Document link copied to clipboard!');
     window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
@@ -2143,9 +2188,25 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
 
               <button
                 type="button"
-                onClick={() => {
+                onClick={async () => {
                   const loanAmountFormatted = client?.loanAmount ? `₹${Number(client.loanAmount).toLocaleString('en-IN')}` : 'As Applicable';
                   const text = `KTR Consultants – Client Documents\n\nClient: ${client?.fullName || 'Client'}\nLoan Amount: ${loanAmountFormatted}\nCase Type: ${client?.loanType || 'Loan Application'}\nProfession: ${client?.occupation || client?.employmentType || 'Salaried'}\n\nReview documents here:\n${shareBundleUrl}`;
+                  if (navigator.share) {
+                    try {
+                      await navigator.share({
+                        title: `KTR Consultants – ${client?.fullName || 'Client'} Documents`,
+                        text,
+                        url: shareBundleUrl
+                      });
+                      setShareDocModal(null);
+                      return;
+                    } catch (err) {
+                      if (err.name === 'AbortError') {
+                        setShareDocModal(null);
+                        return;
+                      }
+                    }
+                  }
                   navigator.clipboard.writeText(text);
                   toast.success('Document link copied to clipboard!');
                   window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
@@ -2156,7 +2217,7 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
                 <Share2 className="w-5 h-5 text-blue-600 shrink-0" />
                 <div>
                   <p className="text-xs font-black text-[#081326]">Share Link</p>
-                  <p className="text-[10px] text-gray-500 font-medium">Share secure banker viewing link</p>
+                  <p className="text-[10px] text-gray-500 font-medium">Share secure banker viewing link (WhatsApp, Gmail, Messages...)</p>
                 </div>
               </button>
             </div>
@@ -2203,23 +2264,28 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
 
               <button
                 type="button"
-                onClick={() => {
+                onClick={async () => {
                   const loanAmountFormatted = client?.loanAmount ? `₹${Number(client.loanAmount).toLocaleString('en-IN')}` : 'As Applicable';
                   const text = `KTR Consultants – Client Documents\n\nClient: ${client?.fullName || 'Client'}\nLoan Amount: ${loanAmountFormatted}\nCase Type: ${client?.loanType || 'Loan Application'}\nProfession: ${client?.occupation || client?.employmentType || 'Salaried'}\n\nReview documents here:\n${shareBundleUrl}`;
                   if (navigator.share) {
-                    navigator.share({
-                      title: `KTR Consultants – ${client?.fullName || 'Client'} Documents`,
-                      text,
-                      url: shareBundleUrl
-                    }).catch(() => {
-                      navigator.clipboard.writeText(text);
-                      window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
-                    });
-                  } else {
-                    navigator.clipboard.writeText(text);
-                    toast.success('WhatsApp share message copied!');
-                    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
+                    try {
+                      await navigator.share({
+                        title: `KTR Consultants – ${client?.fullName || 'Client'} Documents`,
+                        text,
+                        url: shareBundleUrl
+                      });
+                      setTopShareModal(false);
+                      return;
+                    } catch (err) {
+                      if (err.name === 'AbortError') {
+                        setTopShareModal(false);
+                        return;
+                      }
+                    }
                   }
+                  navigator.clipboard.writeText(text);
+                  toast.success('WhatsApp share message copied!');
+                  window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
                   setTopShareModal(false);
                 }}
                 className="w-full p-3.5 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl text-left text-xs font-black text-blue-950 flex items-center gap-3 transition-colors cursor-pointer"

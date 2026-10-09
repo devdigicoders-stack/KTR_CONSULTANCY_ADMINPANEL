@@ -339,7 +339,6 @@ const Clients = () => {
         formData.append('files', file);
 
         await api.post(`/clients/${uploadingForClient._id}/documents`, formData, {
-          headers: { 'Content-Type': 'multipart/form-data' },
           timeout: 600000, // 10 minutes per file (for large 100MB-500MB+ files)
           onUploadProgress: (progressEvent) => {
             if (progressEvent.total) {

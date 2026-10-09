@@ -153,6 +153,80 @@ const SharedDocuments = () => {
     handleShareWhatsApp();
   };
 
+  const getDocMimeType = (url) => {
+    const clean = (url || '').toLowerCase().split('?')[0];
+    if (clean.endsWith('.pdf')) return 'application/pdf';
+    if (clean.endsWith('.png')) return 'image/png';
+    if (clean.endsWith('.webp')) return 'image/webp';
+    if (clean.endsWith('.svg')) return 'image/svg+xml';
+    return 'image/jpeg';
+  };
+
+  const handleShareSingleDocFile = async (docItem) => {
+    const primaryFile = docItem.files?.[0] || docItem;
+    const fileUrl = primaryFile.fileUrl;
+    if (!fileUrl) return;
+    const fullUrl = getAssetUrl(fileUrl);
+    const mimeType = getDocMimeType(fileUrl);
+    const ext = mimeType === 'application/pdf' ? '.pdf' : (mimeType === 'image/png' ? '.png' : (mimeType === 'image/webp' ? '.webp' : '.jpg'));
+    const docName = docItem.title || docItem.name || 'document';
+    const safeName = docName.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const fileName = `${safeName}${ext}`;
+
+    toast.loading('Preparing file for sharing...', { id: 'share-file-toast' });
+
+    try {
+      const response = await fetch(fullUrl);
+      if (response.ok) {
+        const blob = await response.blob();
+        const file = new File([blob], fileName, { type: mimeType });
+
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          toast.dismiss('share-file-toast');
+          await navigator.share({
+            files: [file],
+            title: docName,
+            text: `${docName} - ${data?.fullName || 'Client'}`
+          });
+          setShareDocModal(null);
+          return;
+        }
+      }
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        toast.dismiss('share-file-toast');
+        setShareDocModal(null);
+        return;
+      }
+      console.log('Native file share failed or not supported', err);
+    }
+
+    toast.dismiss('share-file-toast');
+    const text = `📄 Document: ${docName}\nClient: ${data?.fullName || 'Client'}\n\n🔗 View / Download:\n${fullUrl}\n\nReview securely here:\n${getShortShareUrl()}`;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `${docName} - ${data?.fullName || 'Client'}`,
+          text: text,
+          url: fullUrl
+        });
+        setShareDocModal(null);
+        return;
+      } catch (err) {
+        if (err.name === 'AbortError') {
+          setShareDocModal(null);
+          return;
+        }
+      }
+    }
+
+    navigator.clipboard.writeText(text);
+    toast.success('Document link copied to clipboard!');
+    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
+    setShareDocModal(null);
+  };
+
   // Helper to normalize document titles
   const getNormalizedDocName = (rawName) => {
     if (!rawName || typeof rawName !== 'string') return 'Document';
@@ -1109,35 +1183,47 @@ const SharedDocuments = () => {
             <div className="space-y-2.5">
               <button
                 type="button"
-                onClick={() => {
-                  const url = getAssetUrl(shareDocModal.fileUrl);
-                  window.open(url, '_blank');
-                  setShareDocModal(null);
-                }}
+                onClick={() => handleShareSingleDocFile(shareDocModal)}
                 className="w-full p-3.5 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl text-left text-xs font-black text-amber-950 flex items-center gap-3 transition-colors cursor-pointer"
               >
                 <FileText className="w-5 h-5 text-amber-600 shrink-0" />
                 <div>
-                  <p className="text-xs font-black text-[#081326]">Open / Direct File Link</p>
-                  <p className="text-[10px] text-gray-500 font-medium">Access direct document file</p>
+                  <p className="text-xs font-black text-[#081326]">Share File</p>
+                  <p className="text-[10px] text-gray-500 font-medium">Send actual document file (WhatsApp, Email, Drive...)</p>
                 </div>
               </button>
 
               <button
                 type="button"
-                onClick={() => {
+                onClick={async () => {
                   const text = `📄 Document: ${shareDocModal.title}\nClient: ${data?.fullName || 'Client'}\n\nReview securely here:\n${getShortShareUrl()}`;
+                  if (navigator.share) {
+                    try {
+                      await navigator.share({
+                        title: `${shareDocModal.title} - ${data?.fullName || 'Client'}`,
+                        text: text,
+                        url: getShortShareUrl()
+                      });
+                      setShareDocModal(null);
+                      return;
+                    } catch (err) {
+                      if (err.name === 'AbortError') {
+                        setShareDocModal(null);
+                        return;
+                      }
+                    }
+                  }
                   navigator.clipboard.writeText(text);
-                  toast.success('Share text copied!');
+                  toast.success('Share link copied!');
                   window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
                   setShareDocModal(null);
                 }}
-                className="w-full p-3.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl text-left text-xs font-black text-emerald-950 flex items-center gap-3 transition-colors cursor-pointer"
+                className="w-full p-3.5 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl text-left text-xs font-black text-blue-950 flex items-center gap-3 transition-colors cursor-pointer"
               >
-                <Share2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                <Share2 className="w-5 h-5 text-blue-600 shrink-0" />
                 <div>
-                  <p className="text-xs font-black text-[#081326]">Share on WhatsApp</p>
-                  <p className="text-[10px] text-gray-500 font-medium">Send formatted WhatsApp message</p>
+                  <p className="text-xs font-black text-[#081326]">Share Link</p>
+                  <p className="text-[10px] text-gray-500 font-medium">Share secure viewing link (WhatsApp, Gmail, Messages...)</p>
                 </div>
               </button>
             </div>
