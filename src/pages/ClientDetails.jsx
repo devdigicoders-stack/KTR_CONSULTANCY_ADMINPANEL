@@ -11,6 +11,7 @@ import OverviewTab from '../components/client/OverviewTab';
 import DocumentRepositoryTab from '../components/client/DocumentRepositoryTab';
 import PendencyTab from '../components/client/PendencyTab';
 import ClientFormsTab from '../components/client/ClientFormsTab';
+import BankerQueriesTab from '../components/client/BankerQueriesTab';
 
 const formatCurrency = (amount) => {
   if (!amount && amount !== 0) return '₹ 0';
@@ -47,15 +48,21 @@ const ClientDetails = () => {
     fetchClient();
   }, [id]);
 
+  const bankerQueriesCount = (client?.bankerQueries || []).filter(q => q.status !== 'Resolved').length;
+
   const tabs = [
     'Overview',
     'Documents',
     'Forms & Submissions',
     'Pendency',
+    `Banker's Queries${bankerQueriesCount > 0 ? ` (${bankerQueriesCount})` : ''}`,
     ...(user?.role === 'admin' ? ['Edit History'] : [])
   ];
 
   const getHeaderInfo = () => {
+    if (activeTab.startsWith("Banker's Queries")) {
+      return { title: "Banker Queries & Portal Support", breadcrumb: "Banker's Queries" };
+    }
     switch(activeTab) {
       case 'Overview': return { title: 'Client Overview', breadcrumb: 'Overview' };
       case 'Documents': return { title: 'Document Repository & Quick Index', breadcrumb: 'Documents' };
@@ -229,6 +236,7 @@ const ClientDetails = () => {
         {activeTab === 'Documents' && <DocumentRepositoryTab client={client} onRefresh={fetchClient} />}
         {activeTab === 'Forms & Submissions' && <ClientFormsTab client={client} />}
         {activeTab === 'Pendency' && <PendencyTab client={client} onRefresh={fetchClient} />}
+        {activeTab.startsWith("Banker's Queries") && <BankerQueriesTab client={client} onRefresh={fetchClient} />}
         {activeTab === 'Edit History' && (
           <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm space-y-4">
             <h4 className="text-xs font-black text-[#081326] uppercase tracking-wider border-b border-gray-50 pb-3 flex items-center gap-2">

@@ -5,7 +5,7 @@ import {
   ExternalLink, ChevronRight, Copy, Check, AlertCircle, 
   Loader2, ArrowLeft, MoreVertical, X, Eye, FileSpreadsheet, 
   Image as ImageIcon, Building, User, Phone, CheckSquare, Square,
-  Users
+  Users, ChevronUp, ChevronDown, MessageSquare, HelpCircle, Send
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../api/axios';
@@ -33,6 +33,21 @@ const SharedDocuments = () => {
   const [shareDocModal, setShareDocModal] = useState(null);
   const [topShareModal, setTopShareModal] = useState(false);
   const [menuDoc, setMenuDoc] = useState(null);
+
+  // Raise Query Modal State
+  const [raiseQueryModal, setRaiseQueryModal] = useState(false);
+  const [querySuccess, setQuerySuccess] = useState(false);
+  const [submittingQuery, setSubmittingQuery] = useState(false);
+  const [queryForm, setQueryForm] = useState({
+    queryText: '',
+    documentTitle: 'General Case Query',
+    bankerName: '',
+    bankerDesignation: '',
+    bankName: '',
+    bankerMobile: '',
+    bankerEmail: '',
+    priority: 'Normal'
+  });
 
   // Print progress state
   const [printingProgress, setPrintingProgress] = useState({
@@ -153,6 +168,39 @@ const SharedDocuments = () => {
     handleShareWhatsApp();
   };
 
+  const handleRaiseQuerySubmit = async (e) => {
+    e.preventDefault();
+    if (!queryForm.queryText.trim()) {
+      toast.error('Please enter your query description.');
+      return;
+    }
+
+    try {
+      setSubmittingQuery(true);
+      const res = await api.post(`/clients/shared/${id}/query`, queryForm);
+      if (res.data.success) {
+        toast.success('Query submitted to the case handling team.');
+        setQuerySuccess(true);
+        if (data) {
+          setData(prev => ({
+            ...prev,
+            bankerQueries: [res.data.data, ...(prev.bankerQueries || [])]
+          }));
+        }
+        setTimeout(() => {
+          setRaiseQueryModal(false);
+          setQuerySuccess(false);
+          setQueryForm(prev => ({ ...prev, queryText: '' }));
+        }, 1800);
+      }
+    } catch (err) {
+      console.error('Raise query error:', err);
+      toast.error(err.response?.data?.message || 'Failed to submit query. Please try again.');
+    } finally {
+      setSubmittingQuery(false);
+    }
+  };
+
   const getDocMimeType = (url) => {
     const clean = (url || '').toLowerCase().split('?')[0];
     if (clean.endsWith('.pdf')) return 'application/pdf';
@@ -162,35 +210,60 @@ const SharedDocuments = () => {
     return 'image/jpeg';
   };
 
-  const handleShareSingleDocFile = async (docItem) => {
-    const primaryFile = docItem.files?.[0] || docItem;
-    const fileUrl = primaryFile.fileUrl;
-    if (!fileUrl) return;
-    const fullUrl = getAssetUrl(fileUrl);
-    const mimeType = getDocMimeType(fileUrl);
-    const ext = mimeType === 'application/pdf' ? '.pdf' : (mimeType === 'image/png' ? '.png' : (mimeType === 'image/webp' ? '.webp' : '.jpg'));
-    const docName = docItem.title || docItem.name || 'document';
-    const safeName = docName.replace(/[^a-zA-Z0-9_-]/g, '_');
-    const fileName = `${safeName}${ext}`;
+  // Reusable Multi / Single Document File Share Handler
+  const handleShareDocFiles = async (docsToShare) => {
+    if (!docsToShare || docsToShare.length === 0) {
+      toast.error('No documents to share.');
+      return;
+    }
 
-    toast.loading('Preparing file for sharing...', { id: 'share-file-toast' });
+    const allFiles = [];
+    docsToShare.forEach(doc => {
+      const files = doc.files || [{ title: doc.title, fileUrl: doc.fileUrl }];
+      files.forEach((f, idx) => {
+        if (f.fileUrl) {
+          allFiles.push({
+            docTitle: doc.title,
+            fileTitle: f.fileTitle || f.title || doc.title,
+            fileUrl: f.fileUrl,
+            label: files.length > 1 ? `${doc.title}_${idx + 1}` : doc.title
+          });
+        }
+      });
+    });
+
+    if (allFiles.length === 0) {
+      toast.error('No files found to share.');
+      return;
+    }
+
+    toast.loading(`Preparing ${allFiles.length} file${allFiles.length > 1 ? 's' : ''} for sharing...`, { id: 'share-file-toast' });
 
     try {
-      const response = await fetch(fullUrl);
-      if (response.ok) {
-        const blob = await response.blob();
-        const file = new File([blob], fileName, { type: mimeType });
+      const filePromises = allFiles.map(async (item, i) => {
+        const fullUrl = getAssetUrl(item.fileUrl);
+        const mimeType = getDocMimeType(item.fileUrl);
+        const ext = mimeType === 'application/pdf' ? '.pdf' : (mimeType === 'image/png' ? '.png' : (mimeType === 'image/webp' ? '.webp' : '.jpg'));
+        const safeName = (item.label || item.fileTitle || `document_${i + 1}`).replace(/[^a-zA-Z0-9_-]/g, '_');
+        const fileName = `${safeName}${ext}`;
 
-        if (navigator.canShare && navigator.canShare({ files: [file] })) {
-          toast.dismiss('share-file-toast');
-          await navigator.share({
-            files: [file],
-            title: docName,
-            text: `${docName} - ${data?.fullName || 'Client'}`
-          });
-          setShareDocModal(null);
-          return;
-        }
+        const res = await fetch(fullUrl);
+        if (!res.ok) throw new Error(`Failed to fetch ${item.docTitle}`);
+        const blob = await res.blob();
+        return new File([blob], fileName, { type: mimeType });
+      });
+
+      const fileObjects = await Promise.all(filePromises);
+
+      if (navigator.canShare && navigator.canShare({ files: fileObjects })) {
+        toast.dismiss('share-file-toast');
+        await navigator.share({
+          files: fileObjects,
+          title: docsToShare.length === 1 ? docsToShare[0].title : `${docsToShare.length} Documents - ${data?.fullName || 'Client'}`,
+          text: `${docsToShare.length === 1 ? docsToShare[0].title : `${docsToShare.length} Documents`} | ${data?.fullName || 'Client'}`
+        });
+        setShareDocModal(null);
+        return;
       }
     } catch (err) {
       if (err.name === 'AbortError') {
@@ -202,14 +275,19 @@ const SharedDocuments = () => {
     }
 
     toast.dismiss('share-file-toast');
-    const text = `📄 Document: ${docName}\nClient: ${data?.fullName || 'Client'}\n\n🔗 View / Download:\n${fullUrl}\n\nReview securely here:\n${getShortShareUrl()}`;
+
+    // Fallback: If 1 file, download it. If multiple, download files and open WhatsApp with short link
+    const clientName = data?.fullName || 'Client';
+    const shortUrl = getShortShareUrl();
+    const docNames = docsToShare.map(d => d.title).join(', ');
+    const text = `📄 *Documents: ${docNames}*\nClient: *${clientName}*\n\nReview & download here:\n${shortUrl}`;
 
     if (navigator.share) {
       try {
         await navigator.share({
-          title: `${docName} - ${data?.fullName || 'Client'}`,
+          title: `${docsToShare.length} Documents - ${clientName}`,
           text: text,
-          url: fullUrl
+          url: shortUrl
         });
         setShareDocModal(null);
         return;
@@ -222,7 +300,48 @@ const SharedDocuments = () => {
     }
 
     navigator.clipboard.writeText(text);
-    toast.success('Document link copied to clipboard!');
+    toast.success('Document links copied to clipboard!');
+    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
+    setShareDocModal(null);
+  };
+
+  // Reusable Multi / Single Document Link Share Handler
+  const handleShareDocLinks = async (docsToShare) => {
+    if (!docsToShare || docsToShare.length === 0) return;
+
+    const clientName = data?.fullName || 'Client';
+    const primaryAge = data?.age || calculateAge(data?.dob);
+    const ageDisplay = primaryAge ? ` (${primaryAge})` : '';
+    const shortUrl = getShortShareUrl();
+
+    let text = '';
+    if (docsToShare.length === 1) {
+      const doc = docsToShare[0];
+      text = `📄 *Document: ${doc.title}*\nClient: *${clientName}${ageDisplay}*\n\nReview securely here:\n${shortUrl}`;
+    } else {
+      const list = docsToShare.map((d, i) => `${i + 1}. ${d.title}${d.files?.length > 1 ? ` (${d.files.length} Files)` : ''}`).join('\n');
+      text = `📄 *Shared Documents (${docsToShare.length})*\nClient: *${clientName}${ageDisplay}*\n\n${list}\n\nReview documents securely here:\n${shortUrl}`;
+    }
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: docsToShare.length === 1 ? `${docsToShare[0].title} - ${clientName}` : `${docsToShare.length} Documents - ${clientName}`,
+          text: text,
+          url: shortUrl
+        });
+        setShareDocModal(null);
+        return;
+      } catch (err) {
+        if (err.name === 'AbortError') {
+          setShareDocModal(null);
+          return;
+        }
+      }
+    }
+
+    navigator.clipboard.writeText(text);
+    toast.success('Share link copied to clipboard!');
     window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
     setShareDocModal(null);
   };
@@ -416,6 +535,25 @@ const SharedDocuments = () => {
   });
 
   // Open Continuous View at exact Document index
+  const scrollToDoc = useCallback((targetIndex) => {
+    if (targetIndex < 0 || targetIndex >= sortedDocs.length) return;
+    const el = document.getElementById(`doc-section-${targetIndex}`) || docRefs.current[targetIndex];
+    if (el) {
+      const headerOffset = 65;
+      const absoluteElementTop = el.getBoundingClientRect().top + (window.pageYOffset || document.documentElement.scrollTop);
+      const offsetPosition = Math.max(absoluteElementTop - headerOffset, 0);
+
+      window.scrollTo({
+        top: offsetPosition,
+        behavior: 'smooth'
+      });
+      setVisibleDocIndex(targetIndex);
+      if (sortedDocs[targetIndex]) {
+        setVisibleDocTitle(sortedDocs[targetIndex].title);
+      }
+    }
+  }, [sortedDocs]);
+
   const openContinuousView = useCallback((targetIndex = 0) => {
     try {
       window.history.pushState({ ktrView: 'continuous' }, '');
@@ -430,27 +568,12 @@ const SharedDocuments = () => {
       setVisibleDocIndex(targetIndex);
     }
 
-    const scrollToTarget = () => {
-      const el = document.getElementById(`doc-section-${targetIndex}`) || docRefs.current[targetIndex];
-      if (el) {
-        const headerHeight = 65;
-        const bodyRect = document.body.getBoundingClientRect().top;
-        const elementRect = el.getBoundingClientRect().top;
-        const elementPosition = elementRect - bodyRect;
-        const offsetPosition = Math.max(elementPosition - headerHeight, 0);
-
-        window.scrollTo({
-          top: offsetPosition,
-          behavior: 'smooth'
-        });
-      }
-    };
-
-    // Trigger dual scroll to guarantee precision after layout renders
-    requestAnimationFrame(scrollToTarget);
-    setTimeout(scrollToTarget, 80);
-    setTimeout(scrollToTarget, 220);
-  }, [sortedDocs]);
+    // Staged scroll triggers for smooth and exact navigation after layout paint
+    requestAnimationFrame(() => scrollToDoc(targetIndex));
+    setTimeout(() => scrollToDoc(targetIndex), 40);
+    setTimeout(() => scrollToDoc(targetIndex), 180);
+    setTimeout(() => scrollToDoc(targetIndex), 450);
+  }, [sortedDocs, scrollToDoc]);
 
   const closeContinuousView = useCallback(() => {
     if (window.history.state?.ktrView === 'continuous') {
@@ -460,7 +583,7 @@ const SharedDocuments = () => {
     }
   }, []);
 
-  // Track active visible document on scroll for the top safe bar
+  // Track active visible document on scroll for top badge and indicator
   useEffect(() => {
     if (viewMode !== 'continuous') return;
 
@@ -751,70 +874,67 @@ const SharedDocuments = () => {
       {/* Main Content Area */}
       <main className="max-w-4xl mx-auto px-4 pt-4 space-y-4">
         
-        {/* 2. CASE & APPLICANTS SUMMARY (Shows Multiple Applicants with Auto-Calculated Age) */}
-        <div className="bg-white rounded-2xl border border-gray-200/80 p-4 sm:p-5 shadow-xs">
-          <div className="flex items-center justify-between pb-3 mb-3 border-b border-gray-100">
-            <h2 className="text-xs font-black text-[#081326] uppercase tracking-wider flex items-center gap-1.5">
-              <Users className="w-4 h-4 text-amber-500" /> Case Summary & Applicants ({applicantsList.length})
-            </h2>
-            <span className="text-xs font-bold text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-md border border-blue-100">
-              {data.caseType || data.loanType || 'General Case'}
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
-            {/* Render Each Applicant */}
-            {applicantsList.map((app, appIdx) => {
-              const appAge = app.age || calculateAge(app.dob);
-              return (
-                <div key={appIdx} className="p-3 bg-slate-50/70 rounded-xl border border-gray-100 space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] uppercase font-bold text-amber-800 bg-amber-100/60 px-1.5 py-0.2 rounded">
-                      {app.relationship || `Applicant ${appIdx + 1}`}
-                    </span>
-                    {appAge && (
-                      <span className="text-xs font-black text-amber-700">
-                        {appAge} Yrs
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-sm font-black text-[#081326] truncate">
-                    {app.fullName} {appAge ? `(${appAge})` : ''}
-                  </p>
-                  <p className="text-xs text-gray-600 font-medium truncate">
-                    Profession: <strong className="text-gray-900">{app.occupation || data.occupation || 'N/A'}</strong>
-                  </p>
-                  {app.mobile && (
-                    <p className="text-xs text-gray-500 font-medium truncate">
-                      Mobile: {app.mobile}
-                    </p>
-                  )}
-                </div>
-              );
-            })}
-
-            {/* Loan Amount Card */}
-            <div className="p-3 bg-emerald-50/50 rounded-xl border border-emerald-100 space-y-1">
-              <span className="text-[10px] uppercase font-bold text-emerald-700 tracking-wider block">
-                Loan Amount
-              </span>
-              <p className="text-base font-black text-emerald-700">
-                {formattedLoanAmount}
-              </p>
-              <p className="text-[11px] text-gray-500 font-medium truncate">
-                Case Type: {data.caseType || data.loanType || 'N/A'}
-              </p>
+        {/* 2. CASE SUMMARY (Clean, Compact, Easy-to-read as requested) */}
+        <div className="bg-white rounded-2xl sm:rounded-3xl border border-gray-100 p-4 sm:p-5 shadow-xs">
+          {/* Top Row: Applicant Name (Age) + Status Badge */}
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-xl sm:text-2xl font-black text-[#081326] tracking-tight">
+                {data.fullName || 'Client'} {primaryAge ? `(${primaryAge})` : ''}
+              </h2>
+              {(data.occupation || data.profession) && (
+                <p className="text-sm font-semibold text-slate-500 mt-0.5">
+                  {data.occupation || data.profession}
+                </p>
+              )}
             </div>
+            {data.status && (
+              <span className="text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200/70 px-2.5 py-0.5 rounded-full flex items-center gap-1.5 shrink-0">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                {data.status}
+              </span>
+            )}
           </div>
 
-          {caseNotesText && (
-            <div className="mt-3 pt-3 border-t border-gray-100">
-              <span className="text-[10px] uppercase font-bold text-amber-700 tracking-wider flex items-center gap-1 mb-1">
-                Note: Case Observations
+          {/* Co-applicants if any */}
+          {data.applicants && data.applicants.length > 1 && (
+            <div className="flex flex-wrap gap-2 mt-2">
+              {data.applicants.slice(1).map((coApp, coIdx) => {
+                const coAge = coApp.age || calculateAge(coApp.dob);
+                return (
+                  <span key={coIdx} className="text-xs font-medium bg-slate-50 text-slate-700 px-2 py-0.5 rounded-md border border-slate-200">
+                    Co-applicant: {coApp.fullName} {coAge ? `(${coAge})` : ''} {coApp.occupation ? `• ${coApp.occupation}` : ''}
+                  </span>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Case Type Tag */}
+          {(data.caseType || data.loanType) && (
+            <div className="mt-2.5">
+              <span className="inline-block px-3 py-1 bg-blue-50 text-blue-600 font-bold text-xs rounded-lg border border-blue-100">
+                {data.caseType || data.loanType}
               </span>
-              <div className="p-3 bg-amber-50/50 border border-amber-200/80 rounded-xl text-xs text-gray-800 font-medium leading-relaxed whitespace-pre-wrap">
+            </div>
+          )}
+
+          {/* Loan Amount - Reduced font size to match overall design */}
+          {data.loanAmount && (
+            <div className="mt-3 p-3 bg-emerald-50/60 border border-emerald-100/80 rounded-xl">
+              <span className="text-base sm:text-lg font-black text-emerald-800 tracking-tight">
+                {formattedLoanAmount}
+              </span>
+            </div>
+          )}
+
+          {/* Case Observations */}
+          {caseNotesText && (
+            <div className="mt-3 p-3 bg-amber-50/50 border border-amber-200/80 rounded-xl flex items-start gap-2.5">
+              <FileText className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+              <p className="text-xs sm:text-sm font-medium text-amber-950 leading-relaxed whitespace-pre-wrap">
                 {caseNotesText}
-              </div>
+              </p>
             </div>
           )}
         </div>
@@ -823,35 +943,36 @@ const SharedDocuments = () => {
         {viewMode === 'list' && (
           <div className="space-y-3">
             {/* Header & Bulk Actions Toolbar */}
-            <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+            <div className="flex flex-wrap items-center justify-between gap-2.5 px-1">
               <div className="flex items-center gap-3">
-                <h2 className="text-xs font-black text-[#081326] uppercase tracking-wider">
-                  Case Documents ({sortedDocs.length})
+                <h2 className="text-xs sm:text-sm font-black text-[#081326] uppercase tracking-wide">
+                  DOCUMENTS ({sortedDocs.length})
                 </h2>
-                <button
-                  type="button"
-                  onClick={handleSelectAll}
-                  className="text-xs font-bold text-gray-600 hover:text-[#081326] flex items-center gap-1 cursor-pointer"
-                >
-                  {selectedDocIds.size === sortedDocs.length ? (
-                    <CheckSquare className="w-3.5 h-3.5 text-amber-600" />
-                  ) : (
-                    <Square className="w-3.5 h-3.5 text-gray-400" />
-                  )}
-                  <span>{selectedDocIds.size === sortedDocs.length ? 'Deselect All' : 'Select All'}</span>
-                </button>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 {selectedDocIds.size > 0 && (
                   <>
                     <button
                       type="button"
                       onClick={() => {
                         const selectedDocs = sortedDocs.filter(d => selectedDocIds.has(d.id));
+                        setShareDocModal({
+                          docs: selectedDocs,
+                          title: `${selectedDocs.length} Selected Document${selectedDocs.length > 1 ? 's' : ''}`
+                        });
+                      }}
+                      className="px-2.5 sm:px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl text-xs font-bold flex items-center gap-1.5 border border-blue-200 shadow-2xs transition-all cursor-pointer"
+                    >
+                      <Share2 className="w-3.5 h-3.5" /> Share Selected ({selectedDocIds.size})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const selectedDocs = sortedDocs.filter(d => selectedDocIds.has(d.id));
                         handleSmartPrint(selectedDocs, `Selected Documents (${selectedDocIds.size})`);
                       }}
-                      className="px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-lg text-xs font-bold flex items-center gap-1 border border-purple-200 transition-colors"
+                      className="px-2.5 sm:px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-xl text-xs font-bold flex items-center gap-1.5 border border-purple-200 shadow-2xs transition-all cursor-pointer"
                     >
                       <Printer className="w-3.5 h-3.5" /> Print Selected ({selectedDocIds.size})
                     </button>
@@ -859,19 +980,29 @@ const SharedDocuments = () => {
                       type="button"
                       onClick={() => {
                         const selectedDocs = sortedDocs.filter(d => selectedDocIds.has(d.id));
-                        selectedDocs.forEach(d => handleDownloadFile(d.fileUrl, d.title));
+                        selectedDocs.forEach(d => {
+                          const files = d.files || [{ title: d.title, fileUrl: d.fileUrl }];
+                          files.forEach(f => handleDownloadFile(f.fileUrl, f.fileTitle || f.title || d.title));
+                        });
                       }}
-                      className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg text-xs font-bold flex items-center gap-1 border border-emerald-200 transition-colors"
+                      className="px-2.5 sm:px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-xl text-xs font-bold flex items-center gap-1.5 border border-emerald-200 shadow-2xs transition-all cursor-pointer"
                     >
                       <Download className="w-3.5 h-3.5" /> Download Selected
                     </button>
                   </>
                 )}
+
                 <button
-                  onClick={() => openContinuousView(0)}
-                  className="px-3 py-1.5 bg-[#081326] hover:bg-[#11203d] text-white rounded-xl text-xs font-bold flex items-center gap-1 cursor-pointer shadow-2xs"
+                  type="button"
+                  onClick={handleSelectAll}
+                  className="text-xs font-bold text-gray-600 hover:text-[#081326] flex items-center gap-1.5 cursor-pointer select-none px-1"
                 >
-                  <Eye className="w-3.5 h-3.5 text-amber-400" /> Open Continuous Review
+                  {selectedDocIds.size === sortedDocs.length ? (
+                    <CheckSquare className="w-4 h-4 text-amber-600" />
+                  ) : (
+                    <Square className="w-4 h-4 text-gray-400" />
+                  )}
+                  <span>Select All</span>
                 </button>
               </div>
             </div>
@@ -883,26 +1014,25 @@ const SharedDocuments = () => {
             ) : (
               <div className="bg-white rounded-2xl border border-gray-200/80 divide-y divide-gray-100 overflow-hidden shadow-xs">
                 {sortedDocs.map((doc, idx) => {
-                  const IconComp = doc.icon || FileText;
                   const hasMulti = doc.files && doc.files.length > 1;
                   const isSelected = selectedDocIds.has(doc.id);
 
                   return (
                     <div
                       key={doc.id || idx}
-                      className={`flex items-center justify-between gap-3 p-3.5 sm:p-4 hover:bg-amber-50/40 transition-colors group cursor-pointer select-none ${
+                      className={`flex items-center justify-between gap-3 p-3 sm:p-3.5 hover:bg-amber-50/40 transition-colors group cursor-pointer select-none ${
                         isSelected ? 'bg-amber-50/60' : ''
                       }`}
                       onClick={() => openContinuousView(idx)}
                     >
-                      {/* Left: Checkbox, Serial & Name */}
+                      {/* Left: Checkbox, Serial Badge & Name (Document icon removed as requested) */}
                       <div className="flex items-center gap-3 min-w-0 flex-1">
                         <div
                           onClick={(e) => {
                             e.stopPropagation();
                             handleToggleSelectDoc(doc.id);
                           }}
-                          className="text-gray-400 hover:text-amber-600 cursor-pointer p-1"
+                          className="text-gray-400 hover:text-amber-600 cursor-pointer p-0.5"
                         >
                           {isSelected ? (
                             <CheckSquare className="w-4 h-4 text-amber-600" />
@@ -911,27 +1041,24 @@ const SharedDocuments = () => {
                           )}
                         </div>
 
-                        <div className="w-9 h-9 rounded-xl bg-slate-100 text-[#081326] group-hover:bg-[#081326] group-hover:text-amber-400 flex items-center justify-center shrink-0 transition-colors">
-                          <IconComp className="w-4 h-4" />
-                        </div>
+                        <span className="text-xs font-mono font-bold text-amber-800 bg-amber-100/60 px-2 py-0.5 rounded-lg border border-amber-200/80 shrink-0">
+                          #{idx + 1}
+                        </span>
 
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-xs font-mono font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
-                              #{idx + 1}
-                            </span>
-                            <h3 className="text-xs sm:text-sm font-bold text-[#081326] truncate">
+                            <h3 className="text-xs sm:text-sm font-bold text-[#081326] group-hover:text-amber-900 transition-colors truncate">
                               {doc.title}
                             </h3>
                             {hasMulti && (
-                              <span className="text-[10px] font-bold bg-blue-50 text-blue-700 px-1.5 py-0.2 rounded border border-blue-200">
+                              <span className="text-[11px] font-bold bg-blue-50 text-blue-600 px-2 py-0.5 rounded-md border border-blue-100 shrink-0">
                                 {doc.files.length} Files
                               </span>
                             )}
                           </div>
                           {doc.notes && (
                             <p className="text-[11px] text-amber-700 font-medium truncate mt-0.5">
-                              Note: {doc.notes}
+                              {doc.notes}
                             </p>
                           )}
                         </div>
@@ -942,7 +1069,7 @@ const SharedDocuments = () => {
                         <button
                           type="button"
                           onClick={() => openContinuousView(idx)}
-                          className="p-2 text-gray-400 hover:text-[#081326] hover:bg-gray-100 rounded-lg cursor-pointer transition-colors"
+                          className="p-1.5 text-gray-400 hover:text-[#081326] hover:bg-gray-100 rounded-lg cursor-pointer transition-colors"
                           title="View Document"
                         >
                           <ChevronRight className="w-4 h-4" />
@@ -953,7 +1080,7 @@ const SharedDocuments = () => {
                             e.stopPropagation();
                             setMenuDoc({ ...doc, docIndex: idx });
                           }}
-                          className="p-2 text-gray-500 hover:text-[#081326] hover:bg-gray-100 rounded-lg cursor-pointer transition-colors"
+                          className="p-1.5 text-gray-400 hover:text-[#081326] hover:bg-gray-100 rounded-lg cursor-pointer transition-colors"
                           title="More actions"
                         >
                           <MoreVertical className="w-4 h-4" />
@@ -992,7 +1119,7 @@ const SharedDocuments = () => {
                         </h3>
                         {doc.notes && (
                           <p className="text-[11px] text-amber-700 font-medium truncate">
-                            Note: {doc.notes}
+                            {doc.notes}
                           </p>
                         )}
                       </div>
@@ -1010,7 +1137,7 @@ const SharedDocuments = () => {
                       </button>
                       <button
                         type="button"
-                        onClick={() => setShareDocModal(doc)}
+                        onClick={() => setShareDocModal({ docs: [doc], title: doc.title })}
                         className="p-1.5 text-gray-600 hover:bg-gray-200 rounded-lg cursor-pointer transition-colors"
                         title="Share Document"
                       >
@@ -1078,6 +1205,217 @@ const SharedDocuments = () => {
 
       </main>
 
+      {/* 5. RIGHT SIDE SCROLL INDICATOR / QUICK NAVIGATOR (Visible in Continuous View) */}
+      {viewMode === 'continuous' && sortedDocs.length > 1 && (
+        <div className="fixed right-3 sm:right-6 top-1/2 -translate-y-1/2 z-30 flex flex-col items-center gap-1 bg-[#081326]/85 backdrop-blur-md text-white p-1.5 rounded-2xl shadow-xl border border-white/10 select-none">
+          <button
+            type="button"
+            onClick={() => scrollToDoc(Math.max(0, visibleDocIndex - 1))}
+            disabled={visibleDocIndex === 0}
+            className="w-8 h-8 flex items-center justify-center rounded-xl bg-white/10 hover:bg-amber-400 hover:text-black disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer"
+            title="Previous Document"
+          >
+            <ChevronUp className="w-4 h-4" />
+          </button>
+          
+          <div className="py-1 px-1 text-center font-mono">
+            <span className="text-[11px] font-black text-amber-400 block">#{visibleDocIndex + 1}</span>
+            <span className="text-[9px] text-gray-400 font-medium block">of {sortedDocs.length}</span>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => scrollToDoc(Math.min(sortedDocs.length - 1, visibleDocIndex + 1))}
+            disabled={visibleDocIndex >= sortedDocs.length - 1}
+            className="w-8 h-8 flex items-center justify-center rounded-xl bg-white/10 hover:bg-amber-400 hover:text-black disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer"
+            title="Next Document"
+          >
+            <ChevronDown className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* 6. FLOATING RAISE QUERY BUTTON (Bottom-Right of Banker Portal) */}
+      <div className="fixed bottom-4 right-4 z-40">
+        <button
+          type="button"
+          onClick={() => {
+            const currentDoc = viewMode === 'continuous' && sortedDocs[visibleDocIndex] ? sortedDocs[visibleDocIndex].title : 'General Case Query';
+            setQueryForm(prev => ({ ...prev, documentTitle: currentDoc }));
+            setRaiseQueryModal(true);
+          }}
+          className="group flex items-center gap-2 px-4 py-3 bg-[#081326] hover:bg-[#11203d] text-white rounded-full shadow-2xl border-2 border-amber-400 transition-all transform hover:scale-105 active:scale-95 cursor-pointer"
+          title="Raise Query for Banker / Staff"
+        >
+          <div className="w-7 h-7 rounded-full bg-amber-400 text-black flex items-center justify-center font-bold">
+            <MessageSquare className="w-4 h-4" />
+          </div>
+          <span className="text-xs sm:text-sm font-black tracking-wide pr-1">Raise Query</span>
+        </button>
+      </div>
+
+      {/* 7. RAISE QUERY MODAL */}
+      {raiseQueryModal && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-[#081326]/70 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="absolute inset-0" onClick={() => !submittingQuery && setRaiseQueryModal(false)} />
+          <div className="relative bg-white w-full max-w-lg rounded-t-3xl sm:rounded-2xl p-5 sm:p-6 shadow-2xl space-y-4 animate-in slide-in-from-bottom duration-200 max-h-[90vh] overflow-y-auto">
+            
+            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center">
+                  <HelpCircle className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm sm:text-base font-black text-[#081326]">Raise Banker Query</h3>
+                  <p className="text-[11px] text-gray-500">Submit an inquiry or document clarification directly to the case handling team</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRaiseQueryModal(false)}
+                disabled={submittingQuery}
+                className="w-7 h-7 rounded-full bg-gray-100 text-gray-500 hover:text-black flex items-center justify-center text-xs font-bold cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {querySuccess ? (
+              <div className="p-6 text-center space-y-3 bg-emerald-50 rounded-2xl border border-emerald-100 animate-in zoom-in-95">
+                <div className="w-12 h-12 rounded-full bg-emerald-500 text-white flex items-center justify-center mx-auto shadow-md">
+                  <Check className="w-6 h-6" />
+                </div>
+                <h4 className="text-sm font-black text-emerald-950">Query Submitted Successfully!</h4>
+                <p className="text-xs text-emerald-800">
+                  Your query has been logged and forwarded to the KTR Consultants handling team.
+                </p>
+              </div>
+            ) : (
+              <form onSubmit={handleRaiseQuerySubmit} className="space-y-3.5">
+                
+                {/* Related Document Selector */}
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-1">
+                    Related Document / Context
+                  </label>
+                  <select
+                    value={queryForm.documentTitle}
+                    onChange={(e) => setQueryForm({ ...queryForm, documentTitle: e.target.value })}
+                    className="w-full text-xs font-semibold p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-amber-400 focus:border-amber-400 outline-none"
+                  >
+                    <option value="General Case Query">General Case Query (Overall File)</option>
+                    {sortedDocs.map((d, i) => (
+                      <option key={d.id || i} value={d.title}>
+                        Doc #{i + 1}: {d.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Query Message */}
+                <div>
+                  <label className="block text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-1">
+                    Query Description / Remarks <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    rows={3}
+                    required
+                    value={queryForm.queryText}
+                    onChange={(e) => setQueryForm({ ...queryForm, queryText: e.target.value })}
+                    placeholder="E.g. Please provide revised DPR with 7-year DSCR or clear copy of PAN card..."
+                    className="w-full text-xs p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-amber-400 focus:border-amber-400 outline-none resize-none leading-relaxed"
+                  />
+                </div>
+
+                {/* Banker Details (Name, Bank, Designation, Mobile) */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-600 uppercase tracking-wider mb-1">
+                      Banker Name
+                    </label>
+                    <input
+                      type="text"
+                      value={queryForm.bankerName}
+                      onChange={(e) => setQueryForm({ ...queryForm, bankerName: e.target.value })}
+                      placeholder="e.g. Ramesh Sharma"
+                      className="w-full text-xs p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-amber-400 outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-600 uppercase tracking-wider mb-1">
+                      Bank / Branch
+                    </label>
+                    <input
+                      type="text"
+                      value={queryForm.bankName}
+                      onChange={(e) => setQueryForm({ ...queryForm, bankName: e.target.value })}
+                      placeholder="e.g. SBI Main Branch"
+                      className="w-full text-xs p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-amber-400 outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-600 uppercase tracking-wider mb-1">
+                      Designation
+                    </label>
+                    <input
+                      type="text"
+                      value={queryForm.bankerDesignation}
+                      onChange={(e) => setQueryForm({ ...queryForm, bankerDesignation: e.target.value })}
+                      placeholder="e.g. Branch Manager / Credit Officer"
+                      className="w-full text-xs p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-amber-400 outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-600 uppercase tracking-wider mb-1">
+                      Contact / Mobile No.
+                    </label>
+                    <input
+                      type="tel"
+                      value={queryForm.bankerMobile}
+                      onChange={(e) => setQueryForm({ ...queryForm, bankerMobile: e.target.value })}
+                      placeholder="e.g. 9876543210"
+                      className="w-full text-xs p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-amber-400 outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-2 flex items-center justify-end gap-2 border-t border-gray-100">
+                  <button
+                    type="button"
+                    onClick={() => setRaiseQueryModal(false)}
+                    disabled={submittingQuery}
+                    className="px-4 py-2 rounded-xl text-xs font-bold text-gray-600 hover:bg-gray-100 cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={submittingQuery || !queryForm.queryText.trim()}
+                    className="px-5 py-2.5 bg-[#081326] hover:bg-[#11203d] text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-sm transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    {submittingQuery ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />
+                        <span>Submitting...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Send className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Submit Query</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            )}
+
+          </div>
+        </div>
+      )}
+
       {/* Action Sheet Modal */}
       {menuDoc && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-[#081326]/60 backdrop-blur-xs animate-in fade-in duration-150">
@@ -1090,7 +1428,7 @@ const SharedDocuments = () => {
               </div>
               <button
                 onClick={() => setMenuDoc(null)}
-                className="w-7 h-7 rounded-full bg-gray-100 text-gray-500 hover:text-black flex items-center justify-center text-xs font-bold"
+                className="w-7 h-7 rounded-full bg-gray-100 text-gray-500 hover:text-black flex items-center justify-center text-xs font-bold cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1117,7 +1455,7 @@ const SharedDocuments = () => {
                 onClick={() => {
                   const targetDoc = menuDoc;
                   setMenuDoc(null);
-                  setShareDocModal(targetDoc);
+                  setShareDocModal({ docs: [targetDoc], title: targetDoc.title });
                 }}
                 className="w-full p-3 bg-gray-50 hover:bg-blue-50 rounded-xl text-left text-xs font-bold text-gray-800 flex items-center gap-3 transition-colors cursor-pointer"
               >
@@ -1162,19 +1500,19 @@ const SharedDocuments = () => {
         </div>
       )}
 
-      {/* Individual Document Share Modal */}
+      {/* Reusable Document Share Modal (Single or Multiple Selected) */}
       {shareDocModal && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-[#081326]/60 backdrop-blur-xs animate-in fade-in duration-150">
           <div className="absolute inset-0" onClick={() => setShareDocModal(null)} />
           <div className="relative bg-white w-full max-w-sm rounded-t-3xl sm:rounded-2xl p-5 shadow-2xl space-y-4 animate-in slide-in-from-bottom duration-200">
             <div className="flex items-center justify-between pb-3 border-b border-gray-100">
               <div className="min-w-0 flex-1">
-                <h3 className="text-sm font-black text-[#081326] truncate">Share {shareDocModal.title}</h3>
+                <h3 className="text-sm font-black text-[#081326] truncate">{shareDocModal.title}</h3>
                 <p className="text-[11px] text-gray-400">Select sharing method</p>
               </div>
               <button
                 onClick={() => setShareDocModal(null)}
-                className="w-7 h-7 rounded-full bg-gray-100 text-gray-500 hover:text-black flex items-center justify-center text-xs font-bold"
+                className="w-7 h-7 rounded-full bg-gray-100 text-gray-500 hover:text-black flex items-center justify-center text-xs font-bold cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1183,41 +1521,19 @@ const SharedDocuments = () => {
             <div className="space-y-2.5">
               <button
                 type="button"
-                onClick={() => handleShareSingleDocFile(shareDocModal)}
+                onClick={() => handleShareDocFiles(shareDocModal.docs)}
                 className="w-full p-3.5 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl text-left text-xs font-black text-amber-950 flex items-center gap-3 transition-colors cursor-pointer"
               >
                 <FileText className="w-5 h-5 text-amber-600 shrink-0" />
                 <div>
-                  <p className="text-xs font-black text-[#081326]">Share File</p>
-                  <p className="text-[10px] text-gray-500 font-medium">Send actual document file (WhatsApp, Email, Drive...)</p>
+                  <p className="text-xs font-black text-[#081326]">Share File{shareDocModal.docs?.length > 1 ? 's' : ''}</p>
+                  <p className="text-[10px] text-gray-500 font-medium">Send actual document file{shareDocModal.docs?.length > 1 ? 's' : ''} (WhatsApp, Email, Drive...)</p>
                 </div>
               </button>
 
               <button
                 type="button"
-                onClick={async () => {
-                  const text = `📄 Document: ${shareDocModal.title}\nClient: ${data?.fullName || 'Client'}\n\nReview securely here:\n${getShortShareUrl()}`;
-                  if (navigator.share) {
-                    try {
-                      await navigator.share({
-                        title: `${shareDocModal.title} - ${data?.fullName || 'Client'}`,
-                        text: text,
-                        url: getShortShareUrl()
-                      });
-                      setShareDocModal(null);
-                      return;
-                    } catch (err) {
-                      if (err.name === 'AbortError') {
-                        setShareDocModal(null);
-                        return;
-                      }
-                    }
-                  }
-                  navigator.clipboard.writeText(text);
-                  toast.success('Share link copied!');
-                  window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
-                  setShareDocModal(null);
-                }}
+                onClick={() => handleShareDocLinks(shareDocModal.docs)}
                 className="w-full p-3.5 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl text-left text-xs font-black text-blue-950 flex items-center gap-3 transition-colors cursor-pointer"
               >
                 <Share2 className="w-5 h-5 text-blue-600 shrink-0" />
@@ -1243,7 +1559,7 @@ const SharedDocuments = () => {
               </div>
               <button
                 onClick={() => setTopShareModal(false)}
-                className="w-7 h-7 rounded-full bg-gray-100 text-gray-500 hover:text-black flex items-center justify-center text-xs font-bold"
+                className="w-7 h-7 rounded-full bg-gray-100 text-gray-500 hover:text-black flex items-center justify-center text-xs font-bold cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1299,3 +1615,4 @@ const SharedDocuments = () => {
 };
 
 export default SharedDocuments;
+

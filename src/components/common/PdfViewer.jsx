@@ -164,8 +164,8 @@ export default function PdfViewer({ url, title = 'PDF Document', className = '' 
       );
       initialScaleRef.current = scale;
       setIsDragging(false);
-    } else if (e.touches.length === 1) {
-      // 1-finger 4-way pan (allowed at any scale or when zoomed)
+    } else if (e.touches.length === 1 && scale > 1.05) {
+      // 1-finger pan only when zoomed in
       const touch = e.touches[0];
       setIsDragging(true);
       dragStartRef.current = {
@@ -187,10 +187,8 @@ export default function PdfViewer({ url, title = 'PDF Document', className = '' 
       const factor = currentDistance / initialDistanceRef.current;
       const newScale = Math.min(Math.max(initialScaleRef.current * factor, 0.8), 4.5);
       setScale(newScale);
-    } else if (e.touches.length === 1 && isDragging) {
-      if (scale > 1) {
-        if (e.cancelable) e.preventDefault(); // Stop outer page scroll while panning zoomed document
-      }
+    } else if (e.touches.length === 1 && isDragging && scale > 1.05) {
+      if (e.cancelable) e.preventDefault(); // Stop outer page scroll only while panning zoomed document
       const touch = e.touches[0];
       setPosition({
         x: touch.clientX - dragStartRef.current.x,
@@ -205,7 +203,7 @@ export default function PdfViewer({ url, title = 'PDF Document', className = '' 
     }
     if (e.touches.length === 0) {
       setIsDragging(false);
-      if (scale <= 1) {
+      if (scale <= 1.05) {
         setPosition({ x: 0, y: 0 });
       }
     }
@@ -213,16 +211,18 @@ export default function PdfViewer({ url, title = 'PDF Document', className = '' 
 
   // Mouse pan handlers (Desktop)
   const handleMouseDown = (e) => {
-    e.preventDefault();
-    setIsDragging(true);
-    dragStartRef.current = {
-      x: e.clientX - position.x,
-      y: e.clientY - position.y
-    };
+    if (scale > 1.05) {
+      e.preventDefault();
+      setIsDragging(true);
+      dragStartRef.current = {
+        x: e.clientX - position.x,
+        y: e.clientY - position.y
+      };
+    }
   };
 
   const handleMouseMove = (e) => {
-    if (isDragging) {
+    if (isDragging && scale > 1.05) {
       e.preventDefault();
       setPosition({
         x: e.clientX - dragStartRef.current.x,
@@ -233,7 +233,7 @@ export default function PdfViewer({ url, title = 'PDF Document', className = '' 
 
   const handleMouseUp = () => {
     setIsDragging(false);
-    if (scale <= 1) {
+    if (scale <= 1.05) {
       setPosition({ x: 0, y: 0 });
     }
   };
@@ -333,9 +333,10 @@ export default function PdfViewer({ url, title = 'PDF Document', className = '' 
 
       {/* Main Document Canvas Viewport with Free 4-Direction Panning */}
       <div
-        className={`relative w-full min-h-[380px] sm:min-h-[520px] flex items-center justify-center p-2 sm:p-4 overflow-hidden touch-none ${
-          scale > 1 ? (isDragging ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-default'
+        className={`relative w-full min-h-[380px] sm:min-h-[520px] flex items-center justify-center p-2 sm:p-4 overflow-hidden ${
+          scale > 1.05 ? (isDragging ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-default'
         }`}
+        style={{ touchAction: scale > 1.05 ? 'none' : 'pan-y' }}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
