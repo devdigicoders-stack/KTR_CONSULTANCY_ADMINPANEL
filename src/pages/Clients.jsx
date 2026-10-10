@@ -117,7 +117,7 @@ const Clients = () => {
       return;
     }
     const lines = active.map((p, i) => `${i + 1}. ${p.title}${p.description ? ` (${p.description})` : ''}`).join('\n');
-    const text = `📋 Pending Requirements for: ${client?.fullName || 'Client'}\n\n${lines}\n\nPlease submit the required documents at earliest.\n- KTR Consultants`;
+    const text = `📁 KTR Consultants – Pending Requirements\n\nClient: ${client?.fullName || 'Client'}\n\nRequired Items:\n${lines}\n\nPlease submit the required documents at earliest.`;
     navigator.clipboard.writeText(text);
     setCopiedPendencyId(client._id);
     toast.success('Pending list copied to clipboard!');
@@ -128,7 +128,7 @@ const Clients = () => {
     const active = (client?.pendencies || []).filter(p => p.status !== 'Resolved');
     if (active.length === 0) return;
     const lines = active.map((p, i) => `${i + 1}. ${p.title}${p.description ? ` (${p.description})` : ''}`).join('\n');
-    const text = `📋 *Pending Requirements for:* ${client?.fullName || 'Client'}\n\n${lines}\n\nPlease submit at earliest.\n- KTR Consultants`;
+    const text = `📁 KTR Consultants – Pending Requirements\n\nClient: ${client?.fullName || 'Client'}\n\nRequired Items:\n${lines}\n\nPlease submit the required documents at earliest.`;
     window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
   };
 

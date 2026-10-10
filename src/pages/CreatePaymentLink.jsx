@@ -88,7 +88,7 @@ const CreatePaymentLink = () => {
   const handleWhatsAppShare = () => {
     if (!createdLink) return;
     const url = getFullShareUrl(createdLink.linkId);
-    const text = `Hello ${createdLink.clientName},\n\nHere is your payment link for *${createdLink.serviceName}* from KTR Consultants:\nAmount Payable: ₹${createdLink.totalAmount.toLocaleString('en-IN')}\n\nClick link to pay & download invoice instantly:\n${url}\n\nThank you,\nKTR Consultants`;
+    const text = `📁 KTR Consultants – Payment Request\n\nClient: ${createdLink.clientName}\nService: ${createdLink.serviceName}\nAmount Payable: ₹${createdLink.totalAmount.toLocaleString('en-IN')}\n\n🔗 Review & Pay Online: ${url}`;
     window.open(`https://wa.me/91${createdLink.clientMobile}?text=${encodeURIComponent(text)}`, '_blank');
   };
 

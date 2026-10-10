@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../api/axios';
-import { getAssetUrl } from '../utils/url';
+import { getAssetUrl, getPublicShareDocsUrl, getBankerShareMessage } from '../utils/url';
 import PdfViewer from '../components/common/PdfViewer';
 import ImageViewer from '../components/common/ImageViewer';
 
@@ -107,26 +107,16 @@ const SharedDocuments = () => {
     return () => window.removeEventListener('popstate', handlePopState);
   }, [viewMode]);
 
-  // Clean Short Share URL (e.g. origin/s/:id)
+  // Clean Short Share URL (e.g. ktrconsultants.in/d/:id or origin/d/:id)
   const getShortShareUrl = useCallback(() => {
-    const origin = window.location.origin;
     const targetId = id || data?._id || '';
-    return `${origin}/s/${targetId}`;
+    return getPublicShareDocsUrl(targetId);
   }, [id, data]);
 
   // Professional WhatsApp Share Message
   const getWhatsAppShareText = useCallback(() => {
-    const clientName = data?.fullName || 'Client';
-    const primaryAge = data?.age || calculateAge(data?.dob);
-    const ageDisplay = primaryAge ? ` (${primaryAge} Yrs)` : '';
-    const formattedLoan = data?.loanAmount 
-      ? Number(data.loanAmount).toLocaleString('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 })
-      : '₹0';
-    const caseType = data?.caseType || data?.loanType || 'Loan Case';
-    const profession = data?.occupation || 'Salaried';
     const shortUrl = getShortShareUrl();
-
-    return `KTR Consultants – Client Documents\n\nClient: ${clientName}${ageDisplay}\nLoan Amount: ${formattedLoan}\nCase Type: ${caseType}\nProfession: ${profession}\n\nReview documents here:\n${shortUrl}`;
+    return getBankerShareMessage(data, shortUrl);
   }, [data, getShortShareUrl]);
 
   const handleCopyLink = () => {
@@ -147,13 +137,12 @@ const SharedDocuments = () => {
 
   // Native share handler
   const handleSharePortalLink = async () => {
-    const shareUrl = getShortShareUrl();
     const text = getWhatsAppShareText();
     const title = `${data?.fullName || 'Client'} - Documents Portal | KTR Consultants`;
 
     if (navigator.share) {
       try {
-        await navigator.share({ title, text, url: shareUrl });
+        await navigator.share({ title, text });
         setTopShareModal(false);
         return;
       } catch (err) {
@@ -280,14 +269,13 @@ const SharedDocuments = () => {
     const clientName = data?.fullName || 'Client';
     const shortUrl = getShortShareUrl();
     const docNames = docsToShare.map(d => d.title).join(', ');
-    const text = `📄 *Documents: ${docNames}*\nClient: *${clientName}*\n\nReview & download here:\n${shortUrl}`;
+    const text = `📁 KTR Consultants – Document File\n\nClient: ${clientName}\nDocument: ${docNames}\n\n🔗 Review Case & Documents: ${shortUrl}`;
 
     if (navigator.share) {
       try {
         await navigator.share({
           title: `${docsToShare.length} Documents - ${clientName}`,
-          text: text,
-          url: shortUrl
+          text: text
         });
         setShareDocModal(null);
         return;
@@ -310,25 +298,22 @@ const SharedDocuments = () => {
     if (!docsToShare || docsToShare.length === 0) return;
 
     const clientName = data?.fullName || 'Client';
-    const primaryAge = data?.age || calculateAge(data?.dob);
-    const ageDisplay = primaryAge ? ` (${primaryAge})` : '';
     const shortUrl = getShortShareUrl();
 
     let text = '';
     if (docsToShare.length === 1) {
       const doc = docsToShare[0];
-      text = `📄 *Document: ${doc.title}*\nClient: *${clientName}${ageDisplay}*\n\nReview securely here:\n${shortUrl}`;
+      text = `📁 KTR Consultants – Document File\n\nClient: ${clientName}\nDocument: ${doc.title}\n\n🔗 Review Case & Documents: ${shortUrl}`;
     } else {
       const list = docsToShare.map((d, i) => `${i + 1}. ${d.title}${d.files?.length > 1 ? ` (${d.files.length} Files)` : ''}`).join('\n');
-      text = `📄 *Shared Documents (${docsToShare.length})*\nClient: *${clientName}${ageDisplay}*\n\n${list}\n\nReview documents securely here:\n${shortUrl}`;
+      text = `📁 KTR Consultants – Loan File Documents\n\nClient: ${clientName}\n\nDocuments Included:\n${list}\n\n🔗 Review Case & Documents: ${shortUrl}`;
     }
 
     if (navigator.share) {
       try {
         await navigator.share({
           title: docsToShare.length === 1 ? `${docsToShare[0].title} - ${clientName}` : `${docsToShare.length} Documents - ${clientName}`,
-          text: text,
-          url: shortUrl
+          text: text
         });
         setShareDocModal(null);
         return;
@@ -872,7 +857,7 @@ const SharedDocuments = () => {
       </header>
 
       {/* Main Content Area */}
-      <main className="max-w-4xl mx-auto px-4 pt-4 space-y-4">
+      <main className="max-w-4xl mx-auto px-3 sm:px-4 pt-4 pb-28 sm:pb-20 space-y-4">
         
         {/* 2. CASE SUMMARY (Clean, Compact, Easy-to-read as requested) */}
         <div className="bg-white rounded-2xl sm:rounded-3xl border border-gray-100 p-4 sm:p-5 shadow-xs">
@@ -1191,13 +1176,13 @@ const SharedDocuments = () => {
             })}
 
             {/* Bottom Back Button */}
-            <div className="text-center pt-4">
+            <div className="text-center pt-8 pb-32 sm:pb-24">
               <button
                 type="button"
                 onClick={closeContinuousView}
-                className="px-6 py-2.5 bg-[#081326] text-white rounded-xl text-xs font-bold hover:bg-[#11203d] transition-all cursor-pointer shadow-sm"
+                className="px-6 py-2.5 bg-[#081326] text-white rounded-xl text-xs font-bold hover:bg-[#11203d] transition-all cursor-pointer shadow-md inline-flex items-center gap-2"
               >
-                ← Back to Document List
+                <ArrowLeft className="w-3.5 h-3.5" /> Back to Document List
               </button>
             </div>
           </div>
@@ -1236,21 +1221,20 @@ const SharedDocuments = () => {
       )}
 
       {/* 6. FLOATING RAISE QUERY BUTTON (Bottom-Right of Banker Portal) */}
-      <div className="fixed bottom-4 right-4 z-40">
+      <div className="fixed bottom-4 right-3 sm:bottom-6 sm:right-6 z-40">
         <button
           type="button"
           onClick={() => {
-            const currentDoc = viewMode === 'continuous' && sortedDocs[visibleDocIndex] ? sortedDocs[visibleDocIndex].title : 'General Case Query';
-            setQueryForm(prev => ({ ...prev, documentTitle: currentDoc }));
+            setQueryForm(prev => ({ ...prev, documentTitle: 'General Case Query' }));
             setRaiseQueryModal(true);
           }}
-          className="group flex items-center gap-2 px-4 py-3 bg-[#081326] hover:bg-[#11203d] text-white rounded-full shadow-2xl border-2 border-amber-400 transition-all transform hover:scale-105 active:scale-95 cursor-pointer"
+          className="group flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 bg-[#081326] hover:bg-[#11203d] text-white rounded-full shadow-2xl border border-amber-400/80 transition-all transform hover:scale-105 active:scale-95 cursor-pointer"
           title="Raise Query for Banker / Staff"
         >
-          <div className="w-7 h-7 rounded-full bg-amber-400 text-black flex items-center justify-center font-bold">
-            <MessageSquare className="w-4 h-4" />
+          <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-amber-400 text-black flex items-center justify-center font-bold shrink-0">
+            <MessageSquare className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
           </div>
-          <span className="text-xs sm:text-sm font-black tracking-wide pr-1">Raise Query</span>
+          <span className="text-[11px] sm:text-xs font-black tracking-wide pr-0.5 sm:pr-1">Raise Query</span>
         </button>
       </div>
 
@@ -1327,59 +1311,18 @@ const SharedDocuments = () => {
                   />
                 </div>
 
-                {/* Banker Details (Name, Bank, Designation, Mobile) */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  <div>
-                    <label className="block text-[10px] font-bold text-gray-600 uppercase tracking-wider mb-1">
-                      Banker Name
-                    </label>
-                    <input
-                      type="text"
-                      value={queryForm.bankerName}
-                      onChange={(e) => setQueryForm({ ...queryForm, bankerName: e.target.value })}
-                      placeholder="e.g. Ramesh Sharma"
-                      className="w-full text-xs p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-amber-400 outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold text-gray-600 uppercase tracking-wider mb-1">
-                      Bank / Branch
-                    </label>
-                    <input
-                      type="text"
-                      value={queryForm.bankName}
-                      onChange={(e) => setQueryForm({ ...queryForm, bankName: e.target.value })}
-                      placeholder="e.g. SBI Main Branch"
-                      className="w-full text-xs p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-amber-400 outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold text-gray-600 uppercase tracking-wider mb-1">
-                      Designation
-                    </label>
-                    <input
-                      type="text"
-                      value={queryForm.bankerDesignation}
-                      onChange={(e) => setQueryForm({ ...queryForm, bankerDesignation: e.target.value })}
-                      placeholder="e.g. Branch Manager / Credit Officer"
-                      className="w-full text-xs p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-amber-400 outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] font-bold text-gray-600 uppercase tracking-wider mb-1">
-                      Contact / Mobile No.
-                    </label>
-                    <input
-                      type="tel"
-                      value={queryForm.bankerMobile}
-                      onChange={(e) => setQueryForm({ ...queryForm, bankerMobile: e.target.value })}
-                      placeholder="e.g. 9876543210"
-                      className="w-full text-xs p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-amber-400 outline-none"
-                    />
-                  </div>
+                {/* Banker Name */}
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-600 uppercase tracking-wider mb-1">
+                    Banker Name
+                  </label>
+                  <input
+                    type="text"
+                    value={queryForm.bankerName}
+                    onChange={(e) => setQueryForm({ ...queryForm, bankerName: e.target.value })}
+                    placeholder="e.g. Ramesh Sharma"
+                    className="w-full text-xs p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-amber-400 outline-none"
+                  />
                 </div>
 
                 <div className="pt-2 flex items-center justify-end gap-2 border-t border-gray-100">

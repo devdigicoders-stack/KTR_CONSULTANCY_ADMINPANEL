@@ -144,10 +144,11 @@ const TemplateForms = () => {
 
   const getFullPublicUrl = (linkId, type = 'data_form') => {
     const origin = window.location.origin;
-    if (type === 'doc_request') {
-      return `${origin}/u/${linkId}`;
+    const prefix = type === 'doc_request' ? '/u/' : '/f/';
+    if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+      return `${origin}${prefix}${linkId}`;
     }
-    return `${origin}/f/${linkId}`;
+    return `https://ktrconsultants.in${prefix}${linkId}`;
   };
 
   const handleCopyLink = (linkId, type) => {
@@ -160,7 +161,8 @@ const TemplateForms = () => {
 
   const handleShareWhatsApp = (formData) => {
     const url = getFullPublicUrl(formData.linkId, formData.type);
-    const text = `Dear ${formData.clientName},\n\nPlease fill out your information & verify documents on KTR Consultants Secure Portal:\n${url}\n\nThank you!`;
+    const title = formData.type === 'doc_request' ? 'Document Upload Request' : 'Client Details Form';
+    const text = `📁 KTR Consultants – ${title}\n\nClient: ${formData.clientName || 'Client'}\n\n🔗 Open Secure Form Here: ${url}`;
     window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
   };
 

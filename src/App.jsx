@@ -59,6 +59,7 @@ function App() {
           <Route path="/login" element={<Login />} />
           
           {/* Public Shared Client Documents & Forms (Clean Short URLs + Legacy URLs) */}
+          <Route path="/d/:id" element={<SharedDocuments />} />
           <Route path="/s/:id" element={<SharedDocuments />} />
           <Route path="/shared-docs/:id" element={<SharedDocuments />} />
           <Route path="/f/:id" element={<PublicClientForm />} />

@@ -317,8 +317,7 @@ const BankFormsRepository = ({ defaultScope = 'common' }) => {
       try {
         await navigator.share({
           title: item.name,
-          text,
-          url: fullUrl
+          text
         });
         return;
       } catch (e) {}

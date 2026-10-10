@@ -177,7 +177,10 @@ const CreateClientForm = () => {
 
   const getFullPublicUrl = (linkId) => {
     const origin = window.location.origin;
-    return `${origin}/form/${linkId}`;
+    if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+      return `${origin}/f/${linkId}`;
+    }
+    return `https://ktrconsultants.in/f/${linkId}`;
   };
 
   const handleCopyLink = (linkId) => {
@@ -190,7 +193,7 @@ const CreateClientForm = () => {
 
   const handleShareWhatsApp = (form) => {
     const url = getFullPublicUrl(form.linkId);
-    const text = `Dear ${form.clientName},\n\nPlease fill out your information form on KTR Consultants Secure Portal:\n${url}\n\nThank you!`;
+    const text = `📁 KTR Consultants – Client Details Form\n\nClient: ${form.clientName || 'Client'}\n\n🔗 Complete Form Here: ${url}`;
     window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
   };
 

@@ -158,7 +158,10 @@ const RequestDocumentsForm = () => {
 
   const getFullPublicUrl = (linkId) => {
     const origin = window.location.origin;
-    return `${origin}/upload-docs/${linkId}`;
+    if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+      return `${origin}/u/${linkId}`;
+    }
+    return `https://ktrconsultants.in/u/${linkId}`;
   };
 
   const handleCopyLink = (linkId) => {
@@ -171,7 +174,7 @@ const RequestDocumentsForm = () => {
 
   const handleShareWhatsApp = (request) => {
     const url = getFullPublicUrl(request.linkId);
-    const text = `Dear ${request.clientName},\n\nPlease upload your required case documents directly on KTR Consultants Secure Upload Portal:\n${url}\n\nThank you!`;
+    const text = `📁 KTR Consultants – Document Upload Request\n\nClient: ${request.clientName || 'Client'}\n\n🔗 Upload Documents Here: ${url}`;
     window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
   };
 

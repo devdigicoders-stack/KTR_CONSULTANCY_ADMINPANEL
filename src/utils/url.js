@@ -36,7 +36,51 @@ export const getAssetUrl = (path) => {
 export const getPublicShareDocsUrl = (clientId) => {
   if (!clientId) return '';
   if (typeof window !== 'undefined') {
-    return `${window.location.origin}/shared-docs/${clientId}`;
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      return `${window.location.origin}/d/${clientId}`;
+    }
+    return `https://ktrconsultants.in/d/${clientId}`;
   }
-  return `https://admin.ktrconsultants.in/shared-docs/${clientId}`;
+  return `https://ktrconsultants.in/d/${clientId}`;
+};
+
+export const getBankerShareMessage = (clientData, customUrl = null) => {
+  const clientName = clientData?.fullName || clientData?.name || 'Client';
+
+  let formattedLoan = 'As Applicable';
+  if (clientData?.loanAmount) {
+    const num = Number(clientData.loanAmount);
+    if (!isNaN(num) && num > 0) {
+      formattedLoan = `₹${num.toLocaleString('en-IN')}`;
+    }
+  }
+
+  const caseType = clientData?.caseType || clientData?.loanType || 'Business Loan';
+  const business = clientData?.companyName || clientData?.businessName || clientData?.businessType;
+  const profession = clientData?.occupation || clientData?.designation || clientData?.employmentType;
+
+  let businessOrProfessionLine = '';
+  if (business) {
+    businessOrProfessionLine = `Business: ${business}`;
+  } else if (profession) {
+    businessOrProfessionLine = `Profession: ${profession}`;
+  }
+
+  const shortUrl = customUrl || getPublicShareDocsUrl(clientData?._id || clientData?.id);
+
+  const lines = [
+    '📁 KTR Consultants – Loan File',
+    '',
+    `Client: ${clientName}`,
+    `Loan Amount: ${formattedLoan}`,
+    `Case Type: ${caseType}`
+  ];
+
+  if (businessOrProfessionLine) {
+    lines.push(businessOrProfessionLine);
+  }
+
+  lines.push('', `🔗 Review Case & Documents: ${shortUrl}`);
+
+  return lines.join('\n');
 };

@@ -9,7 +9,7 @@ import {
 import toast from 'react-hot-toast';
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.mjs?url';
-import { getAssetUrl, getPublicShareDocsUrl } from '../../utils/url';
+import { getAssetUrl, getPublicShareDocsUrl, getBankerShareMessage } from '../../utils/url';
 import api from '../../api/axios';
 import PdfViewer from '../common/PdfViewer';
 import ImageViewer from '../common/ImageViewer';
@@ -899,15 +899,14 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
 
   // Share portal link via chooser / WhatsApp
   const handleSharePortalLink = async () => {
+    const text = getBankerShareMessage(client, shareBundleUrl);
     const clientName = client?.fullName || 'Client';
-    const text = `📂 KTR Consultants - Client Documents Portal\nClient: ${clientName}\n\nReview verified case documents here:\n${shareBundleUrl}`;
 
     if (navigator.share) {
       try {
         await navigator.share({
           title: `${clientName} - Documents Portal`,
-          text: text,
-          url: shareBundleUrl
+          text: text
         });
         setTopShareModal(false);
         return;
@@ -921,7 +920,7 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
     }
 
     navigator.clipboard.writeText(text);
-    toast.success('Portal link copied to clipboard!');
+    toast.success('Portal link message copied to clipboard!');
     window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
     setTopShareModal(false);
   };
@@ -1032,14 +1031,13 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
     }
 
     toast.dismiss('share-file-toast');
-    const text = `📄 Document: ${docItem.name}\nClient: ${client?.fullName || 'Client'}\n\n🔗 View / Download:\n${fullUrl}\n\nPortal: ${shareBundleUrl}`;
+    const text = `📁 KTR Consultants – Document File\n\nClient: ${client?.fullName || 'Client'}\nDocument: ${docItem.name}\n\n🔗 Review Case & Documents: ${shareBundleUrl}`;
 
     if (navigator.share) {
       try {
         await navigator.share({
           title: `${docItem.name} - ${client?.fullName || 'Client'}`,
-          text: text,
-          url: fullUrl
+          text: text
         });
         setShareDocModal(null);
         return;
@@ -2189,14 +2187,12 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
               <button
                 type="button"
                 onClick={async () => {
-                  const loanAmountFormatted = client?.loanAmount ? `₹${Number(client.loanAmount).toLocaleString('en-IN')}` : 'As Applicable';
-                  const text = `KTR Consultants – Client Documents\n\nClient: ${client?.fullName || 'Client'}\nLoan Amount: ${loanAmountFormatted}\nCase Type: ${client?.loanType || 'Loan Application'}\nProfession: ${client?.occupation || client?.employmentType || 'Salaried'}\n\nReview documents here:\n${shareBundleUrl}`;
+                  const text = getBankerShareMessage(client, shareBundleUrl);
                   if (navigator.share) {
                     try {
                       await navigator.share({
                         title: `KTR Consultants – ${client?.fullName || 'Client'} Documents`,
-                        text,
-                        url: shareBundleUrl
+                        text
                       });
                       setShareDocModal(null);
                       return;
@@ -2265,14 +2261,12 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
               <button
                 type="button"
                 onClick={async () => {
-                  const loanAmountFormatted = client?.loanAmount ? `₹${Number(client.loanAmount).toLocaleString('en-IN')}` : 'As Applicable';
-                  const text = `KTR Consultants – Client Documents\n\nClient: ${client?.fullName || 'Client'}\nLoan Amount: ${loanAmountFormatted}\nCase Type: ${client?.loanType || 'Loan Application'}\nProfession: ${client?.occupation || client?.employmentType || 'Salaried'}\n\nReview documents here:\n${shareBundleUrl}`;
+                  const text = getBankerShareMessage(client, shareBundleUrl);
                   if (navigator.share) {
                     try {
                       await navigator.share({
                         title: `KTR Consultants – ${client?.fullName || 'Client'} Documents`,
-                        text,
-                        url: shareBundleUrl
+                        text
                       });
                       setTopShareModal(false);
                       return;

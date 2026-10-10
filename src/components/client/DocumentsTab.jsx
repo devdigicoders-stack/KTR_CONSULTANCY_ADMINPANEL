@@ -3,7 +3,7 @@ import {
   Eye, Search, FileText, Upload, Trash2, ShieldAlert, X, Download, 
   FolderPlus, Folder, ArrowLeft, FolderOpen, Copy, Check, ExternalLink 
 } from 'lucide-react';
-import { getAssetUrl, getPublicShareDocsUrl } from '../../utils/url';
+import { getAssetUrl, getPublicShareDocsUrl, getBankerShareMessage } from '../../utils/url';
 import api from '../../api/axios';
 import { useAuth } from '../../context/AuthContext';
 
@@ -77,13 +77,10 @@ const DocumentsTab = ({ client, onRefresh }) => {
   };
 
   const handleShareDocOnWhatsApp = (docTitle, fileUrl, targetMobile = null) => {
-    if (!fileUrl) return;
-    const fullUrl = getAssetUrl(fileUrl);
     const clientName = client?.fullName || 'Client';
-    const appId = client?.applicationId ? ` (${client.applicationId})` : '';
-    const caseType = client?.caseType ? `\n📋 *Case Type:* ${client.caseType}` : '';
+    const link = shareBundleUrl || (fileUrl ? getAssetUrl(fileUrl) : '');
     
-    const message = `📄 *Document:* ${docTitle}\n👤 *Client:* ${clientName}${appId}${caseType}\n\n📎 *Direct Document Link (Open to View / Download):*\n${fullUrl}\n\n_Sent via KTR Consultants Case Portal_`;
+    const message = `📁 KTR Consultants – Document File\n\nClient: ${clientName}\nDocument: ${docTitle}\n\n🔗 Review Case & Documents: ${link}`;
     
     if (targetMobile) {
       window.open(`https://wa.me/91${targetMobile}?text=${encodeURIComponent(message)}`, '_blank');
@@ -94,12 +91,7 @@ const DocumentsTab = ({ client, onRefresh }) => {
 
   const handleShareCompleteBundleOnWhatsApp = (targetMobile = null) => {
     if (!shareBundleUrl) return;
-    const clientName = client?.fullName || 'Client';
-    const appId = client?.applicationId ? `\n🆔 *Application ID:* ${client.applicationId}` : '';
-    const caseType = client?.caseType ? `\n📋 *Case / Loan Type:* ${client.caseType}` : '';
-    const totalFiles = (documents || []).length;
-    
-    const message = `📂 *Case Documents: ${clientName}*${appId}${caseType}\n📊 *Total Documents:* ${totalFiles} available\n\n👉 *Open this link to view, preview, download or save all documents:*\n${shareBundleUrl}\n\n_KTR Consultants - Financial & Legal Services_`;
+    const message = getBankerShareMessage(client, shareBundleUrl);
     
     if (targetMobile) {
       window.open(`https://wa.me/91${targetMobile}?text=${encodeURIComponent(message)}`, '_blank');
