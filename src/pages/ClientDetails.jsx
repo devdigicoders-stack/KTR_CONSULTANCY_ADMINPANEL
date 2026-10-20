@@ -13,6 +13,7 @@ import DocumentRepositoryTab from '../components/client/DocumentRepositoryTab';
 import PendencyTab from '../components/client/PendencyTab';
 import ClientFormsTab from '../components/client/ClientFormsTab';
 import BankerQueriesTab from '../components/client/BankerQueriesTab';
+import ErrorBoundary from '../components/common/ErrorBoundary';
 
 const formatCurrency = (amount) => {
   if (!amount && amount !== 0) return '₹ 0';
@@ -236,49 +237,51 @@ const ClientDetails = () => {
 
       {/* Dynamic Tab Content Area */}
       <div className="flex-1">
-        {activeTab === 'Overview' && (
-          <OverviewTab 
-            client={client} 
-            onEditClick={() => navigate(`/clients/edit/${client._id}`)} 
-            onManageApplicants={() => navigate(`/clients/edit/${client._id}`)} 
-          />
-        )}
-        {activeTab === 'Documents' && <DocumentRepositoryTab client={client} onRefresh={fetchClient} />}
-        {activeTab === 'Forms & Submissions' && <ClientFormsTab client={client} />}
-        {activeTab === 'Pendency' && <PendencyTab client={client} onRefresh={fetchClient} />}
-        {activeTab.startsWith("Banker's Queries") && <BankerQueriesTab client={client} onRefresh={fetchClient} />}
-        {activeTab === 'Edit History' && (
-          <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm space-y-4">
-            <h4 className="text-xs font-black text-[#081326] uppercase tracking-wider border-b border-gray-50 pb-3 flex items-center gap-2">
-              <History className="w-4 h-4 text-blue-600" /> Edit Audit History Log
-            </h4>
-            {client.editHistory && client.editHistory.length > 0 ? (
-              <div className="relative pl-6 border-l-2 border-gray-200 space-y-6">
-                {client.editHistory.slice().reverse().map((item, idx) => (
-                  <div key={idx} className="relative group">
-                    <div className="absolute -left-[31px] top-1.5 w-4 h-4 rounded-full bg-blue-600 border-2 border-white shadow-sm"></div>
-                    <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
-                      <div className="flex justify-between items-center mb-1">
-                        <span className="text-xs font-bold text-[#081326]">{item.action}</span>
-                        <span className="text-[10px] text-gray-400 font-medium flex items-center gap-1">
-                          <Clock className="w-3 h-3" /> {new Date(item.timestamp).toLocaleString()}
-                        </span>
+        <ErrorBoundary title="Error loading client details tab">
+          {activeTab === 'Overview' && (
+            <OverviewTab 
+              client={client} 
+              onEditClick={() => navigate(`/clients/edit/${client._id}`)} 
+              onManageApplicants={() => navigate(`/clients/edit/${client._id}`)} 
+            />
+          )}
+          {activeTab === 'Documents' && <DocumentRepositoryTab client={client} onRefresh={fetchClient} />}
+          {activeTab === 'Forms & Submissions' && <ClientFormsTab client={client} />}
+          {activeTab === 'Pendency' && <PendencyTab client={client} onRefresh={fetchClient} />}
+          {activeTab.startsWith("Banker's Queries") && <BankerQueriesTab client={client} onRefresh={fetchClient} />}
+          {activeTab === 'Edit History' && (
+            <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm space-y-4">
+              <h4 className="text-xs font-black text-[#081326] uppercase tracking-wider border-b border-gray-50 pb-3 flex items-center gap-2">
+                <History className="w-4 h-4 text-blue-600" /> Edit Audit History Log
+              </h4>
+              {client.editHistory && client.editHistory.length > 0 ? (
+                <div className="relative pl-6 border-l-2 border-gray-200 space-y-6">
+                  {client.editHistory.slice().reverse().map((item, idx) => (
+                    <div key={idx} className="relative group">
+                      <div className="absolute -left-[31px] top-1.5 w-4 h-4 rounded-full bg-blue-600 border-2 border-white shadow-sm"></div>
+                      <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                        <div className="flex justify-between items-center mb-1">
+                          <span className="text-xs font-bold text-[#081326]">{item.action}</span>
+                          <span className="text-[10px] text-gray-400 font-medium flex items-center gap-1">
+                            <Clock className="w-3 h-3" /> {new Date(item.timestamp).toLocaleString()}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-gray-600 font-medium mb-1">{item.details}</p>
+                        <p className="text-[10px] text-gray-400 font-bold">
+                          Edited By: <span className="text-gray-700">{item.editorName || 'Staff/Admin'}</span> ({item.editorRole || 'staff'})
+                        </p>
                       </div>
-                      <p className="text-[11px] text-gray-600 font-medium mb-1">{item.details}</p>
-                      <p className="text-[10px] text-gray-400 font-bold">
-                        Edited By: <span className="text-gray-700">{item.editorName || 'Staff/Admin'}</span> ({item.editorRole || 'staff'})
-                      </p>
                     </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-xs text-gray-400 text-center py-8 font-medium">
-                No edit history recorded yet for this client.
-              </p>
-            )}
-          </div>
-        )}
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-gray-400 text-center py-8 font-medium">
+                  No edit history recorded yet for this client.
+                </p>
+              )}
+            </div>
+          )}
+        </ErrorBoundary>
       </div>
 
       {/* Delete Confirmation Modal */}

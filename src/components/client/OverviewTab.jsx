@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { 
   User, Phone, Briefcase, IndianRupee, FileCheck, CheckCircle2, 
   Clock, AlertCircle, Edit, StickyNote, Calendar, FileText, Users,
-  ShieldCheck, CreditCard, Lock, Tag, Sparkles, ClipboardCheck, Eye
+  ShieldCheck, CreditCard, Lock, Tag, Sparkles, ClipboardCheck, Eye, Plus
 } from 'lucide-react';
 import SubmissionDetailsModal from './SubmissionDetailsModal';
 import { FormattedNotes } from '../common/RichTextEditor';

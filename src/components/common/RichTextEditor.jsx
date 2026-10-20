@@ -370,16 +370,17 @@ const RichTextEditor = ({
  * while safely rendering legacy unformatted strings.
  */
 export const FormattedNotes = ({ content, className = '', emptyText = 'No case notes logged.' }) => {
-  if (!content || !content.trim()) {
+  const textContent = typeof content === 'string' ? content : (content ? String(content) : '');
+  if (!textContent.trim()) {
     return <p className="text-[11px] text-gray-400 italic py-1">{emptyText}</p>;
   }
 
-  const hasHtml = /<[a-z][\s\S]*>/i.test(content);
+  const hasHtml = /<[a-z][\s\S]*>/i.test(textContent);
 
   if (!hasHtml) {
     return (
       <div className={`text-xs text-gray-700 whitespace-pre-wrap leading-relaxed font-medium ${className}`}>
-        {content}
+        {textContent}
       </div>
     );
   }

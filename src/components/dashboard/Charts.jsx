@@ -219,7 +219,7 @@ export const AdminClientStatusChart = ({ data }) => {
   const chartData = data && data.length > 0 ? data.map((d, i) => ({
     ...d, 
     color: i === 0 ? '#081326' : i === 1 ? '#f59e0b' : '#3b82f6'
-  })) : adminClientStatusData;
+  })) : clientStatusData;
   
   const totalClients = chartData.reduce((acc, curr) => acc + curr.value, 0);
 

@@ -5,7 +5,7 @@ import {
   CheckCircle, Trash2, Edit, AlertTriangle, History, Clock, Phone, Mail, FileText, 
   Briefcase, IndianRupee, FileCheck, AlertCircle, CheckCircle2, Upload, FileUp, Folder, UserPlus,
   Share2, Copy, Check, ChevronDown, ChevronUp, ArrowRight, Lock, Plus, Tag, Calendar, CreditCard, ShieldCheck,
-  GripVertical, ArrowUp, ArrowDown, Archive, BarChart2
+  GripVertical, ArrowUp, ArrowDown, Archive, BarChart2, StickyNote
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../api/axios';
@@ -15,6 +15,7 @@ import OverviewTab from '../components/client/OverviewTab';
 import DocumentRepositoryTab from '../components/client/DocumentRepositoryTab';
 import PendencyTab from '../components/client/PendencyTab';
 import RichTextEditor from '../components/common/RichTextEditor';
+import ErrorBoundary from '../components/common/ErrorBoundary';
 
 export const CASE_STATUS_OPTIONS = [
   'Documents Pending',
@@ -1543,6 +1544,7 @@ const Clients = () => {
 
             {/* Content Area */}
             <div className="flex-1 overflow-y-auto p-6 bg-gray-50/30">
+              <ErrorBoundary title="Error loading client preview tab">
                {previewTab === 'Overview' && (
                   <OverviewTab 
                     client={selectedClient} 
@@ -1591,6 +1593,7 @@ const Clients = () => {
                      )}
                   </div>
                )}
+              </ErrorBoundary>
             </div>
             
             {/* Action Footer */}
