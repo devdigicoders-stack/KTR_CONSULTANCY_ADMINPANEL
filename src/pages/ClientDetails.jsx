@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
+import { getStatusBadgeStyle, getStatusDotColor } from './Clients';
 
 import OverviewTab from '../components/client/OverviewTab';
 import DocumentRepositoryTab from '../components/client/DocumentRepositoryTab';
@@ -46,6 +47,9 @@ const ClientDetails = () => {
 
   useEffect(() => {
     fetchClient();
+    const handleFocus = () => fetchClient();
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
   }, [id]);
 
   const bankerQueriesCount = (client?.bankerQueries || []).filter(q => q.status !== 'Resolved').length;
@@ -167,9 +171,9 @@ const ClientDetails = () => {
                     </span>
                   )}
                 </h2>
-                <span className={`${client.status === 'Approved' ? 'text-green-600 bg-green-50' : client.status === 'Rejected' ? 'text-red-500 bg-red-50' : 'text-orange-500 bg-orange-50'} px-2.5 py-1 rounded-md font-bold flex items-center gap-1.5 text-xs`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${client.status === 'Approved' ? 'bg-green-500' : client.status === 'Rejected' ? 'bg-red-500' : 'bg-orange-500'}`}></span>
-                  {client.status || 'Pending'}
+                <span className={`${getStatusBadgeStyle(client.status)} px-2.5 py-1 rounded-md font-bold flex items-center gap-1.5 text-xs border`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${getStatusDotColor(client.status)}`}></span>
+                  {client.status || 'Documents Pending'}
                 </span>
                 {client.applicants && client.applicants.length > 1 && (
                   <span className="bg-blue-50 text-blue-700 border border-blue-200 px-2.5 py-1 rounded-md font-bold text-xs">
@@ -232,7 +236,13 @@ const ClientDetails = () => {
 
       {/* Dynamic Tab Content Area */}
       <div className="flex-1">
-        {activeTab === 'Overview' && <OverviewTab client={client} />}
+        {activeTab === 'Overview' && (
+          <OverviewTab 
+            client={client} 
+            onEditClick={() => navigate(`/clients/edit/${client._id}`)} 
+            onManageApplicants={() => navigate(`/clients/edit/${client._id}`)} 
+          />
+        )}
         {activeTab === 'Documents' && <DocumentRepositoryTab client={client} onRefresh={fetchClient} />}
         {activeTab === 'Forms & Submissions' && <ClientFormsTab client={client} />}
         {activeTab === 'Pendency' && <PendencyTab client={client} onRefresh={fetchClient} />}

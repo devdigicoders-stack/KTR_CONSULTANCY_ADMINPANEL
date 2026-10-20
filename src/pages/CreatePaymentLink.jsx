@@ -1,44 +1,93 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   CreditCard, User, Phone, Briefcase, FileText, 
   Percent, Tag, DollarSign, Copy, Check, Share2, 
-  ExternalLink, ArrowRight, ShieldCheck, Sparkles 
+  ExternalLink, ArrowRight, ShieldCheck, Sparkles, Search 
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../api/axios';
+import { useAuth } from '../context/AuthContext';
+import PaymentsNavHeader from '../components/PaymentsNavHeader';
 
-const inputCls = "w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium outline-none text-gray-800 hover:border-gray-300 focus:border-[#f59e0b] focus:bg-white transition-all";
+const inputCls = "w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs sm:text-sm font-medium outline-none text-gray-800 hover:border-gray-300 focus:border-[#f59e0b] focus:bg-white transition-all";
 const labelCls = "text-xs font-semibold text-gray-700 block mb-1.5";
 
 const CreatePaymentLink = () => {
   const navigate = useNavigate();
+  const { role } = useAuth();
   const [loading, setLoading] = useState(false);
 
+  // Client Selection
+  const [clients, setClients] = useState([]);
+  const [loadingClients, setLoadingClients] = useState(false);
+  const [clientMode, setClientMode] = useState('new'); // 'new' | 'existing'
+  const [clientSearch, setClientSearch] = useState('');
+
   const [formData, setFormData] = useState({
+    clientRef: '',
     clientName: '',
     clientMobile: '',
     serviceName: '',
     serviceDetails: '',
     amount: '',
     taxRate: '18',
-    discount: '0'
+    discount: ''
   });
 
   const [createdLink, setCreatedLink] = useState(null);
   const [copied, setCopied] = useState(false);
 
-  const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+  // Fetch registered clients for quick selection
+  useEffect(() => {
+    const fetchClients = async () => {
+      setLoadingClients(true);
+      try {
+        const res = await api.get(role === 'admin' ? '/clients' : '/clients/my-clients');
+        if (res.data.success) {
+          setClients(res.data.data || []);
+        }
+      } catch (err) {
+        console.error('Fetch clients error:', err);
+      } finally {
+        setLoadingClients(false);
+      }
+    };
+    fetchClients();
+  }, [role]);
+
+  const handleSelectClient = (c) => {
+    setFormData(prev => ({
+      ...prev,
+      clientRef: c._id || '',
+      clientName: c.fullName || c.name || '',
+      clientMobile: c.mobile || '',
+    }));
+    toast.success(`Selected client: ${c.fullName || c.name}`);
   };
 
-  // Calculations
-  const numAmount = parseFloat(formData.amount) || 0;
-  const numTaxRate = parseFloat(formData.taxRate) || 0;
-  const numDiscount = parseFloat(formData.discount) || 0;
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    if (name === 'discount' || name === 'amount') {
+      let cleanVal = value;
+      // Strip leading zeroes if length > 1 (e.g. typing "500" when "0" was present, or "0500" -> "500")
+      if (cleanVal.length > 1 && cleanVal.startsWith('0') && !cleanVal.startsWith('0.')) {
+        cleanVal = cleanVal.replace(/^0+/, '') || '0';
+      }
+      setFormData(prev => ({ ...prev, [name]: cleanVal }));
+      return;
+    }
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
 
-  const taxAmount = Math.round((numAmount * numTaxRate) / 100);
-  const totalAmount = Math.max(0, Math.round(numAmount + taxAmount - numDiscount));
+  // Calculations: Discount applies to base amount BEFORE calculating GST
+  const numAmount = parseFloat(formData.amount) || 0;
+  const numDiscount = parseFloat(formData.discount) || 0;
+  const numTaxRate = parseFloat(formData.taxRate) || 0;
+
+  const taxableAmount = Math.max(0, numAmount - numDiscount);
+  const taxAmount = Math.round((taxableAmount * numTaxRate) / 100);
+  const totalAmount = Math.max(0, Math.round(taxableAmount + taxAmount));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -52,6 +101,7 @@ const CreatePaymentLink = () => {
       const res = await api.post('/payments/create-link', {
         ...formData,
         amount: numAmount,
+        taxableAmount,
         taxRate: numTaxRate,
         discount: numDiscount
       });
@@ -92,30 +142,17 @@ const CreatePaymentLink = () => {
     window.open(`https://wa.me/91${createdLink.clientMobile}?text=${encodeURIComponent(text)}`, '_blank');
   };
 
-  return (
-    <div className="flex flex-col gap-6 relative h-full pb-10 max-w-5xl mx-auto">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-xs font-extrabold text-[#f59e0b] bg-amber-50 px-2.5 py-1 rounded-md border border-amber-200 flex items-center gap-1">
-              <Sparkles className="w-3.5 h-3.5" /> Payments System
-            </span>
-          </div>
-          <h2 className="text-xl sm:text-2xl font-bold text-[#081326]">Create Payment Link</h2>
-          <p className="text-xs text-gray-500 mt-0.5">
-            Generate custom payment links with itemized taxes & discounts to share directly with clients.
-          </p>
-        </div>
+  const filteredClients = clients.filter(c => {
+    const q = clientSearch.toLowerCase();
+    const name = (c.fullName || c.name || '').toLowerCase();
+    const mob = (c.mobile || '').toLowerCase();
+    return name.includes(q) || mob.includes(q);
+  }).slice(0, 6);
 
-        <button
-          onClick={() => navigate('/payments/invoices')}
-          className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition-all flex items-center gap-2 cursor-pointer w-fit"
-        >
-          <FileText className="w-4 h-4 text-[#081326]" />
-          <span>View All Invoices</span>
-        </button>
-      </div>
+  return (
+    <div className="flex flex-col gap-6 relative h-full pb-10 max-w-6xl mx-auto">
+      {/* Top Navigation */}
+      <PaymentsNavHeader activeTab="create-link" />
 
       {/* Main Grid Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -124,6 +161,84 @@ const CreatePaymentLink = () => {
         <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-7">
           <form onSubmit={handleSubmit} className="flex flex-col gap-5">
             
+            {/* Header info */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-gray-100 gap-2">
+              <div>
+                <h2 className="text-base sm:text-lg font-bold text-[#081326] flex items-center gap-2">
+                  <CreditCard className="w-5 h-5 text-[#f59e0b]" />
+                  <span>Generate Payment Link</span>
+                </h2>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Generate secure online checkout links with itemized taxes & discounts to share directly with clients.
+                </p>
+              </div>
+
+              {/* Client Picker Switcher */}
+              <div className="flex items-center bg-gray-100 p-1 rounded-xl text-xs font-bold w-fit">
+                <button
+                  type="button"
+                  onClick={() => setClientMode('new')}
+                  className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                    clientMode === 'new' ? 'bg-white text-[#081326] shadow-xs' : 'text-gray-500 hover:text-gray-800'
+                  }`}
+                >
+                  New Client
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setClientMode('existing')}
+                  className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                    clientMode === 'existing' ? 'bg-white text-[#081326] shadow-xs' : 'text-gray-500 hover:text-gray-800'
+                  }`}
+                >
+                  Existing Client
+                </button>
+              </div>
+            </div>
+
+            {/* Existing Client Search Picker if active */}
+            {clientMode === 'existing' && (
+              <div className="p-4 bg-amber-50/50 rounded-xl border border-amber-200/70 animate-in fade-in duration-200">
+                <label className="text-xs font-bold text-amber-900 block mb-1.5 flex items-center gap-1.5">
+                  <Search className="w-3.5 h-3.5 text-[#f59e0b]" /> Select Client to Auto-fill
+                </label>
+                <input
+                  type="text"
+                  placeholder="Search client by name or mobile..."
+                  value={clientSearch}
+                  onChange={(e) => setClientSearch(e.target.value)}
+                  className="w-full px-3 py-2 bg-white border border-amber-200 rounded-lg text-xs font-medium outline-none focus:border-[#f59e0b]"
+                />
+
+                {loadingClients ? (
+                  <p className="text-xs text-gray-500 mt-2">Loading clients...</p>
+                ) : (
+                  <div className="mt-2.5 grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto">
+                    {filteredClients.map(c => (
+                      <button
+                        type="button"
+                        key={c._id}
+                        onClick={() => handleSelectClient(c)}
+                        className={`p-2 rounded-lg text-left border transition-all text-xs cursor-pointer ${
+                          formData.clientRef === c._id
+                            ? 'bg-[#081326] text-white border-[#081326]'
+                            : 'bg-white border-amber-100 hover:border-amber-300 text-gray-800'
+                        }`}
+                      >
+                        <p className="font-bold truncate">{c.fullName || c.name}</p>
+                        <p className={`text-[11px] font-mono ${formData.clientRef === c._id ? 'text-amber-300' : 'text-gray-500'}`}>
+                          +91 {c.mobile}
+                        </p>
+                      </button>
+                    ))}
+                    {filteredClients.length === 0 && (
+                      <p className="text-xs text-gray-500 col-span-2">No matching clients found.</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Section 1: Client Information */}
             <div>
               <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
@@ -199,7 +314,7 @@ const CreatePaymentLink = () => {
             {/* Section 3: Pricing & Tax Breakdown */}
             <div className="border-t border-gray-100 pt-5">
               <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                <CreditCard className="w-3.5 h-3.5 text-[#f59e0b]" /> Charges & Discounts
+                <DollarSign className="w-3.5 h-3.5 text-[#f59e0b]" /> Charges & Discounts
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
@@ -238,6 +353,11 @@ const CreatePaymentLink = () => {
                     name="discount"
                     value={formData.discount}
                     onChange={handleChange}
+                    onFocus={(e) => {
+                      if (e.target.value === '0') {
+                        setFormData(prev => ({ ...prev, discount: '' }));
+                      }
+                    }}
                     placeholder="0"
                     min="0"
                     className={inputCls}
@@ -284,28 +404,40 @@ const CreatePaymentLink = () => {
             <div className="space-y-3 text-xs font-normal text-gray-300">
               <div className="flex justify-between">
                 <span>Client:</span>
-                <span className="font-semibold text-white">{formData.clientName || 'Not specified'}</span>
+                <span className="font-semibold text-white truncate max-w-[150px]">{formData.clientName || 'Not specified'}</span>
               </div>
               <div className="flex justify-between">
                 <span>Service:</span>
-                <span className="font-semibold text-white">{formData.serviceName || 'Not specified'}</span>
+                <span className="font-semibold text-white truncate max-w-[150px]">{formData.serviceName || 'Not specified'}</span>
               </div>
               <div className="flex justify-between">
                 <span>Base Price:</span>
                 <span className="font-mono text-white">₹{numAmount.toLocaleString('en-IN')}</span>
               </div>
 
-              {numTaxRate > 0 && (
-                <div className="flex justify-between text-amber-400">
-                  <span>GST ({numTaxRate}%):</span>
-                  <span className="font-mono">+₹{taxAmount.toLocaleString('en-IN')}</span>
-                </div>
-              )}
-
               {numDiscount > 0 && (
                 <div className="flex justify-between text-emerald-400">
                   <span>Discount:</span>
                   <span className="font-mono">-₹{numDiscount.toLocaleString('en-IN')}</span>
+                </div>
+              )}
+
+              {numDiscount > 0 && (
+                <div className="flex justify-between text-amber-200/90 font-medium border-t border-gray-800/80 pt-1.5">
+                  <span>Taxable Amount:</span>
+                  <span className="font-mono text-white">₹{taxableAmount.toLocaleString('en-IN')}</span>
+                </div>
+              )}
+
+              {numTaxRate > 0 ? (
+                <div className="flex justify-between text-amber-400">
+                  <span>GST ({numTaxRate}%):</span>
+                  <span className="font-mono">+₹{taxAmount.toLocaleString('en-IN')}</span>
+                </div>
+              ) : (
+                <div className="flex justify-between text-gray-400">
+                  <span>GST:</span>
+                  <span className="font-mono">0% (Non-Taxable)</span>
                 </div>
               )}
 
@@ -335,6 +467,7 @@ const CreatePaymentLink = () => {
                   {getFullShareUrl(createdLink.linkId)}
                 </span>
                 <button
+                  type="button"
                   onClick={handleCopyLink}
                   className="px-3 py-1.5 bg-[#081326] text-white hover:bg-black text-xs font-bold rounded-lg shrink-0 transition-all flex items-center gap-1.5 cursor-pointer"
                 >
@@ -345,6 +478,7 @@ const CreatePaymentLink = () => {
 
               <div className="grid grid-cols-2 gap-2">
                 <button
+                  type="button"
                   onClick={handleWhatsAppShare}
                   className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
                 >

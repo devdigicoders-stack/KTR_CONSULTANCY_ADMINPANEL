@@ -78,10 +78,28 @@ const BankFormsRepository = ({ defaultScope = 'common' }) => {
   };
 
   useEffect(() => {
+    setSelectedFolder('All');
+  }, [scope]);
+
+  useEffect(() => {
     fetchFolders();
     fetchItems();
     setSelectedItemIds([]);
   }, [scope, selectedFolder]);
+
+  const openUploadModal = (targetFolder) => {
+    setSelectedFiles([]);
+    setUploadDocName('');
+    setUploadNotes('');
+    if (targetFolder && targetFolder !== 'All') {
+      setUploadFolder(targetFolder);
+    } else if (selectedFolder && selectedFolder !== 'All') {
+      setUploadFolder(selectedFolder);
+    } else if (folders.length > 0 && (!uploadFolder || !folders.includes(uploadFolder))) {
+      setUploadFolder(folders[0]);
+    }
+    setShowUploadModal(true);
+  };
 
   // Create permanent folder
   const handleCreateFolder = async (e) => {
@@ -90,7 +108,11 @@ const BankFormsRepository = ({ defaultScope = 'common' }) => {
     if (!clean) return;
 
     try {
-      const res = await api.post('/repository/folders', { name: clean, scope });
+      const res = await api.post('/repository/folders', {
+        folderName: clean,
+        name: clean,
+        scope
+      });
       if (res.data.success) {
         toast.success(`Folder "${clean}" created!`);
         await fetchFolders();
@@ -140,6 +162,7 @@ const BankFormsRepository = ({ defaultScope = 'common' }) => {
       if (res.data.success) {
         toast.success(`Folder "${folderName}" deleted`);
         if (selectedFolder === folderName) setSelectedFolder('All');
+        setShowRenameFolderModal(null);
         await fetchFolders();
         await fetchItems();
       }
@@ -194,7 +217,11 @@ const BankFormsRepository = ({ defaultScope = 'common' }) => {
         setUploadDocName('');
         setUploadNotes('');
         await fetchFolders();
-        await fetchItems();
+        if (selectedFolder !== 'All' && selectedFolder !== uploadFolder) {
+          setSelectedFolder(uploadFolder);
+        } else {
+          await fetchItems();
+        }
       }
     } catch (err) {
       console.error('Upload error:', err);
@@ -390,10 +417,7 @@ const BankFormsRepository = ({ defaultScope = 'common' }) => {
             <FolderPlus className="w-4 h-4 text-gray-600" /> + New Folder
           </button>
           <button
-            onClick={() => {
-              setSelectedFiles([]);
-              setShowUploadModal(true);
-            }}
+            onClick={() => openUploadModal()}
             className="px-4 py-2 bg-[#081326] text-white hover:bg-[#11203d] rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-2 cursor-pointer"
           >
             <Upload className="w-4 h-4 text-[#f59e0b]" /> Upload Files
@@ -533,7 +557,7 @@ const BankFormsRepository = ({ defaultScope = 'common' }) => {
             {searchQuery ? 'No documents match your search query.' : 'Get started by uploading bank forms, PDFs, or private staff documents.'}
           </p>
           <button
-            onClick={() => setShowUploadModal(true)}
+            onClick={() => openUploadModal()}
             className="px-4 py-2 bg-[#081326] text-white rounded-xl text-xs font-bold hover:bg-[#11203d] transition-colors cursor-pointer inline-flex items-center gap-2"
           >
             <Upload className="w-4 h-4 text-[#f59e0b]" /> Upload New File

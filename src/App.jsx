@@ -26,6 +26,7 @@ import Reports from './pages/Reports';
 import Profile from './pages/Profile';
 import Users from './pages/Users';
 import CreatePaymentLink from './pages/CreatePaymentLink';
+import GenerateInvoice from './pages/GenerateInvoice';
 import Invoices from './pages/Invoices';
 import SharedDocuments from './pages/SharedDocuments';
 import BankFormsRepository from './pages/BankFormsRepository';
@@ -35,6 +36,7 @@ import TemplateForms from './pages/TemplateForms';
 import FilledForms from './pages/FilledForms';
 import PublicClientForm from './pages/PublicClientForm';
 import PublicDocUpload from './pages/PublicDocUpload';
+import DeletedClientsBackup from './pages/DeletedClientsBackup';
 
 // ProtectedRoute component
 const ProtectedRoute = ({ children }) => {
@@ -90,9 +92,12 @@ function App() {
             {/* Payments & Invoices (Accessible to Staff & Admin) */}
             <Route path="payments" element={<Invoices />} />
             <Route path="payments/create" element={<CreatePaymentLink />} />
+            <Route path="payments/generate-link" element={<CreatePaymentLink />} />
+            <Route path="payments/generate-invoice" element={<GenerateInvoice />} />
             <Route path="payments/invoices" element={<Invoices />} />
 
             {/* Admin-Only Routes */}
+            <Route path="deleted-clients" element={<AdminRoute><DeletedClientsBackup /></AdminRoute>} />
             <Route path="documents" element={<AdminRoute><Documents /></AdminRoute>} />
             <Route path="cibil" element={<AdminRoute><Cibil /></AdminRoute>} />
             <Route path="credit-info" element={<AdminRoute><CreditInfo /></AdminRoute>} />

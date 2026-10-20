@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  Users, UserCheck, UserMinus, FileWarning, Search, Eye, X, RefreshCcw, Download, 
+  Users, UserCheck, UserMinus, FileWarning, Search, Eye, EyeOff, X, RefreshCcw, Download, 
   CheckCircle, Trash2, Edit, AlertTriangle, History, Clock, Phone, Mail, FileText, 
   Briefcase, IndianRupee, FileCheck, AlertCircle, CheckCircle2, Upload, FileUp, Folder, UserPlus,
-  Share2, Copy, Check, ChevronDown, ChevronUp, ArrowRight
+  Share2, Copy, Check, ChevronDown, ChevronUp, ArrowRight, Lock, Plus, Tag, Calendar, CreditCard, ShieldCheck,
+  GripVertical, ArrowUp, ArrowDown, Archive, BarChart2
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../api/axios';
@@ -13,24 +14,100 @@ import { getAssetUrl } from '../utils/url';
 import OverviewTab from '../components/client/OverviewTab';
 import DocumentRepositoryTab from '../components/client/DocumentRepositoryTab';
 import PendencyTab from '../components/client/PendencyTab';
+import RichTextEditor from '../components/common/RichTextEditor';
+
+export const CASE_STATUS_OPTIONS = [
+  'Documents Pending',
+  'Bank Side Pending',
+  'Client Side Pending',
+  'Case Sanctioned',
+  'Disbursement Pendency',
+  'Case Disbursed'
+];
+
+export const getStatusBadgeStyle = (status) => {
+  switch (status) {
+    case 'Documents Pending':
+      return 'text-amber-800 bg-amber-50 border-amber-200';
+    case 'Bank Side Pending':
+      return 'text-indigo-800 bg-indigo-50 border-indigo-200';
+    case 'Client Side Pending':
+      return 'text-sky-800 bg-sky-50 border-sky-200';
+    case 'Case Sanctioned':
+      return 'text-teal-800 bg-teal-50 border-teal-200';
+    case 'Disbursement Pendency':
+      return 'text-rose-800 bg-rose-50 border-rose-200';
+    case 'Case Disbursed':
+      return 'text-emerald-800 bg-emerald-50 border-emerald-200';
+    case 'Approved':
+      return 'text-green-800 bg-green-50 border-green-200';
+    case 'Rejected':
+      return 'text-red-800 bg-red-50 border-red-200';
+    case 'Pending':
+    default:
+      return 'text-orange-800 bg-orange-50 border-orange-200';
+  }
+};
+
+export const getStatusDotColor = (status) => {
+  switch (status) {
+    case 'Documents Pending':
+      return 'bg-amber-500';
+    case 'Bank Side Pending':
+      return 'bg-indigo-500';
+    case 'Client Side Pending':
+      return 'bg-sky-500';
+    case 'Case Sanctioned':
+      return 'bg-teal-500';
+    case 'Disbursement Pendency':
+      return 'bg-rose-500';
+    case 'Case Disbursed':
+      return 'bg-emerald-500';
+    case 'Approved':
+      return 'bg-green-500';
+    case 'Rejected':
+      return 'bg-red-500';
+    case 'Pending':
+    default:
+      return 'bg-orange-500';
+  }
+};
 
 const StatusBadge = ({ status, isDoc }) => {
-  const styles = {
-    Approved: "text-green-600 bg-green-50 border border-green-100",
-    Rejected: "text-red-500 bg-red-50 border border-red-100",
-    Pending: "text-orange-500 bg-orange-50 border border-orange-100",
-  };
-  const dotColor = {
-    Approved: "bg-green-500",
-    Rejected: "bg-red-500",
-    Pending: "bg-orange-500"
-  };
+  const currentStatus = status || 'Documents Pending';
+  return (
+    <span className={`${getStatusBadgeStyle(currentStatus)} px-2.5 py-1 rounded-md font-bold flex items-center justify-center gap-1.5 w-fit text-[11px] border`}>
+      {!isDoc && <span className={`w-1.5 h-1.5 rounded-full ${getStatusDotColor(currentStatus)}`}></span>}
+      {currentStatus}
+    </span>
+  );
+};
+
+const StatusSelectDropdown = ({ client, onChange, isUpdating }) => {
+  const currentStatus = client?.status || 'Documents Pending';
 
   return (
-    <span className={`${styles[status] || 'text-gray-600 bg-gray-50'} px-2.5 py-1 rounded-md font-bold flex items-center justify-center gap-1.5 w-fit text-[11px]`}>
-      {!isDoc && dotColor[status] && <span className={`w-1.5 h-1.5 rounded-full ${dotColor[status]}`}></span>}
-      {status || 'Pending'}
-    </span>
+    <div className="relative inline-block text-left" onClick={(e) => e.stopPropagation()}>
+      <select
+        value={currentStatus}
+        onChange={(e) => onChange(client._id, e.target.value)}
+        disabled={isUpdating}
+        title="Click to select and update case status"
+        className={`appearance-none text-[11px] font-bold px-2.5 py-1.5 pr-6 rounded-lg border cursor-pointer outline-none transition-all shadow-xs ${getStatusBadgeStyle(currentStatus)} ${isUpdating ? 'opacity-50 pointer-events-none' : 'hover:brightness-95'}`}
+      >
+        {!CASE_STATUS_OPTIONS.includes(currentStatus) && (
+          <option value={currentStatus} className="bg-white text-gray-800 font-bold">
+            {currentStatus}
+          </option>
+        )}
+        {CASE_STATUS_OPTIONS.map((opt) => (
+          <option key={opt} value={opt} className="bg-white text-gray-800 font-bold">
+            {opt}
+          </option>
+        ))}
+      </select>
+      <ChevronDown className="w-3 h-3 text-gray-500 absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+    </div>
   );
 };
 
@@ -62,17 +139,27 @@ const Clients = () => {
   const navigate = useNavigate();
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('All Clients');
+  const [activeTab, setActiveTab] = useState('Active Clients');
+  const [showStats, setShowStats] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [draggedClientId, setDraggedClientId] = useState(null);
+  const [dragOverClientId, setDragOverClientId] = useState(null);
+  const [statusUpdatingId, setStatusUpdatingId] = useState(null);
   const [showPreview, setShowPreview] = useState(false);
   const [selectedClient, setSelectedClient] = useState(null);
   const [previewTab, setPreviewTab] = useState('Overview');
   const [statusLoading, setStatusLoading] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [clientToDelete, setClientToDelete] = useState(null);
+  const [deleteReason, setDeleteReason] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Quick Edit Contact Info Modal State
   const [showEditContactModal, setShowEditContactModal] = useState(false);
   const [contactFormData, setContactFormData] = useState({ fullName: '', mobile: '', email: '' });
+  const [editCustomFields, setEditCustomFields] = useState([]);
+  const [editNewFieldName, setEditNewFieldName] = useState('');
+  const [editNewFieldValue, setEditNewFieldValue] = useState('');
   const [updatingContact, setUpdatingContact] = useState(false);
 
   // Front Quick Add Documents Modal State
@@ -84,20 +171,18 @@ const Clients = () => {
     notes: ''
   });
   const [selectedUploadFiles, setSelectedUploadFiles] = useState([]);
+  const uploadFileInputRef = useRef(null);
   const [isUploadingDocs, setIsUploadingDocs] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadStatusText, setUploadStatusText] = useState('');
   const [uploadError, setUploadError] = useState('');
 
-  // Co-Applicant Modal State
-  const [showCoApplicantModal, setShowCoApplicantModal] = useState(false);
-  const [coApplicantClient, setCoApplicantClient] = useState(null);
-  const [isSavingCoApplicant, setIsSavingCoApplicant] = useState(false);
-  const [coApplicantError, setCoApplicantError] = useState('');
-  const [coApplicantForm, setCoApplicantForm] = useState({
-    fullName: '', mobile: '', occupation: '', panNumber: '',
-    aadhaarNumber: '', motherName: '', addressLine1: '', city: '', state: '', pincode: ''
-  });
+  // Multi-Applicant & Co-Borrower Modal State
+  const [showApplicantsModal, setShowApplicantsModal] = useState(false);
+  const [applicantsModalClient, setApplicantsModalClient] = useState(null);
+  const [modalApplicantsList, setModalApplicantsList] = useState([]);
+  const [isSavingApplicants, setIsSavingApplicants] = useState(false);
+  const [applicantsModalError, setApplicantsModalError] = useState('');
 
   // Pendency Popup Modal State
   const [showPendencyModal, setShowPendencyModal] = useState(false);
@@ -187,46 +272,144 @@ const Clients = () => {
   const updateStatus = async (id, newStatus) => {
     try {
       setStatusLoading(true);
+      setStatusUpdatingId(id);
       const res = await api.patch(`/clients/${id}/status`, { status: newStatus });
       if (res.data.success) {
-        setSelectedClient(res.data.data);
-        fetchClients();
+        setClients(prev => prev.map(c => c._id === id ? { ...c, status: newStatus } : c));
+        if (selectedClient && selectedClient._id === id) {
+          setSelectedClient(prev => ({ ...prev, status: newStatus }));
+        }
+        toast.success(`Case status updated to "${newStatus}"`);
       }
     } catch (error) {
-      alert('Error updating status');
+      console.error('Error updating status:', error);
+      toast.error('Failed to update case status');
     } finally {
       setStatusLoading(false);
+      setStatusUpdatingId(null);
     }
+  };
+
+  const handleStatusChange = (id, newStatus) => {
+    updateStatus(id, newStatus);
+  };
+
+  const handleToggleHide = async (clientId, targetHidden) => {
+    try {
+      const res = await api.patch(`/clients/${clientId}/toggle-hide`, { isHidden: targetHidden });
+      if (res.data.success) {
+        setClients(prev => prev.map(c => c._id === clientId ? { ...c, isHidden: targetHidden } : c));
+        if (selectedClient && selectedClient._id === clientId) {
+          setSelectedClient(prev => ({ ...prev, isHidden: targetHidden }));
+        }
+        toast.success(targetHidden ? 'Client hidden from active list' : 'Client unhidden and restored to active list');
+      }
+    } catch (error) {
+      console.error('Error toggling hide client:', error);
+      toast.error('Failed to update client visibility');
+    }
+  };
+
+  const handleReorder = async (sourceId, targetId) => {
+    if (!sourceId || !targetId || sourceId === targetId) return;
+
+    const currentFiltered = [...filteredClients];
+    const srcIdx = currentFiltered.findIndex(c => c._id === sourceId);
+    const tgtIdx = currentFiltered.findIndex(c => c._id === targetId);
+    if (srcIdx === -1 || tgtIdx === -1) return;
+
+    // Move source item to target position in filtered list
+    const [movedItem] = currentFiltered.splice(srcIdx, 1);
+    currentFiltered.splice(tgtIdx, 0, movedItem);
+
+    // Reconstruct full clients list preserving order of filtered items
+    const filteredSet = new Set(currentFiltered.map(c => c._id));
+    const nextClients = [];
+    let fIdx = 0;
+    for (const c of clients) {
+      if (filteredSet.has(c._id)) {
+        nextClients.push(currentFiltered[fIdx++]);
+      } else {
+        nextClients.push(c);
+      }
+    }
+
+    setClients(nextClients);
+
+    try {
+      const orderedIds = nextClients.map(c => c._id);
+      await api.post('/clients/reorder', { orderedIds });
+      toast.success('Custom client order saved', { id: 'client-order-toast', duration: 1500 });
+    } catch (err) {
+      console.error('Failed to save client order:', err);
+      toast.error('Failed to save client order');
+      fetchClients();
+    }
+  };
+
+  const handleMoveStep = (clientId, direction) => {
+    const idx = filteredClients.findIndex(c => c._id === clientId);
+    if (idx === -1) return;
+    const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (targetIdx < 0 || targetIdx >= filteredClients.length) return;
+    handleReorder(clientId, filteredClients[targetIdx]._id);
   };
 
   const handleDeleteClient = async () => {
     if (!clientToDelete) return;
+    const clientId = typeof clientToDelete === 'object' ? clientToDelete._id : clientToDelete;
+    const clientName = typeof clientToDelete === 'object' ? (clientToDelete.fullName || 'Client') : 'Client';
+
     try {
-      const res = await api.delete(`/clients/${clientToDelete}`);
+      setIsDeleting(true);
+      const res = await api.delete(`/clients/${clientId}`, {
+        data: { reason: deleteReason.trim() || 'Deleted via Staff Portal' }
+      });
       if (res.data.success) {
+        toast.success(`Client "${clientName}" removed from active list. All data securely backed up for Super Admin.`);
         setShowDeleteModal(false);
         setClientToDelete(null);
+        setDeleteReason('');
+        if (selectedClient && selectedClient._id === clientId) {
+          setShowPreview(false);
+          setSelectedClient(null);
+        }
         fetchClients();
       }
     } catch (error) {
-      alert('Error deleting client');
+      console.error('Error deleting client:', error);
+      toast.error(error.response?.data?.message || 'Error deleting client');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
   const handleOpenEditContact = () => {
     if (!selectedClient) return;
+    const primaryApp = selectedClient.applicants?.[0];
     setContactFormData({
-      fullName: selectedClient.fullName || '',
-      mobile: selectedClient.mobile || '',
-      email: selectedClient.email || '',
-      panNumber: selectedClient.panNumber || selectedClient.pan || '',
+      fullName: primaryApp?.fullName || selectedClient.fullName || '',
+      dob: primaryApp?.dob ? primaryApp.dob.split('T')[0] : (selectedClient.dob ? selectedClient.dob.split('T')[0] : ''),
+      occupation: primaryApp?.occupation || selectedClient.occupation || '',
       loanAmount: selectedClient.loanAmount || '',
       caseType: selectedClient.caseType || selectedClient.loanType || '',
-      occupation: selectedClient.occupation || '',
+      panNumber: primaryApp?.panNumber || selectedClient.panNumber || selectedClient.pan || '',
+      aadhaarNumber: primaryApp?.aadhaarNumber || selectedClient.aadhaarNumber || '',
+      mobile: primaryApp?.mobile || selectedClient.mobile || '',
+      email: primaryApp?.email || selectedClient.email || '',
       addressLine1: selectedClient.addressLine1 || selectedClient.address || '',
       notes: selectedClient.notes || selectedClient.caseNotes || '',
+      caseNotes: selectedClient.caseNotes || selectedClient.notes || '',
+      internalNotes: selectedClient.internalNotes || '',
       status: selectedClient.status || 'Pending'
     });
+    setEditCustomFields(
+      selectedClient.customFields && Array.isArray(selectedClient.customFields)
+        ? selectedClient.customFields.map(cf => ({ fieldName: cf.fieldName || '', fieldValue: cf.fieldValue || '' }))
+        : []
+    );
+    setEditNewFieldName('');
+    setEditNewFieldValue('');
     setShowEditContactModal(true);
   };
 
@@ -243,52 +426,201 @@ const Clients = () => {
     setShowUploadModal(true);
   };
 
-  const handleOpenCoApplicantModal = (client, e) => {
-    e?.stopPropagation();
-    setCoApplicantClient(client);
-    // Pre-fill if co-applicant already exists
-    setCoApplicantForm({
-      fullName: client.coApplicant?.fullName || '',
-      mobile: client.coApplicant?.mobile || '',
-      occupation: client.coApplicant?.occupation || '',
-      panNumber: client.coApplicant?.panNumber || '',
-      aadhaarNumber: client.coApplicant?.aadhaarNumber || '',
-      motherName: client.coApplicant?.motherName || '',
-      addressLine1: client.coApplicant?.addressLine1 || '',
-      city: client.coApplicant?.city || '',
-      state: client.coApplicant?.state || '',
-      pincode: client.coApplicant?.pincode || ''
+  const handleDocMultiFileSelect = (e) => {
+    const incoming = Array.from(e.target.files || []);
+    if (incoming.length === 0) return;
+
+    setSelectedUploadFiles(prev => {
+      const existing = new Set(prev.map(f => `${f.name}_${f.size}_${f.lastModified}`));
+      const fresh = incoming.filter(f => !existing.has(`${f.name}_${f.size}_${f.lastModified}`));
+      return [...prev, ...fresh];
     });
-    setCoApplicantError('');
-    setShowCoApplicantModal(true);
+
+    if (e.target) {
+      e.target.value = '';
+    }
   };
 
-  const handleSaveCoApplicant = async (e) => {
+  const handleDocMultiFileDrop = (e) => {
     e.preventDefault();
-    if (!coApplicantClient?._id) return;
-    if (!coApplicantForm.fullName.trim() || !coApplicantForm.mobile.trim()) {
-      setCoApplicantError('Co-applicant ka naam aur mobile number zaroori hai.');
+    const incoming = Array.from(e.dataTransfer.files || []);
+    if (incoming.length === 0) return;
+
+    setSelectedUploadFiles(prev => {
+      const existing = new Set(prev.map(f => `${f.name}_${f.size}_${f.lastModified}`));
+      const fresh = incoming.filter(f => !existing.has(`${f.name}_${f.size}_${f.lastModified}`));
+      return [...prev, ...fresh];
+    });
+  };
+
+  const handleRemoveSelectedUploadFile = (idx) => {
+    setSelectedUploadFiles(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleOpenApplicantsModal = (client, e) => {
+    e?.stopPropagation();
+    setApplicantsModalClient(client);
+    setApplicantsModalError('');
+
+    let apps = [];
+    if (client.applicants && client.applicants.length > 0) {
+      apps = client.applicants.map((a, idx) => ({
+        fullName: a.fullName || (idx === 0 ? client.fullName || '' : ''),
+        dob: a.dob ? a.dob.split('T')[0] : (idx === 0 && client.dob ? client.dob.split('T')[0] : ''),
+        occupation: a.occupation || (idx === 0 ? client.occupation || '' : ''),
+        mobile: a.mobile || (idx === 0 ? client.mobile || '' : ''),
+        panNumber: a.panNumber || (idx === 0 ? client.panNumber || '' : ''),
+        aadhaarNumber: a.aadhaarNumber || (idx === 0 ? client.aadhaarNumber || '' : ''),
+        relationship: a.relationship || (idx === 0 ? 'Primary Applicant' : `Co-Applicant ${idx}`),
+        customFields: a.customFields && Array.isArray(a.customFields)
+          ? a.customFields.map(cf => ({ fieldName: cf.fieldName || '', fieldValue: cf.fieldValue || '' }))
+          : []
+      }));
+    } else {
+      // Primary applicant from root
+      apps.push({
+        fullName: client.fullName || '',
+        dob: client.dob ? client.dob.split('T')[0] : '',
+        occupation: client.occupation || '',
+        mobile: client.mobile || '',
+        panNumber: client.panNumber || '',
+        aadhaarNumber: client.aadhaarNumber || '',
+        relationship: 'Primary Applicant',
+        customFields: client.customFields && Array.isArray(client.customFields)
+          ? client.customFields.map(cf => ({ fieldName: cf.fieldName || '', fieldValue: cf.fieldValue || '' }))
+          : []
+      });
+
+      // Legacy co-applicant if any
+      if (client.hasCoApplicant && client.coApplicant && client.coApplicant.fullName) {
+        apps.push({
+          fullName: client.coApplicant.fullName || '',
+          dob: client.coApplicant.dob ? client.coApplicant.dob.split('T')[0] : '',
+          occupation: client.coApplicant.occupation || '',
+          mobile: client.coApplicant.mobile || '',
+          panNumber: client.coApplicant.panNumber || '',
+          aadhaarNumber: client.coApplicant.aadhaarNumber || '',
+          relationship: client.coApplicant.relationship || 'Co-Applicant 1',
+          customFields: client.coApplicant.customFields && Array.isArray(client.coApplicant.customFields)
+            ? client.coApplicant.customFields.map(cf => ({ fieldName: cf.fieldName || '', fieldValue: cf.fieldValue || '' }))
+            : []
+        });
+      }
+    }
+
+    setModalApplicantsList(apps);
+    setShowApplicantsModal(true);
+  };
+
+  const handleOpenCoApplicantModal = handleOpenApplicantsModal;
+
+  const handleModalAddApplicant = (role = 'Co-Applicant') => {
+    setModalApplicantsList(prev => [
+      ...prev,
+      {
+        fullName: '',
+        dob: '',
+        occupation: '',
+        mobile: '',
+        panNumber: '',
+        aadhaarNumber: '',
+        relationship: `${role} ${prev.length}`,
+        customFields: []
+      }
+    ]);
+  };
+
+  const handleModalRemoveApplicant = (idx) => {
+    if (idx === 0) {
+      alert('Primary applicant cannot be removed. You can edit their details.');
       return;
     }
+    setModalApplicantsList(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleModalApplicantChange = (idx, field, value) => {
+    setModalApplicantsList(prev => {
+      const updated = [...prev];
+      updated[idx] = { ...updated[idx], [field]: value };
+      return updated;
+    });
+  };
+
+  const handleModalAddCustomField = (appIdx, fieldName, fieldValue) => {
+    if (!fieldName.trim()) return;
+    setModalApplicantsList(prev => {
+      const updated = [...prev];
+      const curFields = updated[appIdx].customFields || [];
+      updated[appIdx] = {
+        ...updated[appIdx],
+        customFields: [...curFields, { fieldName: fieldName.trim(), fieldValue: fieldValue.trim() }]
+      };
+      return updated;
+    });
+  };
+
+  const handleModalRemoveCustomField = (appIdx, fieldIdx) => {
+    setModalApplicantsList(prev => {
+      const updated = [...prev];
+      const curFields = updated[appIdx].customFields || [];
+      updated[appIdx] = {
+        ...updated[appIdx],
+        customFields: curFields.filter((_, i) => i !== fieldIdx)
+      };
+      return updated;
+    });
+  };
+
+  const handleSaveModalApplicants = async (e) => {
+    e.preventDefault();
+    if (!applicantsModalClient?._id) return;
+    if (modalApplicantsList.length === 0 || !modalApplicantsList[0].fullName.trim()) {
+      setApplicantsModalError('Primary applicant full name is required.');
+      return;
+    }
+
     try {
-      setIsSavingCoApplicant(true);
-      setCoApplicantError('');
-      const res = await api.put(`/clients/${coApplicantClient._id}`, {
-        hasCoApplicant: true,
-        coApplicant: coApplicantForm
+      setIsSavingApplicants(true);
+      setApplicantsModalError('');
+
+      const processedApplicants = modalApplicantsList.map((app, idx) => {
+        const appDob = app.dob ? new Date(app.dob) : undefined;
+        return {
+          fullName: app.fullName.trim(),
+          dob: appDob,
+          age: appDob ? calculateAge(appDob) : null,
+          occupation: (app.occupation || 'Salaried').trim(),
+          mobile: (app.mobile || '').trim(),
+          panNumber: (app.panNumber || '').trim().toUpperCase(),
+          aadhaarNumber: (app.aadhaarNumber || '').trim(),
+          relationship: (app.relationship || (idx === 0 ? 'Primary Applicant' : `Co-Applicant ${idx}`)).trim(),
+          customFields: app.customFields || []
+        };
       });
+
+      const res = await api.put(`/clients/${applicantsModalClient._id}`, {
+        applicants: processedApplicants,
+        fullName: processedApplicants[0].fullName,
+        mobile: processedApplicants[0].mobile || applicantsModalClient.mobile,
+        occupation: processedApplicants[0].occupation || applicantsModalClient.occupation,
+        panNumber: processedApplicants[0].panNumber || applicantsModalClient.panNumber,
+        aadhaarNumber: processedApplicants[0].aadhaarNumber || applicantsModalClient.aadhaarNumber,
+        dob: processedApplicants[0].dob || applicantsModalClient.dob
+      });
+
       if (res.data.success) {
-        setShowCoApplicantModal(false);
-        setCoApplicantClient(null);
+        toast.success('Applicant and co-applicant details updated successfully!');
+        setShowApplicantsModal(false);
+        setApplicantsModalClient(null);
         fetchClients();
-        if (selectedClient?._id === coApplicantClient._id) {
+        if (selectedClient?._id === applicantsModalClient._id) {
           refreshSelectedClient();
         }
       }
     } catch (err) {
-      setCoApplicantError(err.response?.data?.message || 'Co-applicant save nahi ho saka.');
+      setApplicantsModalError(err.response?.data?.message || 'Failed to save applicants.');
     } finally {
-      setIsSavingCoApplicant(false);
+      setIsSavingApplicants(false);
     }
   };
 
@@ -385,27 +717,50 @@ const Clients = () => {
 
     try {
       setUpdatingContact(true);
-      const res = await api.put(`/clients/${selectedClient._id}`, contactFormData);
+      const res = await api.put(`/clients/${selectedClient._id}`, {
+        ...contactFormData,
+        customFields: editCustomFields
+      });
       if (res.data.success) {
         setShowEditContactModal(false);
+        if (res.data.data) {
+          setSelectedClient(res.data.data);
+        }
+        toast.success('Case details updated successfully!');
         fetchClients();
         refreshSelectedClient();
       }
     } catch (err) {
       console.error('Error updating client info:', err);
-      alert('Failed to update contact info: ' + (err.response?.data?.message || err.message));
+      toast.error('Failed to update case info: ' + (err.response?.data?.message || err.message));
     } finally {
       setUpdatingContact(false);
     }
   };
 
-  const tabs = ['All Clients', 'Approved Clients', 'Pending Clients', 'Rejected Clients'];
+  const tabs = [
+    { id: 'Active Clients', label: 'Active Clients', count: clients.filter(c => !c.isHidden).length },
+    { id: 'Hidden Clients', label: 'Hidden Clients', count: clients.filter(c => !!c.isHidden).length },
+    { id: 'All Clients', label: 'All Clients', count: clients.length }
+  ];
 
   // Filtering
   const filteredClients = clients.filter(c => {
-    if (activeTab === 'Approved Clients') return c.status === 'Approved';
-    if (activeTab === 'Pending Clients') return c.status === 'Pending';
-    if (activeTab === 'Rejected Clients') return c.status === 'Rejected';
+    // Search query filter
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const matchName = (c.fullName || '').toLowerCase().includes(q);
+      const matchMobile = (c.mobile || '').includes(q);
+      const matchStatus = (c.status || '').toLowerCase().includes(q);
+      const matchCase = (c.caseType || c.loanType || '').toLowerCase().includes(q);
+      if (!matchName && !matchMobile && !matchStatus && !matchCase) {
+        return false;
+      }
+    }
+
+    if (activeTab === 'Active Clients') return !c.isHidden;
+    if (activeTab === 'Hidden Clients') return !!c.isHidden;
+    if (activeTab === 'All Clients') return true;
     return true;
   });
 
@@ -415,188 +770,403 @@ const Clients = () => {
       {/* Main Content Area */}
       <div className="flex flex-col space-y-6 transition-all duration-300 flex-1 min-w-0 w-full">
         
-        {/* Stat Cards */}
-        <div className="grid gap-3 sm:gap-4 grid-cols-2 md:grid-cols-4">
-            <div className="bg-white p-3.5 sm:p-5 rounded-2xl border border-gray-100 shadow-xs flex flex-col justify-between hover:border-[#f59e0b] hover:shadow-md transition-all">
-              <div className="flex justify-between items-start mb-2">
-                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-blue-50 flex items-center justify-center shrink-0 border border-blue-100">
-                  <Users className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 stroke-[2]" />
-                </div>
+        {/* Collapsible Client Statistics Bar (Compact on Mobile & Desktop) */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-2xs overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setShowStats(!showStats)}
+            className="w-full px-3.5 sm:px-4 py-2.5 flex items-center justify-between hover:bg-gray-50/80 transition-colors text-left cursor-pointer"
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-7 h-7 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center font-bold shrink-0 border border-amber-200/60">
+                <BarChart2 className="w-3.5 h-3.5" />
               </div>
-              <div>
-                <p className="text-[11px] font-bold text-gray-500 mb-0.5">Total Clients</p>
-                <h4 className="text-xl sm:text-2xl font-black text-[#081326] leading-none mb-1">{clients.length}</h4>
-              </div>
-            </div>
-            <div className="bg-white p-3.5 sm:p-5 rounded-2xl border border-gray-100 shadow-xs flex flex-col justify-between hover:border-[#f59e0b] hover:shadow-md transition-all">
-              <div className="flex justify-between items-start mb-2">
-                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-green-50 flex items-center justify-center shrink-0 border border-green-100">
-                  <UserCheck className="w-4 h-4 sm:w-5 sm:h-5 text-green-600 stroke-[2]" />
-                </div>
-              </div>
-              <div>
-                <p className="text-[11px] font-bold text-gray-500 mb-0.5">Approved</p>
-                <h4 className="text-xl sm:text-2xl font-black text-[#081326] leading-none mb-1">{clients.filter(c => c.status === 'Approved').length}</h4>
+              <div className="truncate">
+                <span className="text-xs font-black text-[#081326]">Client Statistics</span>
+                <span className="text-[11px] text-gray-500 font-semibold ml-2">
+                  ({clients.filter(c => !c.isHidden).length} Active • {clients.filter(c => ['Case Sanctioned', 'Case Disbursed', 'Approved'].includes(c.status)).length} Sanctioned)
+                </span>
               </div>
             </div>
-            <div className="bg-white p-3.5 sm:p-5 rounded-2xl border border-gray-100 shadow-xs flex flex-col justify-between hover:border-[#f59e0b] hover:shadow-md transition-all">
-              <div className="flex justify-between items-start mb-2">
-                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-orange-50 flex items-center justify-center shrink-0 border border-orange-100">
-                  <UserMinus className="w-4 h-4 sm:w-5 sm:h-5 text-orange-500 stroke-[2]" />
-                </div>
-              </div>
-              <div>
-                <p className="text-[11px] font-bold text-gray-500 mb-0.5">Pending</p>
-                <h4 className="text-xl sm:text-2xl font-black text-[#081326] leading-none mb-1">{clients.filter(c => c.status === 'Pending').length}</h4>
+            <div className="flex items-center gap-1.5 shrink-0 ml-2">
+              <span className="text-[11px] font-bold text-gray-500 hidden xs:inline">
+                {showStats ? 'Hide Stats' : 'View Stats'}
+              </span>
+              <div className="w-6 h-6 rounded-md bg-gray-50 border border-gray-200 flex items-center justify-center text-gray-500">
+                {showStats ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
               </div>
             </div>
-            <div className="bg-white p-3.5 sm:p-5 rounded-2xl border border-gray-100 shadow-xs flex flex-col justify-between hover:border-[#f59e0b] hover:shadow-md transition-all">
-              <div className="flex justify-between items-start mb-2">
-                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-red-50 flex items-center justify-center shrink-0 border border-red-100">
-                  <FileWarning className="w-4 h-4 sm:w-5 sm:h-5 text-red-600 stroke-[2]" />
+          </button>
+
+          {/* Collapsible Statistics Grid */}
+          {showStats && (
+            <div className="p-3 sm:p-4 border-t border-gray-100 bg-gray-50/50 animate-in fade-in duration-150">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
+                {/* Total Clients */}
+                <div 
+                  onClick={() => setActiveTab('All Clients')}
+                  className={`p-2.5 bg-white rounded-xl border transition-all cursor-pointer ${
+                    activeTab === 'All Clients' ? 'border-[#081326] ring-1 ring-[#081326]' : 'border-gray-200/80 hover:border-gray-300'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-0.5">
+                    <span className="text-[10px] font-bold text-gray-500 uppercase">Total</span>
+                    <Users className="w-3 h-3 text-blue-600" />
+                  </div>
+                  <div className="text-base font-black text-[#081326]">{clients.length}</div>
+                </div>
+
+                {/* Active Clients */}
+                <div 
+                  onClick={() => setActiveTab('Active Clients')}
+                  className={`p-2.5 bg-white rounded-xl border transition-all cursor-pointer ${
+                    activeTab === 'Active Clients' ? 'border-emerald-500 ring-1 ring-emerald-500' : 'border-gray-200/80 hover:border-emerald-300'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-0.5">
+                    <span className="text-[10px] font-bold text-emerald-700 uppercase">Active</span>
+                    <UserCheck className="w-3 h-3 text-emerald-600" />
+                  </div>
+                  <div className="text-base font-black text-emerald-700">
+                    {clients.filter(c => !c.isHidden).length}
+                  </div>
+                </div>
+
+                {/* Sanctioned / Disbursed */}
+                <div className="p-2.5 bg-white rounded-xl border border-gray-200/80">
+                  <div className="flex items-center justify-between mb-0.5">
+                    <span className="text-[10px] font-bold text-emerald-700 uppercase">Sanctioned</span>
+                    <FileCheck className="w-3 h-3 text-emerald-600" />
+                  </div>
+                  <div className="text-base font-black text-emerald-700">
+                    {clients.filter(c => ['Case Sanctioned', 'Case Disbursed', 'Approved'].includes(c.status)).length}
+                  </div>
+                </div>
+
+                {/* Pending Cases */}
+                <div className="p-2.5 bg-white rounded-xl border border-gray-200/80">
+                  <div className="flex items-center justify-between mb-0.5">
+                    <span className="text-[10px] font-bold text-amber-700 uppercase">Pending</span>
+                    <Clock className="w-3 h-3 text-amber-600" />
+                  </div>
+                  <div className="text-base font-black text-amber-800">
+                    {clients.filter(c => ['Documents Pending', 'Bank Side Pending', 'Client Side Pending', 'Disbursement Pendency', 'Pending'].includes(c.status)).length}
+                  </div>
+                </div>
+
+                {/* Rejected Cases */}
+                <div className="p-2.5 bg-white rounded-xl border border-gray-200/80">
+                  <div className="flex items-center justify-between mb-0.5">
+                    <span className="text-[10px] font-bold text-red-700 uppercase">Rejected</span>
+                    <AlertTriangle className="w-3 h-3 text-red-600" />
+                  </div>
+                  <div className="text-base font-black text-red-700">
+                    {clients.filter(c => c.status === 'Rejected').length}
+                  </div>
+                </div>
+
+                {/* Hidden Clients */}
+                <div 
+                  onClick={() => setActiveTab('Hidden Clients')}
+                  className={`p-2.5 bg-white rounded-xl border transition-all cursor-pointer ${
+                    activeTab === 'Hidden Clients' ? 'border-amber-500 ring-1 ring-amber-500' : 'border-gray-200/80 hover:border-amber-300'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-0.5">
+                    <span className="text-[10px] font-bold text-gray-500 uppercase">Hidden</span>
+                    <EyeOff className="w-3 h-3 text-gray-500" />
+                  </div>
+                  <div className="text-base font-black text-gray-700">
+                    {clients.filter(c => !!c.isHidden).length}
+                  </div>
                 </div>
               </div>
-              <div>
-                <p className="text-[11px] font-bold text-gray-500 mb-0.5">Rejected</p>
-                <h4 className="text-xl sm:text-2xl font-black text-[#081326] leading-none mb-1">{clients.filter(c => c.status === 'Rejected').length}</h4>
-              </div>
             </div>
+          )}
         </div>
 
         {/* Clients Section */}
         <div className="bg-white rounded-2xl shadow-xs border border-gray-100 flex flex-col overflow-hidden">
           {/* Tabs & Top Actions */}
-          <div className="border-b border-gray-100 flex flex-col sm:flex-row justify-between items-stretch sm:items-center p-2 sm:px-4 gap-3 bg-gray-50/30">
+          <div className="border-b border-gray-100 flex flex-col md:flex-row justify-between items-stretch md:items-center p-2.5 sm:px-4 gap-3 bg-gray-50/40">
+            {/* Filter Tabs */}
             <div className="flex gap-1.5 overflow-x-auto scrollbar-hide py-1">
               {tabs.map(tab => (
                 <button 
-                  key={tab}
-                  onClick={() => setActiveTab(tab)}
-                  className={`px-3 sm:px-4 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
-                    activeTab === tab 
-                    ? 'bg-white text-[#f59e0b] shadow-xs border border-gray-200' 
-                    : 'text-gray-500 hover:text-[#081326] hover:bg-white/50'
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`px-3 sm:px-4 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 ${
+                    activeTab === tab.id 
+                    ? 'bg-white text-[#081326] shadow-xs border border-gray-200' 
+                    : 'text-gray-500 hover:text-[#081326] hover:bg-white/60'
                   }`}
                 >
-                  {tab}
+                  <span>{tab.label}</span>
+                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+                    activeTab === tab.id 
+                      ? (tab.id === 'Hidden Clients' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800')
+                      : 'bg-gray-100 text-gray-500'
+                  }`}>
+                    {tab.count}
+                  </span>
                 </button>
               ))}
             </div>
-            <div className="flex items-center justify-between sm:justify-end gap-2">
+
+            {/* Right: Search & Actions */}
+            <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+              <div className="relative flex-1 sm:w-56">
+                <Search className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input 
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search client, mobile..."
+                  className="w-full pl-8 pr-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-medium outline-none focus:border-[#f59e0b] shadow-xs placeholder-gray-400"
+                />
+                {searchQuery && (
+                  <button onClick={() => setSearchQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+              {role === 'admin' && (
+                <button 
+                  onClick={() => navigate('/deleted-clients')}
+                  className="px-3.5 py-2 bg-red-50 border border-red-200 text-red-700 hover:bg-red-100 rounded-lg text-xs font-bold transition-colors shadow-xs text-center cursor-pointer whitespace-nowrap flex items-center gap-1.5"
+                  title="Super Admin Deleted Clients Backup Archive"
+                >
+                  <Archive className="w-3.5 h-3.5 text-red-600 stroke-[2.5]" />
+                  <span className="hidden sm:inline">Deleted Clients Backup</span>
+                  <span className="sm:hidden">Backup</span>
+                </button>
+              )}
               <button 
                 onClick={() => navigate('/clients/new')}
-                className="flex-1 sm:flex-none px-3.5 py-2 bg-[#081326] text-white rounded-lg text-xs font-bold hover:bg-[#11203d] transition-colors shadow-xs text-center cursor-pointer"
+                className="px-3.5 py-2 bg-[#081326] text-white rounded-lg text-xs font-bold hover:bg-[#11203d] transition-colors shadow-xs text-center cursor-pointer whitespace-nowrap"
               >
                 + Add Client
               </button>
               <button 
                 onClick={() => fetchClients()}
                 className="w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 shadow-xs transition-colors shrink-0 cursor-pointer"
+                title="Refresh Clients"
               >
                 <RefreshCcw className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.5]" />
               </button>
             </div>
           </div>
 
-          {/* Mobile Cards View (Visible on phones for easy tap & navigation) */}
+          {/* Mobile Cards View (Clean, Compact Banker Portal Layout) */}
           <div className="block md:hidden divide-y divide-gray-100">
             {loading ? (
               <div className="p-8 text-center text-xs font-bold text-gray-500">Loading clients...</div>
             ) : filteredClients.length === 0 ? (
               <div className="p-8 text-center text-xs font-bold text-gray-500">No client cases found.</div>
             ) : (
-              filteredClients.map((client) => {
+              filteredClients.map((client, index) => {
                 const activePendencies = (client.pendencies || []).filter(p => p.status !== 'Resolved');
+                const clientAge = client.age || calculateAge(client.dob);
 
                 return (
                   <div 
                     key={client._id}
                     onClick={() => openPreview(client)}
-                    className="p-4 bg-white hover:bg-gray-50 active:bg-gray-100 transition-colors flex flex-col gap-3 cursor-pointer"
+                    className={`p-3 bg-white hover:bg-gray-50/90 active:bg-gray-100 transition-colors flex flex-col gap-2 cursor-pointer ${client.isHidden ? 'bg-gray-50/70 opacity-90' : ''}`}
                   >
-                    {/* Top Row: Avatar + Name + Status */}
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-2.5 flex-1 min-w-0">
-                        {client.photoUrl ? (
-                          <img src={getAssetUrl(client.photoUrl)} className="w-10 h-10 rounded-full object-cover shadow-sm border border-gray-100 shrink-0" alt="" />
-                        ) : (
-                          <div className="w-10 h-10 rounded-full bg-[#081326] text-white flex items-center justify-center font-bold text-xs shrink-0">
-                            {client.fullName ? client.fullName.substring(0, 2).toUpperCase() : 'CL'}
-                          </div>
+                    {/* Row 1: Name + Age + Status Dropdown (Banker Portal Style) */}
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                        <h4 className="text-sm font-black text-[#081326] truncate tracking-tight">
+                          {client.fullName}
+                        </h4>
+                        {clientAge && (
+                          <span className="text-[11px] font-bold text-amber-800 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200/80 shrink-0">
+                            ({clientAge} Yrs)
+                          </span>
                         )}
-                        <div className="min-w-0">
-                          <h4 className="text-sm font-black text-[#081326] truncate flex items-center gap-1.5 flex-wrap">
-                            <span>{client.fullName}</span>
-                            {(client.age || client.dob) && (
-                              <span className="text-[11px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">
-                                ({client.age || calculateAge(client.dob)} Yrs)
-                              </span>
-                            )}
-                            {client.applicants && client.applicants.length > 1 && (
-                              <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-1.5 py-0.2 rounded border border-blue-200">
-                                {client.applicants.length} Applicants
-                              </span>
-                            )}
-                            <ArrowRight className="w-3.5 h-3.5 text-[#f59e0b] shrink-0" />
-                          </h4>
-                          <p className="text-xs text-gray-500 font-medium truncate mt-0.5">
-                            {client.mobile || 'No Mobile'} • <span className="font-bold text-gray-700">{client.occupation || 'General'}</span>
-                          </p>
-                        </div>
+                        {client.isHidden && (
+                          <span className="text-[9px] font-black uppercase text-gray-500 bg-gray-100 px-1 py-0.2 rounded border border-gray-200 shrink-0">
+                            Hidden
+                          </span>
+                        )}
                       </div>
-                      <StatusBadge status={client.status} isDoc={false} />
-                    </div>
 
-                    {/* Middle Row: Case Type + Loan Amount */}
-                    <div className="flex items-center justify-between bg-gray-50/80 p-2.5 rounded-xl text-xs border border-gray-100">
-                      <div>
-                        <span className="text-[10px] text-gray-400 font-bold uppercase block">Case Type</span>
-                        <span className="font-bold text-[#081326]">{client.caseType || client.loanType || 'General Loan'}</span>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-[10px] text-gray-400 font-bold uppercase block">Loan Amount</span>
-                        <span className="font-black text-emerald-700">{formatCurrency(client.loanAmount)}</span>
+                      {/* Staff-Controlled Case Status Dropdown (Top Right) */}
+                      <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
+                        <StatusSelectDropdown
+                          client={client}
+                          onChange={handleStatusChange}
+                          isUpdating={statusUpdatingId === client._id}
+                        />
                       </div>
                     </div>
 
-                    {/* Bottom Row: Pendency Badge + Quick Action Buttons */}
-                    <div className="flex items-center justify-between gap-2 pt-1">
-                      {activePendencies.length === 0 ? (
-                        <span className="text-[11px] font-bold text-green-700 bg-green-50 px-2.5 py-1 rounded-lg border border-green-100 flex items-center gap-1">
-                          <CheckCircle2 className="w-3 h-3 text-green-600" /> No Pendency
+                    {/* Row 2: Metadata (Mobile No • Profession • Case Type • Loan Amount) */}
+                    <div className="flex items-center justify-between gap-2 text-xs flex-wrap">
+                      <div className="flex items-center gap-2 flex-wrap text-gray-500 font-medium">
+                        {client.mobile ? (
+                          <a 
+                            href={`tel:${client.mobile}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="flex items-center gap-1 text-emerald-700 hover:text-emerald-800 font-semibold"
+                            title="Call client"
+                          >
+                            <Phone className="w-3 h-3 text-emerald-600" />
+                            <span>{client.mobile}</span>
+                          </a>
+                        ) : (
+                          <span className="text-gray-400">No Mobile</span>
+                        )}
+                        {client.occupation && (
+                          <>
+                            <span className="text-gray-300">•</span>
+                            <span className="text-gray-700 font-bold flex items-center gap-1">
+                              <Briefcase className="w-3 h-3 text-gray-400" />
+                              <span className="truncate max-w-[130px]">{client.occupation}</span>
+                            </span>
+                          </>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        {/* Case Type Tag */}
+                        <span className="inline-block px-2 py-0.5 bg-blue-50 text-blue-700 font-bold text-[10px] rounded-md border border-blue-100">
+                          {client.caseType || client.loanType || 'General Loan'}
                         </span>
-                      ) : activePendencies.length === 1 ? (
-                        <button
-                          onClick={(e) => handleOpenPendencyModal(client, e)}
-                          className="text-[11px] font-bold text-amber-900 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200 flex items-center gap-1 truncate max-w-[170px]"
-                        >
-                          <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                          <span className="truncate">{activePendencies[0].title}</span>
-                        </button>
-                      ) : (
-                        <button
-                          onClick={(e) => handleOpenPendencyModal(client, e)}
-                          className="text-[11px] font-black text-amber-950 bg-amber-100/90 border border-amber-300 px-2.5 py-1 rounded-lg flex items-center gap-1 shrink-0"
-                        >
-                          <AlertCircle className="w-3.5 h-3.5 text-amber-700 shrink-0" />
-                          <span>{activePendencies.length} Pending → View</span>
-                        </button>
-                      )}
+                        {/* Loan Amount */}
+                        <span className="font-black text-emerald-800 text-xs sm:text-sm tracking-tight">
+                          {formatCurrency(client.loanAmount)}
+                        </span>
+                      </div>
+                    </div>
 
-                      <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                    {/* Row 3: Co-Applicant summary (if any) */}
+                    {client.applicants && client.applicants.length > 1 && (
+                      <div className="flex items-center gap-1.5 text-[11px] text-gray-600 bg-purple-50/60 border border-purple-100 px-2 py-1 rounded-lg">
+                        <Users className="w-3 h-3 text-purple-700 shrink-0" />
+                        <span className="truncate">
+                          Co-Applicant: <span className="font-bold text-purple-950">{client.applicants[1].fullName}</span>
+                          {(client.applicants[1].age || calculateAge(client.applicants[1].dob)) ? ` (${client.applicants[1].age || calculateAge(client.applicants[1].dob)} Yrs)` : ''}
+                          {client.applicants[1].occupation ? ` • ${client.applicants[1].occupation}` : ''}
+                        </span>
+                        {client.applicants.length > 2 && (
+                          <span className="text-[10px] font-black text-purple-700 ml-auto shrink-0">
+                            +{client.applicants.length - 2} more
+                          </span>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Row 4: Pendency Badge + Quick Actions Toolbar */}
+                    <div className="flex items-center justify-between gap-1.5 pt-0.5 flex-wrap">
+                      {/* Pendency Indicator */}
+                      <div className="flex items-center shrink-0">
+                        {activePendencies.length === 0 ? (
+                          <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200/80 flex items-center gap-1">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600" /> No Pendency
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={(e) => handleOpenPendencyModal(client, e)}
+                            className="text-[10px] font-bold text-amber-900 bg-amber-50 hover:bg-amber-100 px-2 py-0.5 rounded border border-amber-300 flex items-center gap-1 max-w-[170px] truncate cursor-pointer transition-colors"
+                            title="Click to view & share pendency items"
+                          >
+                            <AlertCircle className="w-3 h-3 text-amber-600 shrink-0" />
+                            <span className="truncate">
+                              {activePendencies.length === 1 ? activePendencies[0].title : `${activePendencies.length} Pending Items`}
+                            </span>
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Essential Actions: View Case, Add Docs, Co-Applicant, Move Up/Down, Hide/Unhide, Delete */}
+                      <div className="flex items-center gap-1 ml-auto" onClick={(e) => e.stopPropagation()}>
+                        {/* 1. View Case Button */}
                         <button
-                          onClick={(e) => handleOpenUploadModal(client, e)}
-                          className="px-2.5 py-1 bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200 rounded-lg text-xs font-bold flex items-center gap-1"
-                          title="Add Docs"
+                          type="button"
+                          onClick={() => openPreview(client)}
+                          className="px-2 py-1 bg-[#081326] text-white hover:bg-[#11203d] rounded-lg text-[10px] font-bold flex items-center gap-1 transition-colors shadow-2xs cursor-pointer"
+                          title="View Client Case Review"
                         >
-                          <FileUp className="w-3 h-3" /> Add Docs
+                          <Eye className="w-3 h-3 text-amber-400" />
+                          <span>View</span>
                         </button>
+
+                        {/* 2. Add Docs Button */}
                         <button
-                          onClick={(e) => handleOpenCoApplicantModal(client, e)}
-                          className="px-2.5 py-1 bg-purple-50 text-purple-800 hover:bg-purple-100 border border-purple-200 rounded-lg text-xs font-bold"
-                          title="Co-Applicant"
+                          type="button"
+                          onClick={(e) => handleOpenUploadModal(client, e)}
+                          className="px-2 py-1 bg-amber-50 text-amber-900 hover:bg-amber-100 border border-amber-200 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-colors cursor-pointer"
+                          title="Quick Add Documents"
                         >
-                          {client.coApplicant?.fullName ? 'Co-App ✓' : 'Co-App'}
+                          <FileUp className="w-3 h-3 text-amber-700" />
+                          <span>Docs</span>
+                        </button>
+
+                        {/* 3. Co-Applicant Button */}
+                        <button
+                          type="button"
+                          onClick={(e) => handleOpenApplicantsModal(client, e)}
+                          className="px-2 py-1 bg-purple-50 text-purple-900 hover:bg-purple-100 border border-purple-200 rounded-lg text-[10px] font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                          title="Manage Applicants & Co-Applicants"
+                        >
+                          <Users className="w-3 h-3 text-purple-700" />
+                          <span>Co-App</span>
+                        </button>
+
+                        {/* 4. Drag / Move Step */}
+                        <div className="flex items-center border border-gray-200 rounded-lg overflow-hidden bg-gray-50">
+                          <button
+                            type="button"
+                            onClick={() => handleMoveStep(client._id, 'up')}
+                            disabled={index === 0}
+                            className="p-1 hover:bg-gray-200 disabled:opacity-20 disabled:pointer-events-none text-gray-600"
+                            title="Move Up"
+                          >
+                            <ArrowUp className="w-3 h-3" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleMoveStep(client._id, 'down')}
+                            disabled={index === filteredClients.length - 1}
+                            className="p-1 hover:bg-gray-200 disabled:opacity-20 disabled:pointer-events-none text-gray-600 border-l border-gray-200"
+                            title="Move Down"
+                          >
+                            <ArrowDown className="w-3 h-3" />
+                          </button>
+                        </div>
+
+                        {/* 5. Show / Hide Client */}
+                        {client.isHidden ? (
+                          <button
+                            type="button"
+                            onClick={() => handleToggleHide(client._id, false)}
+                            className="p-1 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200 rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                            title="Unhide Client"
+                          >
+                            <Eye className="w-3.5 h-3.5 text-emerald-600" />
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleToggleHide(client._id, true)}
+                            className="p-1 bg-gray-50 text-gray-500 hover:bg-gray-100 border border-gray-200 rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                            title="Hide Client"
+                          >
+                            <EyeOff className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+
+                        {/* 6. Delete Button */}
+                        <button
+                          type="button"
+                          onClick={() => { setClientToDelete(client); setDeleteReason(''); setShowDeleteModal(true); }}
+                          className="p-1 bg-red-50 text-red-600 hover:bg-red-600 hover:text-white border border-red-200 rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                          title="Delete Client (Backed up for Super Admin)"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     </div>
@@ -611,6 +1181,9 @@ const Clients = () => {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-gray-50/50 text-[11px] font-black text-gray-500 border-b border-gray-100 tracking-wider">
+                  <th className="w-12 px-3 py-4 text-center select-none" title="Drag and drop rows to reorder">
+                    <span className="text-[10px] text-gray-400">Order</span>
+                  </th>
                   <th className="px-5 py-4 whitespace-nowrap">Client Name</th>
                   <th className="px-5 py-4 whitespace-nowrap">Mobile No.</th>
                   <th className="px-5 py-4 whitespace-nowrap">Profession</th>
@@ -618,51 +1191,99 @@ const Clients = () => {
                   <th className="px-5 py-4 whitespace-nowrap">Case Type</th>
                   <th className="px-5 py-4 whitespace-nowrap">Current Pendency</th>
                   <th className="px-5 py-4 whitespace-nowrap text-center">Action</th>
-                  <th className="px-5 py-4 whitespace-nowrap text-center">Status</th>
+                  <th className="px-5 py-4 whitespace-nowrap text-center">Case Status</th>
                 </tr>
               </thead>
               <tbody className="text-[12px] text-gray-600 divide-y divide-gray-50">
                 {loading ? (
                   <tr>
-                    <td colSpan="8" className="px-5 py-8 text-center text-xs font-bold text-gray-500">Loading clients...</td>
+                    <td colSpan="9" className="px-5 py-8 text-center text-xs font-bold text-gray-500">Loading clients...</td>
                   </tr>
                 ) : filteredClients.length === 0 ? (
                   <tr>
-                    <td colSpan="8" className="px-5 py-8 text-center text-xs font-bold text-gray-500">No client cases found.</td>
+                    <td colSpan="9" className="px-5 py-8 text-center text-xs font-bold text-gray-500">No client cases found.</td>
                   </tr>
                 ) : (
                   filteredClients.map((client) => {
                     const activePendencies = (client.pendencies || []).filter(p => p.status !== 'Resolved');
+                    const isDragging = draggedClientId === client._id;
+                    const isOver = dragOverClientId === client._id && !isDragging;
 
                     return (
-                      <tr key={client._id} className="hover:bg-gray-50/80 transition-colors group">
-                        {/* 1. Client Name (Clickable) */}
+                      <tr 
+                        key={client._id}
+                        draggable={true}
+                        onDragStart={(e) => {
+                          e.dataTransfer.setData('text/plain', client._id);
+                          e.dataTransfer.effectAllowed = 'move';
+                          setDraggedClientId(client._id);
+                        }}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          e.dataTransfer.dropEffect = 'move';
+                        }}
+                        onDragEnter={() => {
+                          if (draggedClientId && draggedClientId !== client._id) {
+                            setDragOverClientId(client._id);
+                          }
+                        }}
+                        onDragLeave={(e) => {
+                          if (e.currentTarget.contains(e.relatedTarget)) return;
+                          setDragOverClientId(null);
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          const sourceId = e.dataTransfer.getData('text/plain') || draggedClientId;
+                          setDragOverClientId(null);
+                          setDraggedClientId(null);
+                          handleReorder(sourceId, client._id);
+                        }}
+                        onDragEnd={() => {
+                          setDraggedClientId(null);
+                          setDragOverClientId(null);
+                        }}
+                        className={`transition-all group ${
+                          isDragging ? 'opacity-30 bg-amber-50/50' : ''
+                        } ${
+                          isOver ? 'border-t-2 border-[#f59e0b] bg-amber-50/60 shadow-xs' : 'hover:bg-gray-50/80'
+                        } ${
+                          client.isHidden ? 'bg-gray-50/40 opacity-75 hover:opacity-100' : ''
+                        }`}
+                      >
+                        {/* 0. Drag Handle */}
+                        <td 
+                          className="w-12 px-3 py-3.5 text-center cursor-grab active:cursor-grabbing text-gray-300 group-hover:text-gray-600 select-none transition-colors"
+                          title="Drag up or down to reorder"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <div className="flex items-center justify-center">
+                            <GripVertical className="w-4 h-4" />
+                          </div>
+                        </td>
+
+                        {/* 1. Client Name Directly (Initials circle removed) */}
                         <td 
                           onClick={() => openPreview(client)}
-                          className="px-5 py-3.5 font-bold text-[#081326] whitespace-nowrap flex items-center gap-3 cursor-pointer hover:text-[#f59e0b] transition-colors"
+                          className="px-5 py-3.5 font-bold text-[#081326] whitespace-nowrap cursor-pointer hover:text-[#f59e0b] transition-colors"
                           title="Click to view complete client case details"
                         >
-                          {client.photoUrl ? (
-                            <img src={getAssetUrl(client.photoUrl)} className="w-8 h-8 rounded-full object-cover shadow-sm" alt="" />
-                          ) : (
-                            <div className="w-8 h-8 rounded-full bg-[#081326] text-white flex items-center justify-center font-bold text-[10px]">
-                              {client.fullName ? client.fullName.substring(0,2).toUpperCase() : 'CL'}
-                            </div>
-                          )}
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-[#081326] group-hover:underline">{client.fullName}</span>
-                              {(client.age || client.dob) && (
-                                <span className="text-[11px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">
-                                  ({client.age || calculateAge(client.dob)} Yrs)
-                                </span>
-                              )}
-                              {client.applicants && client.applicants.length > 1 && (
-                                <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-1.5 py-0.2 rounded border border-blue-200">
-                                  {client.applicants.length} Applicants
-                                </span>
-                              )}
-                            </div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-[#081326] group-hover:underline text-[13px]">{client.fullName}</span>
+                            {client.isHidden && (
+                              <span className="text-[10px] font-bold text-gray-500 bg-gray-100 border border-gray-200 px-1.5 py-0.5 rounded">
+                                Hidden
+                              </span>
+                            )}
+                            {(client.age || client.dob) && (
+                              <span className="text-[11px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">
+                                ({client.age || calculateAge(client.dob)} Yrs)
+                              </span>
+                            )}
+                            {client.applicants && client.applicants.length > 1 && (
+                              <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-1.5 py-0.2 rounded border border-blue-200">
+                                {client.applicants.length} Applicants
+                              </span>
+                            )}
                           </div>
                         </td>
 
@@ -717,9 +1338,9 @@ const Clients = () => {
                           )}
                         </td>
 
-                        {/* 7. Action: Add Docs + View + Edit/Delete */}
+                        {/* 7. Action: Add Docs + Applicants + Review + Show/Hide + Edit/Delete */}
                         <td className="px-5 py-3.5 whitespace-nowrap text-center">
-                          <div className="flex justify-center items-center gap-1.5">
+                          <div className="flex justify-center items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
                             <button 
                               onClick={(e) => handleOpenUploadModal(client, e)}
                               className="px-2.5 py-1.5 rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-600 hover:text-white border border-amber-200 hover:border-amber-600 flex items-center gap-1 text-[11px] font-bold transition-all shadow-xs cursor-pointer"
@@ -730,12 +1351,12 @@ const Clients = () => {
                             </button>
 
                             <button 
-                              onClick={(e) => handleOpenCoApplicantModal(client, e)}
+                              onClick={(e) => handleOpenApplicantsModal(client, e)}
                               className="px-2.5 py-1.5 rounded-lg bg-purple-50 text-purple-700 hover:bg-purple-600 hover:text-white border border-purple-200 hover:border-purple-600 flex items-center gap-1 text-[11px] font-bold transition-all shadow-xs cursor-pointer"
-                              title={client.coApplicant?.fullName ? `Co-Applicant: ${client.coApplicant.fullName}` : 'Add Co-Applicant'}
+                              title="Manage Applicants & Guarantors"
                             >
-                              <UserPlus className="w-3.5 h-3.5 stroke-[2.5]" />
-                              <span>{client.coApplicant?.fullName ? 'Co-App ✓' : 'Co-App'}</span>
+                              <Users className="w-3.5 h-3.5 stroke-[2.5]" />
+                              <span>{client.applicants?.length > 1 ? `${client.applicants.length} Applicants` : (client.hasCoApplicant ? '2 Applicants' : 'Applicants')}</span>
                             </button>
 
                             <button 
@@ -745,30 +1366,52 @@ const Clients = () => {
                             >
                               <Eye className="w-4 h-4 stroke-[2.5]" />
                             </button>
-                            {role === 'admin' && (
-                              <>
-                                <button 
-                                  onClick={() => navigate(`/clients/edit/${client._id}`)}
-                                  className="w-8 h-8 rounded-lg bg-orange-50 text-orange-600 hover:bg-orange-600 hover:text-white flex items-center justify-center transition-all shadow-xs cursor-pointer"
-                                  title="Edit Profile"
-                                >
-                                  <Edit className="w-4 h-4 stroke-[2.5]" />
-                                </button>
-                                <button 
-                                  onClick={() => { setClientToDelete(client._id); setShowDeleteModal(true); }}
-                                  className="w-8 h-8 rounded-lg bg-red-50 text-red-600 hover:bg-red-600 hover:text-white flex items-center justify-center transition-all shadow-xs cursor-pointer"
-                                  title="Delete Profile"
-                                >
-                                  <Trash2 className="w-4 h-4 stroke-[2.5]" />
-                                </button>
-                              </>
+
+                            {/* Show / Hide Client Button */}
+                            {client.isHidden ? (
+                              <button 
+                                onClick={() => handleToggleHide(client._id, false)}
+                                className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white flex items-center justify-center transition-all shadow-xs cursor-pointer"
+                                title="Unhide / Restore Client to Active List"
+                              >
+                                <Eye className="w-4 h-4 stroke-[2.5]" />
+                              </button>
+                            ) : (
+                              <button 
+                                onClick={() => handleToggleHide(client._id, true)}
+                                className="w-8 h-8 rounded-lg bg-gray-50 text-gray-500 hover:bg-amber-500 hover:text-white flex items-center justify-center transition-all shadow-xs cursor-pointer"
+                                title="Hide Client from Active List (never deletes records)"
+                              >
+                                <EyeOff className="w-4 h-4 stroke-[2.5]" />
+                              </button>
                             )}
+
+                            {role === 'admin' && (
+                              <button 
+                                onClick={() => navigate(`/clients/edit/${client._id}`)}
+                                className="w-8 h-8 rounded-lg bg-orange-50 text-orange-600 hover:bg-orange-600 hover:text-white flex items-center justify-center transition-all shadow-xs cursor-pointer"
+                                title="Edit Profile"
+                              >
+                                <Edit className="w-4 h-4 stroke-[2.5]" />
+                              </button>
+                            )}
+                            <button 
+                              onClick={() => { setClientToDelete(client); setDeleteReason(''); setShowDeleteModal(true); }}
+                              className="w-8 h-8 rounded-lg bg-red-50 text-red-600 hover:bg-red-600 hover:text-white flex items-center justify-center transition-all shadow-xs cursor-pointer"
+                              title="Delete Client (Backed up for Super Admin)"
+                            >
+                              <Trash2 className="w-4 h-4 stroke-[2.5]" />
+                            </button>
                           </div>
                         </td>
 
-                        {/* 8. Status */}
-                        <td className="px-5 py-3.5 whitespace-nowrap text-center">
-                          <StatusBadge status={client.status} isDoc={false} />
+                        {/* 8. Staff-Controlled Case Status Dropdown */}
+                        <td className="px-5 py-3.5 whitespace-nowrap text-center" onClick={(e) => e.stopPropagation()}>
+                          <StatusSelectDropdown 
+                            client={client}
+                            onChange={handleStatusChange}
+                            isUpdating={statusUpdatingId === client._id}
+                          />
                         </td>
                       </tr>
                     );
@@ -824,9 +1467,38 @@ const Clients = () => {
               )}
               
               <div className="flex flex-col gap-1.5 flex-1">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-xl font-black text-[#081326]">{selectedClient.fullName}</h2>
-                  <StatusBadge status={selectedClient.status} isDoc={false} />
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-xl font-black text-[#081326]">{selectedClient.fullName}</h2>
+                    {selectedClient.isHidden && (
+                      <span className="text-[10px] font-bold text-gray-500 bg-gray-100 border border-gray-200 px-2 py-0.5 rounded">
+                        Hidden
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <StatusSelectDropdown
+                      client={selectedClient}
+                      onChange={handleStatusChange}
+                      isUpdating={statusUpdatingId === selectedClient._id}
+                    />
+                    <button
+                      onClick={() => handleToggleHide(selectedClient._id, !selectedClient.isHidden)}
+                      className="px-2.5 py-1.5 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg text-xs font-bold text-gray-600 flex items-center gap-1.5 cursor-pointer shadow-xs"
+                      title={selectedClient.isHidden ? "Unhide Client" : "Hide Client"}
+                    >
+                      {selectedClient.isHidden ? <Eye className="w-3.5 h-3.5 text-emerald-600" /> : <EyeOff className="w-3.5 h-3.5 text-gray-500" />}
+                      <span>{selectedClient.isHidden ? 'Unhide' : 'Hide'}</span>
+                    </button>
+                    <button
+                      onClick={() => { setClientToDelete(selectedClient); setDeleteReason(''); setShowDeleteModal(true); }}
+                      className="px-2.5 py-1.5 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg text-xs font-bold text-red-700 flex items-center gap-1.5 cursor-pointer shadow-xs"
+                      title="Delete Client (Backed up for Super Admin)"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 text-red-600" />
+                      <span>Delete</span>
+                    </button>
+                  </div>
                 </div>
                 <div className="flex flex-wrap gap-2 text-xs font-bold text-gray-600 items-center">
                    <span className="bg-gray-50 px-3 py-1 rounded-lg border border-gray-100 flex items-center gap-1">
@@ -872,7 +1544,11 @@ const Clients = () => {
             {/* Content Area */}
             <div className="flex-1 overflow-y-auto p-6 bg-gray-50/30">
                {previewTab === 'Overview' && (
-                  <OverviewTab client={selectedClient} onEditClick={handleOpenEditContact} />
+                  <OverviewTab 
+                    client={selectedClient} 
+                    onEditClick={handleOpenEditContact} 
+                    onManageApplicants={() => handleOpenApplicantsModal(selectedClient)}
+                  />
                )}
 
                {previewTab === 'Documents' && (
@@ -917,29 +1593,36 @@ const Clients = () => {
                )}
             </div>
             
-            {/* Action Footer (Admin Only) */}
-            {role === 'admin' && (
-              <div className="p-6 border-t border-gray-100 bg-white flex gap-4">
-                 {selectedClient.status !== 'Approved' && (
-                    <button 
-                      onClick={() => updateStatus(selectedClient._id, 'Approved')} 
-                      disabled={statusLoading}
-                      className="flex-1 py-3 bg-green-500 text-white rounded-xl text-sm font-black hover:bg-green-600 transition-colors shadow-sm disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
-                    >
-                      <CheckCircle className="w-4 h-4 stroke-[2.5]" /> Approve Application
-                    </button>
-                 )}
-                 {selectedClient.status !== 'Rejected' && (
-                    <button 
-                      onClick={() => updateStatus(selectedClient._id, 'Rejected')} 
-                      disabled={statusLoading}
-                      className="flex-1 py-3 border-2 border-red-200 text-red-600 bg-red-50 rounded-xl text-sm font-black hover:bg-red-100 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
-                    >
-                      <X className="w-4 h-4 stroke-[2.5]" /> Reject
-                    </button>
-                 )}
+            {/* Action Footer */}
+            <div className="p-4 sm:p-5 border-t border-gray-100 bg-white flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-gray-600">Case Status:</span>
+                <StatusSelectDropdown
+                  client={selectedClient}
+                  onChange={handleStatusChange}
+                  isUpdating={statusUpdatingId === selectedClient._id}
+                />
               </div>
-            )}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleToggleHide(selectedClient._id, !selectedClient.isHidden)}
+                  className={`px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 border transition-all cursor-pointer ${
+                    selectedClient.isHidden
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                      : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
+                  }`}
+                >
+                  {selectedClient.isHidden ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                  <span>{selectedClient.isHidden ? 'Unhide Client' : 'Hide Client'}</span>
+                </button>
+                <button
+                  onClick={() => navigate(`/clients/${selectedClient._id}`)}
+                  className="px-3.5 py-2 bg-[#081326] text-white rounded-lg text-xs font-bold hover:bg-[#11203d] transition-colors shadow-xs cursor-pointer flex items-center gap-1.5"
+                >
+                  Full Profile <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -959,119 +1642,231 @@ const Clients = () => {
             </div>
 
             <form onSubmit={handleSaveContactInfo} className="space-y-4">
+              
+              {/* Reorganized Form: Name, DOB, Profession, Loan Amount, Case Type, PAN, Aadhaar, Mobile */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                
+                {/* 1. Full Name */}
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">Full Name *</label>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Applicant Full Name *</label>
                   <input 
                     type="text" 
                     value={contactFormData.fullName}
                     onChange={(e) => setContactFormData({ ...contactFormData, fullName: e.target.value })}
                     required
-                    className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg outline-none focus:border-[#f59e0b] font-medium"
+                    className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg outline-none focus:border-[#f59e0b] font-bold text-[#081326]"
                   />
                 </div>
 
+                {/* 2. Date of Birth */}
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">Mobile Number *</label>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Date of Birth (DOB)</label>
                   <input 
-                    type="tel" 
-                    value={contactFormData.mobile}
-                    onChange={(e) => setContactFormData({ ...contactFormData, mobile: e.target.value })}
-                    required
-                    placeholder="10-digit mobile"
-                    className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg outline-none focus:border-[#f59e0b] font-medium"
+                    type="date" 
+                    value={contactFormData.dob || ''}
+                    onChange={(e) => setContactFormData({ ...contactFormData, dob: e.target.value })}
+                    className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg outline-none focus:border-[#f59e0b] font-bold"
                   />
                 </div>
 
+                {/* 3. Profession / Occupation */}
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">Email Address</label>
-                  <input 
-                    type="email" 
-                    value={contactFormData.email}
-                    onChange={(e) => setContactFormData({ ...contactFormData, email: e.target.value })}
-                    placeholder="Client email address"
-                    className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg outline-none focus:border-[#f59e0b] font-medium"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">PAN Number</label>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Profession / Occupation</label>
                   <input 
                     type="text" 
-                    value={contactFormData.panNumber}
-                    onChange={(e) => setContactFormData({ ...contactFormData, panNumber: e.target.value.toUpperCase() })}
-                    placeholder="e.g. ABCDE1234F"
-                    className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg outline-none focus:border-[#f59e0b] font-medium uppercase"
+                    value={contactFormData.occupation || ''}
+                    onChange={(e) => setContactFormData({ ...contactFormData, occupation: e.target.value })}
+                    placeholder="e.g. Salaried, Business, Doctor"
+                    className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg outline-none focus:border-[#f59e0b] font-medium"
                   />
                 </div>
 
+                {/* 4. Loan Amount */}
                 <div>
-                  <label className="block text-xs font-bold text-emerald-800 mb-1">Required Loan Amount (₹)</label>
+                  <label className="block text-xs font-bold text-emerald-800 mb-1">Required Loan Amount (₹) *</label>
                   <input 
                     type="number" 
-                    value={contactFormData.loanAmount}
+                    value={contactFormData.loanAmount || ''}
                     onChange={(e) => setContactFormData({ ...contactFormData, loanAmount: e.target.value })}
-                    placeholder="e.g. 500000"
+                    placeholder="e.g. 3500000"
                     className="w-full px-3 py-2 text-xs border border-emerald-200 bg-emerald-50/40 rounded-lg outline-none focus:border-emerald-500 font-bold text-emerald-950"
                   />
                 </div>
 
+                {/* 5. Case Type */}
                 <div>
-                  <label className="block text-xs font-bold text-blue-800 mb-1">Case Type / Service</label>
+                  <label className="block text-xs font-bold text-blue-800 mb-1">Case Type / Service *</label>
                   <input 
                     type="text" 
-                    value={contactFormData.caseType}
+                    value={contactFormData.caseType || ''}
                     onChange={(e) => setContactFormData({ ...contactFormData, caseType: e.target.value })}
-                    placeholder="e.g. Fake Loan Removal, Property Legal, MSME Loan"
+                    placeholder="e.g. Home Loan, LAP, BT from PNB Housing"
                     className="w-full px-3 py-2 text-xs border border-blue-200 bg-blue-50/40 rounded-lg outline-none focus:border-blue-500 font-bold text-blue-950"
                   />
                 </div>
 
+                {/* 6. PAN Number */}
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">Occupation / Profession</label>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">PAN Number</label>
                   <input 
                     type="text" 
-                    value={contactFormData.occupation}
-                    onChange={(e) => setContactFormData({ ...contactFormData, occupation: e.target.value })}
-                    placeholder="e.g. Salaried, Businessman, Professional"
+                    maxLength={10}
+                    value={contactFormData.panNumber || ''}
+                    onChange={(e) => setContactFormData({ ...contactFormData, panNumber: e.target.value.toUpperCase() })}
+                    placeholder="e.g. ABCDE1234F"
+                    className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg outline-none focus:border-[#f59e0b] font-mono uppercase"
+                  />
+                </div>
+
+                {/* 7. Aadhaar Number */}
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Aadhaar Number</label>
+                  <input 
+                    type="text" 
+                    maxLength={12}
+                    value={contactFormData.aadhaarNumber || ''}
+                    onChange={(e) => setContactFormData({ ...contactFormData, aadhaarNumber: e.target.value })}
+                    placeholder="12-digit Aadhaar"
+                    className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg outline-none focus:border-[#f59e0b] font-mono"
+                  />
+                </div>
+
+                {/* 8. Mobile Number */}
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Mobile Number *</label>
+                  <input 
+                    type="tel" 
+                    maxLength={10}
+                    value={contactFormData.mobile || ''}
+                    onChange={(e) => setContactFormData({ ...contactFormData, mobile: e.target.value })}
+                    required
+                    placeholder="10-digit mobile"
+                    className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg outline-none focus:border-[#f59e0b] font-mono"
+                  />
+                </div>
+
+                {/* Case Status */}
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Case Status</label>
+                  <select 
+                    value={contactFormData.status || 'Documents Pending'}
+                    onChange={(e) => setContactFormData({ ...contactFormData, status: e.target.value })}
+                    className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg outline-none focus:border-[#f59e0b] font-bold cursor-pointer bg-white"
+                  >
+                    {!CASE_STATUS_OPTIONS.includes(contactFormData.status) && contactFormData.status && (
+                      <option value={contactFormData.status}>{contactFormData.status}</option>
+                    )}
+                    {CASE_STATUS_OPTIONS.map(opt => (
+                      <option key={opt} value={opt}>{opt}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Email Address */}
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Email Address</label>
+                  <input 
+                    type="email" 
+                    value={contactFormData.email || ''}
+                    onChange={(e) => setContactFormData({ ...contactFormData, email: e.target.value })}
+                    placeholder="client@example.com"
                     className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg outline-none focus:border-[#f59e0b] font-medium"
                   />
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">Case Status</label>
-                  <select 
-                    value={contactFormData.status}
-                    onChange={(e) => setContactFormData({ ...contactFormData, status: e.target.value })}
-                    className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg outline-none focus:border-[#f59e0b] font-bold cursor-pointer"
+              </div>
+
+              {/* Custom Fields Editor */}
+              <div className="pt-2 border-t border-gray-100 space-y-2">
+                <label className="block text-xs font-black text-[#081326] flex items-center gap-1.5">
+                  <Tag className="w-3.5 h-3.5 text-purple-600" /> Custom Fields
+                </label>
+                
+                {editCustomFields.length > 0 && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
+                    {editCustomFields.map((cf, idx) => (
+                      <div key={idx} className="flex items-center gap-2 p-2 bg-purple-50/50 border border-purple-100 rounded-lg">
+                        <div className="flex-1 min-w-0">
+                          <span className="text-[10px] font-bold text-purple-800 uppercase block truncate">{cf.fieldName}</span>
+                          <input 
+                            type="text"
+                            value={cf.fieldValue}
+                            onChange={(e) => {
+                              const updated = [...editCustomFields];
+                              updated[idx].fieldValue = e.target.value;
+                              setEditCustomFields(updated);
+                            }}
+                            className="w-full text-xs font-bold text-[#081326] bg-transparent outline-none border-b border-purple-200 py-0.5"
+                          />
+                        </div>
+                        <button 
+                          type="button"
+                          onClick={() => setEditCustomFields(editCustomFields.filter((_, i) => i !== idx))}
+                          className="p-1 text-gray-400 hover:text-red-600"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="flex gap-2 items-center bg-gray-50 p-2 rounded-lg border border-gray-200">
+                  <input 
+                    type="text" 
+                    placeholder="Field Name (e.g. CIBIL, Valuation)"
+                    value={editNewFieldName}
+                    onChange={(e) => setEditNewFieldName(e.target.value)}
+                    className="flex-1 px-2.5 py-1.5 text-xs bg-white border border-gray-200 rounded-md outline-none"
+                  />
+                  <input 
+                    type="text" 
+                    placeholder="Field Value"
+                    value={editNewFieldValue}
+                    onChange={(e) => setEditNewFieldValue(e.target.value)}
+                    className="flex-1 px-2.5 py-1.5 text-xs bg-white border border-gray-200 rounded-md outline-none"
+                  />
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      if (!editNewFieldName.trim()) return;
+                      setEditCustomFields([...editCustomFields, { fieldName: editNewFieldName.trim(), fieldValue: editNewFieldValue.trim() }]);
+                      setEditNewFieldName('');
+                      setEditNewFieldValue('');
+                    }}
+                    disabled={!editNewFieldName.trim()}
+                    className="px-3 py-1.5 bg-[#081326] text-white rounded-md text-xs font-bold disabled:opacity-40"
                   >
-                    <option value="Pending">Pending</option>
-                    <option value="Approved">Approved</option>
-                    <option value="Rejected">Rejected</option>
-                  </select>
+                    + Add
+                  </button>
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1">Address</label>
-                <input 
-                  type="text" 
-                  value={contactFormData.addressLine1}
-                  onChange={(e) => setContactFormData({ ...contactFormData, addressLine1: e.target.value })}
-                  placeholder="Client full street address"
-                  className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg outline-none focus:border-[#f59e0b] font-medium"
-                />
-              </div>
+              {/* Notes: Case Notes & Internal Notes */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-gray-100">
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1 flex items-center gap-1">
+                    <StickyNote className="w-3.5 h-3.5 text-amber-500" /> Case Notes / Remarks
+                  </label>
+                  <RichTextEditor 
+                    value={contactFormData.caseNotes || contactFormData.notes || ''}
+                    onChange={(val) => setContactFormData(prev => ({ ...prev, notes: val, caseNotes: val }))}
+                    placeholder="General observations about the case..."
+                    minHeight="100px"
+                  />
+                </div>
 
-              <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1">Case Notes / Remarks</label>
-                <textarea 
-                  rows={3}
-                  value={contactFormData.notes || ''}
-                  onChange={(e) => setContactFormData({ ...contactFormData, notes: e.target.value, caseNotes: e.target.value })}
-                  placeholder="Important details about the case for easy understanding..."
-                  className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg outline-none focus:border-[#f59e0b] font-medium resize-y"
-                />
+                <div className="bg-amber-50/40 p-2.5 rounded-xl border border-amber-200/80">
+                  <label className="block text-xs font-black text-amber-950 mb-1 flex items-center gap-1">
+                    <Lock className="w-3.5 h-3.5 text-amber-700" /> Internal Notes (Team Only)
+                  </label>
+                  <RichTextEditor 
+                    value={contactFormData.internalNotes || ''}
+                    onChange={(val) => setContactFormData(prev => ({ ...prev, internalNotes: val }))}
+                    placeholder="🔒 Confidential internal team notes (Never shared with bankers)..."
+                    minHeight="100px"
+                  />
+                </div>
               </div>
 
               <div className="flex gap-3 pt-3 border-t border-gray-100">
@@ -1095,30 +1890,59 @@ const Clients = () => {
         </div>
       )}
 
-      {/* Delete Confirmation Modal */}
+      {/* Delete Confirmation Modal (Zero Data Loss - Super Admin Backup) */}
       {showDeleteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-[#081326]/60 backdrop-blur-sm" onClick={() => setShowDeleteModal(false)}></div>
-          <div className="relative bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-in fade-in zoom-in-95 duration-200">
-            <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">
+          <div className="absolute inset-0 bg-[#081326]/60 backdrop-blur-sm" onClick={() => !isDeleting && setShowDeleteModal(false)}></div>
+          <div className="relative bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+            <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-3">
               <AlertTriangle className="w-6 h-6 text-red-600 stroke-[2.5]" />
             </div>
-            <h3 className="text-lg font-black text-[#081326] text-center mb-2">Delete Client?</h3>
-            <p className="text-sm text-gray-500 text-center mb-6 font-medium leading-relaxed">
-              Are you sure you want to delete this client? This action cannot be undone and all associated records will be removed.
-            </p>
+            <h3 className="text-lg font-black text-[#081326] text-center mb-1">
+              Delete Client from Active List?
+            </h3>
+            
+            {clientToDelete && typeof clientToDelete === 'object' && (
+              <p className="text-xs text-gray-500 text-center mb-3 font-semibold">
+                Client: <span className="font-bold text-[#081326]">{clientToDelete.fullName}</span>
+                {clientToDelete.mobile && ` (${clientToDelete.mobile})`}
+              </p>
+            )}
+
+            <div className="bg-amber-50/80 border border-amber-200 rounded-xl p-3 text-xs text-amber-900 mb-4 leading-relaxed">
+              <span className="font-bold block mb-1">🛡️ Data Security & Complete Backup:</span>
+              Deleting will remove this client from the active staff list. No data will be lost: all client details, documents, form submissions, pendencies, and edit history are securely archived and preserved for Super Admin recovery.
+            </div>
+
+            <div className="space-y-1.5 mb-5">
+              <label className="text-xs font-bold text-gray-700">
+                Reason for Deletion (Optional)
+              </label>
+              <textarea
+                rows="2"
+                value={deleteReason}
+                onChange={(e) => setDeleteReason(e.target.value)}
+                placeholder="e.g. Lead cancelled, duplicate entry, loan rejected by banks..."
+                className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs outline-none focus:border-red-500 focus:bg-white resize-none"
+              />
+            </div>
+
             <div className="flex gap-3">
               <button 
+                type="button"
+                disabled={isDeleting}
                 onClick={() => setShowDeleteModal(false)}
-                className="flex-1 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-sm font-bold transition-colors cursor-pointer"
+                className="flex-1 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 disabled:opacity-50 text-gray-700 rounded-xl text-xs font-bold transition-colors cursor-pointer"
               >
                 Cancel
               </button>
               <button 
+                type="button"
+                disabled={isDeleting}
                 onClick={handleDeleteClient}
-                className="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-bold transition-colors shadow-sm shadow-red-200 cursor-pointer"
+                className="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-colors shadow-sm shadow-red-200 flex items-center justify-center gap-1.5 cursor-pointer"
               >
-                Yes, Delete
+                {isDeleting ? 'Deleting & Backing Up...' : 'Yes, Delete Client'}
               </button>
             </div>
           </div>
@@ -1192,48 +2016,67 @@ const Clients = () => {
                 <label className="block text-xs font-bold text-gray-700 mb-1">
                   Select File(s) <span className="text-red-500">*</span>
                 </label>
-                <div className="border-2 border-dashed border-gray-200 hover:border-[#f59e0b] rounded-xl p-5 text-center bg-gray-50/50 transition-colors">
+                <div 
+                  onClick={() => uploadFileInputRef.current?.click()}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={handleDocMultiFileDrop}
+                  className="border-2 border-dashed border-gray-300 hover:border-amber-500 rounded-2xl p-6 text-center cursor-pointer bg-slate-50/50 hover:bg-amber-50/30 transition-all space-y-2"
+                >
+                  <Upload className="w-8 h-8 text-[#f59e0b] mx-auto" />
+                  <p className="text-xs font-bold text-gray-700">Click to browse or drag & drop files</p>
+                  <p className="text-[10px] text-gray-400">PDF, JPG, PNG, WEBP (Selecting more files will append to list)</p>
                   <input 
+                    ref={uploadFileInputRef}
                     type="file" 
                     id="front-doc-multi-file-input"
                     multiple
-                    onChange={(e) => {
-                      if (e.target.files) {
-                        setSelectedUploadFiles(Array.from(e.target.files));
-                      }
-                    }}
+                    accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx"
+                    onChange={handleDocMultiFileSelect}
                     className="hidden"
                   />
-                  <label 
-                    htmlFor="front-doc-multi-file-input"
-                    className="cursor-pointer flex flex-col items-center gap-1.5"
-                  >
-                    <Upload className="w-8 h-8 text-[#f59e0b]" />
-                    <span className="text-xs font-bold text-[#081326]">
-                      Click to choose files from device
-                    </span>
-                    <span className="text-[11px] text-gray-400 font-medium">
-                      Supports PDFs, Images (JPG, PNG), Excel, Word docs (Multiple files allowed)
-                    </span>
-                  </label>
                 </div>
-
-                {selectedUploadFiles.length > 0 && (
-                  <div className="mt-3 bg-amber-50/70 border border-amber-200 rounded-xl p-3">
-                    <p className="text-xs font-bold text-amber-900 mb-1.5">
-                      Selected {selectedUploadFiles.length} file{selectedUploadFiles.length > 1 ? 's' : ''}:
-                    </p>
-                    <ul className="space-y-1 max-h-32 overflow-y-auto text-[11px] text-gray-700 font-medium pr-1">
-                      {selectedUploadFiles.map((file, idx) => (
-                        <li key={idx} className="flex justify-between items-center bg-white px-2.5 py-1.5 rounded-lg border border-amber-100">
-                          <span className="truncate max-w-[280px] font-bold text-[#081326]">{file.name}</span>
-                          <span className="text-gray-400 shrink-0 ml-2 font-mono">{(file.size / 1024).toFixed(1)} KB</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
               </div>
+
+              {/* Selected Files List with Remove/Delete Option */}
+              {selectedUploadFiles.length > 0 && (
+                <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                  <div className="text-[10px] font-bold text-gray-500 flex justify-between items-center px-1">
+                    <span>Queue ({selectedUploadFiles.length} file{selectedUploadFiles.length > 1 ? 's' : ''} selected):</span>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedUploadFiles([])}
+                      className="text-red-500 hover:underline cursor-pointer font-bold"
+                    >
+                      Clear All
+                    </button>
+                  </div>
+                  {selectedUploadFiles.map((file, idx) => (
+                    <div 
+                      key={idx} 
+                      className="flex items-center justify-between p-2 bg-gray-50 hover:bg-red-50/30 rounded-xl text-xs border border-gray-200 transition-colors"
+                    >
+                      <div className="flex items-center gap-2 truncate max-w-[280px]">
+                        <FileText className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                        <span className="truncate font-medium text-gray-700">{file.name}</span>
+                        <span className="text-[10px] text-gray-400 font-mono shrink-0">({(file.size / 1024).toFixed(1)} KB)</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleRemoveSelectedUploadFile(idx);
+                        }}
+                        className="text-red-500 hover:text-red-700 hover:bg-red-100 p-1.5 rounded-lg font-bold ml-2 cursor-pointer transition-colors flex items-center gap-1 shrink-0"
+                        title={`Remove "${file.name}"`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                        <span className="text-xs font-bold">✕</span>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {/* Upload Progress Bar */}
               {isUploadingDocs && (
@@ -1295,85 +2138,285 @@ const Clients = () => {
           </div>
         </div>
       )}
-      {/* Co-Applicant Modal */}
-      {showCoApplicantModal && coApplicantClient && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-[#081326]/60 backdrop-blur-sm" onClick={() => setShowCoApplicantModal(false)} />
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white z-10 rounded-t-2xl">
+      {/* Multi-Applicant & Co-Borrower Modal */}
+      {showApplicantsModal && applicantsModalClient && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-4">
+          <div className="absolute inset-0 bg-[#081326]/60 backdrop-blur-sm" onClick={() => setShowApplicantsModal(false)} />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-gray-100 bg-white z-10 shrink-0">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-purple-100 flex items-center justify-center">
-                  <UserPlus className="w-5 h-5 text-purple-600" />
+                <div className="w-9 h-9 rounded-xl bg-purple-100 flex items-center justify-center shrink-0">
+                  <Users className="w-5 h-5 text-purple-600" />
                 </div>
                 <div>
                   <h3 className="text-sm font-black text-[#081326]">
-                    {coApplicantClient.coApplicant?.fullName ? 'Edit Co-Applicant' : 'Add Co-Applicant'}
+                    Applicants, Co-Borrowers & Guarantors
                   </h3>
-                  <p className="text-[11px] text-gray-400 font-medium">Client: {coApplicantClient.fullName} ({coApplicantClient.mobile})</p>
+                  <p className="text-[11px] text-gray-500 font-medium">
+                    Case: <span className="font-bold text-gray-800">{applicantsModalClient.fullName}</span> • {modalApplicantsList.length} Person(s) Registered
+                  </p>
                 </div>
               </div>
-              <button onClick={() => setShowCoApplicantModal(false)} className="w-7 h-7 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center cursor-pointer transition-colors">
+              <button 
+                onClick={() => setShowApplicantsModal(false)} 
+                className="w-7 h-7 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center cursor-pointer transition-colors"
+              >
                 <X className="w-4 h-4 text-gray-500" />
               </button>
             </div>
-            <form onSubmit={handleSaveCoApplicant} className="p-6 space-y-4">
-              {coApplicantError && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs font-bold text-red-600">{coApplicantError}</div>
+
+            {/* Scrollable Form Content */}
+            <form onSubmit={handleSaveModalApplicants} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
+              {applicantsModalError && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs font-bold text-red-600">
+                  {applicantsModalError}
+                </div>
               )}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="sm:col-span-2">
-                  <label className="block text-xs font-bold text-gray-700 mb-1">Full Name <span className="text-red-500">*</span></label>
-                  <input type="text" value={coApplicantForm.fullName} onChange={e => setCoApplicantForm(p => ({ ...p, fullName: e.target.value }))} placeholder="Co-applicant ka poora naam" required className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 outline-none focus:border-purple-400 focus:bg-white transition-all" />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">Mobile <span className="text-red-500">*</span></label>
-                  <input type="tel" value={coApplicantForm.mobile} onChange={e => setCoApplicantForm(p => ({ ...p, mobile: e.target.value }))} placeholder="10 digit number" maxLength={10} required className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 outline-none focus:border-purple-400 focus:bg-white transition-all" />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">Occupation</label>
-                  <input type="text" value={coApplicantForm.occupation} onChange={e => setCoApplicantForm(p => ({ ...p, occupation: e.target.value }))} placeholder="e.g. Salaried, Business" className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 outline-none focus:border-purple-400 focus:bg-white transition-all" />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">Mother's Name</label>
-                  <input type="text" value={coApplicantForm.motherName} onChange={e => setCoApplicantForm(p => ({ ...p, motherName: e.target.value }))} placeholder="Mother ka naam" className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 outline-none focus:border-purple-400 focus:bg-white transition-all" />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">PAN Number</label>
-                  <input type="text" value={coApplicantForm.panNumber} onChange={e => setCoApplicantForm(p => ({ ...p, panNumber: e.target.value.toUpperCase() }))} placeholder="ABCDE1234F" maxLength={10} className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 outline-none focus:border-purple-400 focus:bg-white transition-all uppercase" />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">Aadhaar Number</label>
-                  <input type="text" value={coApplicantForm.aadhaarNumber} onChange={e => setCoApplicantForm(p => ({ ...p, aadhaarNumber: e.target.value }))} placeholder="12 digit Aadhaar" maxLength={12} className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 outline-none focus:border-purple-400 focus:bg-white transition-all" />
-                </div>
-                <div className="sm:col-span-2">
-                  <label className="block text-xs font-bold text-gray-700 mb-1">Address</label>
-                  <input type="text" value={coApplicantForm.addressLine1} onChange={e => setCoApplicantForm(p => ({ ...p, addressLine1: e.target.value }))} placeholder="Ghar/flat, colony, street" className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 outline-none focus:border-purple-400 focus:bg-white transition-all" />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">City</label>
-                  <input type="text" value={coApplicantForm.city} onChange={e => setCoApplicantForm(p => ({ ...p, city: e.target.value }))} placeholder="City" className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 outline-none focus:border-purple-400 focus:bg-white transition-all" />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">State</label>
-                  <input type="text" value={coApplicantForm.state} onChange={e => setCoApplicantForm(p => ({ ...p, state: e.target.value }))} placeholder="State" className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 outline-none focus:border-purple-400 focus:bg-white transition-all" />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">Pincode</label>
-                  <input type="text" value={coApplicantForm.pincode} onChange={e => setCoApplicantForm(p => ({ ...p, pincode: e.target.value }))} placeholder="6 digit pincode" maxLength={6} className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-800 outline-none focus:border-purple-400 focus:bg-white transition-all" />
-                </div>
+
+              {/* Each Person's Section */}
+              <div className="space-y-4">
+                {modalApplicantsList.map((app, idx) => {
+                  const calculatedAge = calculateAge(app.dob);
+                  const isPrimary = idx === 0;
+
+                  return (
+                    <div 
+                      key={idx} 
+                      className={`p-4 rounded-2xl border transition-all ${
+                        isPrimary 
+                          ? 'bg-amber-50/30 border-amber-200/90' 
+                          : 'bg-slate-50/70 border-gray-200'
+                      }`}
+                    >
+                      {/* Person Card Header */}
+                      <div className="flex items-center justify-between border-b border-gray-200/70 pb-2.5 mb-3">
+                        <div className="flex items-center gap-2">
+                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                            isPrimary 
+                              ? 'bg-amber-100 text-amber-900 border border-amber-300' 
+                              : 'bg-blue-100 text-blue-900 border border-blue-300'
+                          }`}>
+                            {isPrimary ? 'Primary Applicant' : (app.relationship || `Co-Applicant ${idx}`)}
+                          </span>
+
+                          <span className="text-xs font-black text-[#081326] truncate max-w-[180px]">
+                            {app.fullName.trim() || `Person ${idx + 1}`}
+                          </span>
+
+                          {calculatedAge && (
+                            <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full text-[10px] font-black border border-emerald-300">
+                              Age: {calculatedAge} Yrs
+                            </span>
+                          )}
+                        </div>
+
+                        {!isPrimary && (
+                          <button
+                            type="button"
+                            onClick={() => handleModalRemoveApplicant(idx)}
+                            className="text-red-500 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                            title="Remove this applicant"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span className="text-[11px]">Remove</span>
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Fields Grid */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                        <div>
+                          <label className="text-[11px] font-bold text-gray-700 block mb-1">
+                            Full Legal Name <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={app.fullName}
+                            onChange={(e) => handleModalApplicantChange(idx, 'fullName', e.target.value)}
+                            placeholder="Full name"
+                            required={isPrimary}
+                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-800 outline-none focus:border-purple-500 transition-all"
+                          />
+                        </div>
+
+                        <div>
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="text-[11px] font-bold text-gray-700">Date of Birth</label>
+                            {calculatedAge && <span className="text-[10px] text-amber-700 font-bold">{calculatedAge} Yrs</span>}
+                          </div>
+                          <input
+                            type="date"
+                            value={app.dob}
+                            onChange={(e) => handleModalApplicantChange(idx, 'dob', e.target.value)}
+                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-800 outline-none focus:border-purple-500 transition-all"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-[11px] font-bold text-gray-700 block mb-1">
+                            Profession / Profile
+                          </label>
+                          <input
+                            type="text"
+                            value={app.occupation}
+                            onChange={(e) => handleModalApplicantChange(idx, 'occupation', e.target.value)}
+                            placeholder="e.g. Salaried, Business, Doctor"
+                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-medium text-gray-800 outline-none focus:border-purple-500 transition-all"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-[11px] font-bold text-gray-700 block mb-1">
+                            Mobile Number {isPrimary && <span className="text-red-500">*</span>}
+                          </label>
+                          <input
+                            type="tel"
+                            maxLength={10}
+                            value={app.mobile}
+                            onChange={(e) => handleModalApplicantChange(idx, 'mobile', e.target.value)}
+                            placeholder="10-digit mobile"
+                            required={isPrimary}
+                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-mono font-medium text-gray-800 outline-none focus:border-purple-500 transition-all"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-[11px] font-bold text-gray-700 block mb-1">
+                            PAN Number
+                          </label>
+                          <input
+                            type="text"
+                            maxLength={10}
+                            value={app.panNumber}
+                            onChange={(e) => handleModalApplicantChange(idx, 'panNumber', e.target.value.toUpperCase())}
+                            placeholder="ABCDE1234F"
+                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-mono uppercase font-bold text-gray-800 outline-none focus:border-purple-500 transition-all"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-[11px] font-bold text-gray-700 block mb-1">
+                            Aadhaar Number
+                          </label>
+                          <input
+                            type="text"
+                            maxLength={12}
+                            value={app.aadhaarNumber}
+                            onChange={(e) => handleModalApplicantChange(idx, 'aadhaarNumber', e.target.value)}
+                            placeholder="12-digit Aadhaar"
+                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-mono font-medium text-gray-800 outline-none focus:border-purple-500 transition-all"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-[11px] font-bold text-gray-700 block mb-1">
+                            Relationship / Role
+                          </label>
+                          <input
+                            type="text"
+                            value={app.relationship}
+                            onChange={(e) => handleModalApplicantChange(idx, 'relationship', e.target.value)}
+                            placeholder={isPrimary ? 'Primary Applicant' : 'e.g. Co-Borrower, Guarantor, Spouse'}
+                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-medium text-gray-800 outline-none focus:border-purple-500 transition-all"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Custom Fields for this Applicant */}
+                      <div className="pt-2.5 mt-2.5 border-t border-gray-200/60">
+                        <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">
+                          Person Custom Fields (e.g. CIBIL, Share %, Employer)
+                        </span>
+
+                        {app.customFields && app.customFields.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5 mb-2">
+                            {app.customFields.map((cf, cIdx) => (
+                              <span key={cIdx} className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-50 border border-purple-200 text-purple-800 rounded text-[11px] font-bold">
+                                <span>{cf.fieldName}: {cf.fieldValue}</span>
+                                <button 
+                                  type="button" 
+                                  onClick={() => handleModalRemoveCustomField(idx, cIdx)} 
+                                  className="text-purple-600 hover:text-red-600 font-black cursor-pointer"
+                                >
+                                  ×
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        <div className="flex gap-2 items-center">
+                          <input
+                            type="text"
+                            id={`modal-app-fn-${idx}`}
+                            placeholder="Field Name (e.g. CIBIL Score)"
+                            className="flex-1 px-2.5 py-1.5 text-xs bg-white border border-gray-200 rounded-lg outline-none focus:border-purple-400"
+                          />
+                          <input
+                            type="text"
+                            id={`modal-app-fv-${idx}`}
+                            placeholder="Value (e.g. 780)"
+                            className="flex-1 px-2.5 py-1.5 text-xs bg-white border border-gray-200 rounded-lg outline-none focus:border-purple-400"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const fn = document.getElementById(`modal-app-fn-${idx}`)?.value || '';
+                              const fv = document.getElementById(`modal-app-fv-${idx}`)?.value || '';
+                              if (fn.trim()) {
+                                handleModalAddCustomField(idx, fn, fv);
+                                document.getElementById(`modal-app-fn-${idx}`).value = '';
+                                document.getElementById(`modal-app-fv-${idx}`).value = '';
+                              }
+                            }}
+                            className="px-3 py-1.5 bg-purple-600 text-white rounded-lg text-xs font-bold hover:bg-purple-700 transition-colors cursor-pointer shrink-0"
+                          >
+                            + Add Field
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-              <div className="flex gap-3 pt-3 border-t border-gray-100">
-                <button type="button" onClick={() => setShowCoApplicantModal(false)} disabled={isSavingCoApplicant} className="flex-1 py-2.5 bg-gray-100 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-200 cursor-pointer disabled:opacity-40">Cancel</button>
-                <button type="submit" disabled={isSavingCoApplicant} className="flex-1 py-2.5 bg-purple-600 text-white rounded-xl text-xs font-bold hover:bg-purple-700 disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer shadow-sm">
-                  {isSavingCoApplicant ? (
+
+              {/* Persistent Add Another Applicant Button (ALWAYS Available) */}
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={() => handleModalAddApplicant('Co-Applicant')}
+                  className="w-full py-3 bg-purple-50/70 hover:bg-purple-100/90 text-purple-800 border-2 border-dashed border-purple-300 rounded-2xl text-xs font-black flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs"
+                >
+                  <Plus className="w-4 h-4 stroke-[3]" />
+                  <span>+ Add Another Applicant / Co-Applicant / Guarantor</span>
+                </button>
+              </div>
+
+              {/* Modal Footer Controls */}
+              <div className="flex gap-3 pt-3 border-t border-gray-100 sticky bottom-0 bg-white py-2">
+                <button 
+                  type="button" 
+                  onClick={() => setShowApplicantsModal(false)} 
+                  disabled={isSavingApplicants} 
+                  className="flex-1 py-2.5 bg-gray-100 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-200 cursor-pointer disabled:opacity-40 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  disabled={isSavingApplicants} 
+                  className="flex-1 py-2.5 bg-[#081326] text-white rounded-xl text-xs font-black hover:bg-black disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer shadow-sm transition-colors"
+                >
+                  {isSavingApplicants ? (
                     <span className="flex items-center gap-2">
                       <svg className="animate-spin w-3.5 h-3.5" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
-                      Saving...
+                      Saving Applicants...
                     </span>
                   ) : (
                     <span className="flex items-center gap-1.5">
-                      <UserPlus className="w-3.5 h-3.5" />
-                      {coApplicantClient.coApplicant?.fullName ? 'Update Co-Applicant' : 'Save Co-Applicant'}
+                      <Check className="w-4 h-4 stroke-[2.5]" />
+                      Save All Applicants ({modalApplicantsList.length})
                     </span>
                   )}
                 </button>

@@ -1,20 +1,31 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useParams, useSearchParams, Link } from 'react-router-dom';
 import { 
   FileText, ShieldCheck, Download, Share2, Printer, 
   ExternalLink, ChevronRight, Copy, Check, AlertCircle, 
   Loader2, ArrowLeft, MoreVertical, X, Eye, FileSpreadsheet, 
   Image as ImageIcon, Building, User, Phone, CheckSquare, Square,
-  Users, ChevronUp, ChevronDown, MessageSquare, HelpCircle, Send
+  Users, ChevronUp, ChevronDown, MessageSquare, HelpCircle, Send,
+  Lock
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../api/axios';
-import { getAssetUrl, getPublicShareDocsUrl, getBankerShareMessage } from '../utils/url';
+import { 
+  getAssetUrl, 
+  getPublicShareDocsUrl, 
+  getBankerShareMessage, 
+  getSelectedDocsShareMessage,
+  matchesDocToken,
+  getNormalizedDocName,
+  createBrandedShareLink
+} from '../utils/url';
 import PdfViewer from '../components/common/PdfViewer';
 import ImageViewer from '../components/common/ImageViewer';
+import { FormattedNotes } from '../components/common/RichTextEditor';
 
 const SharedDocuments = () => {
   const { id } = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -107,11 +118,29 @@ const SharedDocuments = () => {
     return () => window.removeEventListener('popstate', handlePopState);
   }, [viewMode]);
 
+  // Parse requested docs from query params (?docs=... or ?d=...) or backend short-code ShareLink
+  const requestedTokens = useMemo(() => {
+    const param = searchParams.get('docs') || searchParams.get('d');
+    if (param) {
+      return param.split(',').map(t => decodeURIComponent(t.trim())).filter(Boolean);
+    }
+    if (data?.selectedDocTokens && Array.isArray(data.selectedDocTokens) && data.selectedDocTokens.length > 0) {
+      return data.selectedDocTokens;
+    }
+    return [];
+  }, [searchParams, data?.selectedDocTokens]);
+
   // Clean Short Share URL (e.g. ktrconsultants.in/d/:id or origin/d/:id)
-  const getShortShareUrl = useCallback(() => {
+  const getShortShareUrl = useCallback((selectedDocsList = null) => {
     const targetId = id || data?._id || '';
+    if (selectedDocsList && selectedDocsList.length > 0) {
+      return getPublicShareDocsUrl(targetId, selectedDocsList);
+    }
+    if (requestedTokens && requestedTokens.length > 0) {
+      return getPublicShareDocsUrl(targetId, requestedTokens);
+    }
     return getPublicShareDocsUrl(targetId);
-  }, [id, data]);
+  }, [id, data, requestedTokens]);
 
   // Professional WhatsApp Share Message
   const getWhatsAppShareText = useCallback(() => {
@@ -119,8 +148,12 @@ const SharedDocuments = () => {
     return getBankerShareMessage(data, shortUrl);
   }, [data, getShortShareUrl]);
 
-  const handleCopyLink = () => {
-    const shortUrl = getShortShareUrl();
+  const handleCopyLink = async () => {
+    const targetId = id || data?._id || '';
+    let shortUrl = getShortShareUrl();
+    try {
+      shortUrl = await createBrandedShareLink(targetId, requestedTokens.length > 0 ? requestedTokens : null, api);
+    } catch (e) {}
     navigator.clipboard.writeText(shortUrl);
     setCopied(true);
     toast.success('Clean share link copied!');
@@ -128,8 +161,12 @@ const SharedDocuments = () => {
   };
 
   // WhatsApp Share handler
-  const handleShareWhatsApp = () => {
-    const message = getWhatsAppShareText();
+  const handleShareWhatsApp = async () => {
+    toast.loading('Generating branded link...', { id: 'wa-share' });
+    const targetId = id || data?._id || '';
+    const shortUrl = await createBrandedShareLink(targetId, requestedTokens.length > 0 ? requestedTokens : null, api);
+    toast.dismiss('wa-share');
+    const message = getBankerShareMessage(data, shortUrl);
     navigator.clipboard.writeText(message);
     window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`, '_blank');
     setTopShareModal(false);
@@ -137,7 +174,11 @@ const SharedDocuments = () => {
 
   // Native share handler
   const handleSharePortalLink = async () => {
-    const text = getWhatsAppShareText();
+    toast.loading('Generating branded link...', { id: 'portal-share' });
+    const targetId = id || data?._id || '';
+    const shortUrl = await createBrandedShareLink(targetId, requestedTokens.length > 0 ? requestedTokens : null, api);
+    toast.dismiss('portal-share');
+    const text = getBankerShareMessage(data, shortUrl);
     const title = `${data?.fullName || 'Client'} - Documents Portal | KTR Consultants`;
 
     if (navigator.share) {
@@ -267,9 +308,8 @@ const SharedDocuments = () => {
 
     // Fallback: If 1 file, download it. If multiple, download files and open WhatsApp with short link
     const clientName = data?.fullName || 'Client';
-    const shortUrl = getShortShareUrl();
-    const docNames = docsToShare.map(d => d.title).join(', ');
-    const text = `📁 KTR Consultants – Document File\n\nClient: ${clientName}\nDocument: ${docNames}\n\n🔗 Review Case & Documents: ${shortUrl}`;
+    const shortUrl = getShortShareUrl(docsToShare);
+    const text = getSelectedDocsShareMessage(data, docsToShare, shortUrl);
 
     if (navigator.share) {
       try {
@@ -298,16 +338,11 @@ const SharedDocuments = () => {
     if (!docsToShare || docsToShare.length === 0) return;
 
     const clientName = data?.fullName || 'Client';
-    const shortUrl = getShortShareUrl();
-
-    let text = '';
-    if (docsToShare.length === 1) {
-      const doc = docsToShare[0];
-      text = `📁 KTR Consultants – Document File\n\nClient: ${clientName}\nDocument: ${doc.title}\n\n🔗 Review Case & Documents: ${shortUrl}`;
-    } else {
-      const list = docsToShare.map((d, i) => `${i + 1}. ${d.title}${d.files?.length > 1 ? ` (${d.files.length} Files)` : ''}`).join('\n');
-      text = `📁 KTR Consultants – Loan File Documents\n\nClient: ${clientName}\n\nDocuments Included:\n${list}\n\n🔗 Review Case & Documents: ${shortUrl}`;
-    }
+    toast.loading('Generating branded link...', { id: 'doc-share' });
+    const targetId = id || data?._id || '';
+    const shortUrl = await createBrandedShareLink(targetId, docsToShare, api);
+    toast.dismiss('doc-share');
+    const text = getSelectedDocsShareMessage(data, docsToShare, shortUrl);
 
     if (navigator.share) {
       try {
@@ -348,6 +383,20 @@ const SharedDocuments = () => {
   const groupedDocsMap = new Map();
   const seenUrls = new Set();
 
+  const getCustomTitle = (key) => {
+    if (!key) return null;
+    if (data?.documentCustomTitles) {
+      if (typeof data.documentCustomTitles.get === 'function') {
+        const val = data.documentCustomTitles.get(key);
+        if (val) return val;
+      } else if (typeof data.documentCustomTitles === 'object') {
+        const val = data.documentCustomTitles[key];
+        if (val) return val;
+      }
+    }
+    return null;
+  };
+
   const getNoteForDoc = (title, docObj) => {
     if (docObj?.notes) return docObj.notes;
     if (data?.documentNotes) {
@@ -363,8 +412,14 @@ const SharedDocuments = () => {
     if (!cd.fileUrl || seenUrls.has(cd.fileUrl)) return;
     seenUrls.add(cd.fileUrl);
 
-    const rawName = (cd.name || 'Document').trim();
-    const groupKey = getNormalizedDocName(rawName);
+    const customFileTitle = getCustomTitle(cd.fileUrl) || (cd._id && getCustomTitle(cd._id.toString())) || cd.fileTitle;
+    const rawName = customFileTitle || (cd.name || 'Document').trim();
+
+    const isGenericCat = !cd.category || ['Document', 'Case Document', 'General Documents', 'Uploaded File'].includes(cd.category);
+    let groupKey = !isGenericCat ? cd.category.trim() : getNormalizedDocName(cd.name);
+    const customGroup = getCustomTitle(groupKey) || getCustomTitle(cd.category);
+    if (customGroup) groupKey = customGroup;
+
     const docNotes = getNoteForDoc(groupKey, cd) || getNoteForDoc(rawName, cd);
     const docEntry = {
       id: `cd_${cd._id || idx}`,
@@ -374,7 +429,7 @@ const SharedDocuments = () => {
       fileTitle: rawName,
       fileUrl: cd.fileUrl,
       docType: cd.docType || 'customDocument',
-      category: cd.category || 'Uploaded File',
+      category: cd.category || groupKey,
       notes: docNotes
     };
 
@@ -405,12 +460,19 @@ const SharedDocuments = () => {
       if (!fDoc.fileUrl || seenUrls.has(fDoc.fileUrl)) return;
       seenUrls.add(fDoc.fileUrl);
 
-      const rawName = (fDoc.name || 'Document').trim();
-      const groupKey = getNormalizedDocName(rawName);
+      const customFileTitle = getCustomTitle(fDoc.fileUrl) || (fDoc._id && getCustomTitle(fDoc._id.toString())) || fDoc.fileTitle;
+      const rawName = customFileTitle || (fDoc.name || 'Document').trim();
+
+      const isGenericCat = !fDoc.category || ['Document', 'Case Document', 'General Documents', 'Uploaded File', 'Custom File'].includes(fDoc.category);
+      let groupKey = !isGenericCat ? fDoc.category.trim() : getNormalizedDocName(fDoc.name);
+      const customGroup = getCustomTitle(groupKey) || getCustomTitle(fDoc.category);
+      if (customGroup) groupKey = customGroup;
+
       const docNotes = getNoteForDoc(groupKey, fDoc) || getNoteForDoc(rawName, fDoc);
       const docEntry = {
         id: `f_${f._id}_${fDoc._id || fIdx}`,
         docId: fDoc._id,
+        folderId: f._id,
         name: groupKey,
         title: groupKey,
         fileTitle: rawName,
@@ -460,12 +522,17 @@ const SharedDocuments = () => {
   legacyFixedMap.forEach(item => {
     if (data?.[item.key] && !seenUrls.has(data[item.key])) {
       seenUrls.add(data[item.key]);
-      const groupKey = item.label;
+      const customFileTitle = getCustomTitle(data[item.key]);
+      const customGroup = getCustomTitle(item.label) || getCustomTitle(item.key);
+      const groupKey = customGroup || item.label;
+      const rawName = customFileTitle || groupKey;
+
       const docNotes = getNoteForDoc(groupKey, null);
       const docEntry = {
         id: `legacy_${item.key}`,
         name: groupKey,
         title: groupKey,
+        fileTitle: rawName,
         fileUrl: data[item.key],
         docType: item.key,
         category: 'Client Document',
@@ -494,11 +561,55 @@ const SharedDocuments = () => {
     }
   });
 
+  // 4. Legacy Other Docs Array
+  (data?.otherDocs || []).forEach((url, idx) => {
+    if (!seenUrls.has(url)) {
+      seenUrls.add(url);
+      const baseLabel = `Document ${idx + 1}`;
+      const customFileTitle = getCustomTitle(url);
+      const customGroup = getCustomTitle(baseLabel);
+      const groupKey = customGroup || customFileTitle || baseLabel;
+      const rawName = customFileTitle || groupKey;
+
+      const docNotes = getNoteForDoc(groupKey, null);
+      const docEntry = {
+        id: `other_${idx}`,
+        name: groupKey,
+        title: groupKey,
+        fileTitle: rawName,
+        fileUrl: url,
+        docType: 'other',
+        category: 'Client Document',
+        notes: docNotes
+      };
+
+      if (groupedDocsMap.has(groupKey)) {
+        groupedDocsMap.get(groupKey).files.push(docEntry);
+        if (docNotes && !groupedDocsMap.get(groupKey).notes) {
+          groupedDocsMap.get(groupKey).notes = docNotes;
+        }
+      } else {
+        groupedDocsMap.set(groupKey, {
+          id: `other_${idx}`,
+          groupId: `group_${docEntry.id}`,
+          title: groupKey,
+          name: groupKey,
+          docType: docEntry.docType,
+          category: docEntry.category,
+          notes: docNotes,
+          files: [docEntry],
+          fileUrl: docEntry.fileUrl,
+          icon: FileText
+        });
+      }
+    }
+  });
+
   const allAvailableDocs = Array.from(groupedDocsMap.values());
 
   // Respect exact sort order
   const docOrder = data?.documentOrder || [];
-  const sortedDocs = [...allAvailableDocs].sort((a, b) => {
+  const baseSortedDocs = [...allAvailableDocs].sort((a, b) => {
     if (docOrder.length === 0) return 0;
     const findIndex = (item) => {
       return docOrder.findIndex(key => 
@@ -518,6 +629,37 @@ const SharedDocuments = () => {
     if (indexB !== -1) return 1;
     return 0;
   });
+
+  // Sort files within each document category according to docOrder
+  baseSortedDocs.forEach(doc => {
+    if (doc.files && doc.files.length > 1 && docOrder.length > 0) {
+      doc.files.sort((fileA, fileB) => {
+        const getFileRank = (f) => {
+          let idx = -1;
+          if (f.fileUrl && (idx = docOrder.indexOf(f.fileUrl)) !== -1) return idx;
+          if (f.id && (idx = docOrder.indexOf(f.id)) !== -1) return idx;
+          if (f.name && (idx = docOrder.indexOf(f.name)) !== -1) return idx;
+          return 999999;
+        };
+        const rankA = getFileRank(fileA);
+        const rankB = getFileRank(fileB);
+        if (rankA !== rankB) return rankA - rankB;
+        return 0;
+      });
+    }
+  });
+
+  const sortedDocs = useMemo(() => {
+    if (!requestedTokens || requestedTokens.length === 0) {
+      return baseSortedDocs;
+    }
+    const filtered = baseSortedDocs.filter(doc => {
+      return requestedTokens.some(token => matchesDocToken(doc, token));
+    });
+    return filtered.length > 0 ? filtered : baseSortedDocs;
+  }, [baseSortedDocs, requestedTokens]);
+
+  const isFilteredView = requestedTokens.length > 0 && sortedDocs.length < baseSortedDocs.length;
 
   // Open Continuous View at exact Document index
   const scrollToDoc = useCallback((targetIndex) => {
@@ -917,9 +1059,7 @@ const SharedDocuments = () => {
           {caseNotesText && (
             <div className="mt-3 p-3 bg-amber-50/50 border border-amber-200/80 rounded-xl flex items-start gap-2.5">
               <FileText className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
-              <p className="text-xs sm:text-sm font-medium text-amber-950 leading-relaxed whitespace-pre-wrap">
-                {caseNotesText}
-              </p>
+              <FormattedNotes content={caseNotesText} className="text-amber-950 flex-1 text-xs sm:text-sm" />
             </div>
           )}
         </div>
@@ -929,10 +1069,24 @@ const SharedDocuments = () => {
           <div className="space-y-3">
             {/* Header & Bulk Actions Toolbar */}
             <div className="flex flex-wrap items-center justify-between gap-2.5 px-1">
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2.5 flex-wrap">
                 <h2 className="text-xs sm:text-sm font-black text-[#081326] uppercase tracking-wide">
-                  DOCUMENTS ({sortedDocs.length})
+                  {isFilteredView ? `SELECTED DOCUMENTS (${sortedDocs.length})` : `DOCUMENTS (${sortedDocs.length})`}
                 </h2>
+                {isFilteredView && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-900 border border-amber-200 shadow-2xs">
+                    Shared Bundle ({sortedDocs.length} of {baseSortedDocs.length})
+                  </span>
+                )}
+                {isFilteredView && typeof window !== 'undefined' && localStorage.getItem('adminToken') && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchParams({})}
+                    className="text-[11px] font-bold text-blue-600 hover:text-blue-800 underline cursor-pointer ml-1"
+                  >
+                    Show Full File ({baseSortedDocs.length})
+                  </button>
+                )}
               </div>
 
               <div className="flex items-center gap-2 flex-wrap">
@@ -1040,6 +1194,12 @@ const SharedDocuments = () => {
                                 {doc.files.length} Files
                               </span>
                             )}
+                            {(doc.password || data?.documentPasswords?.[doc.title] || data?.documentPasswords?.[doc.name]) && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-amber-50 text-amber-900 border border-amber-200/80 px-2 py-0.5 rounded-full shrink-0">
+                                <Lock className="w-2.5 h-2.5 text-amber-600" />
+                                <span>Password Protected</span>
+                              </span>
+                            )}
                           </div>
                           {doc.notes && (
                             <p className="text-[11px] text-amber-700 font-medium truncate mt-0.5">
@@ -1099,9 +1259,17 @@ const SharedDocuments = () => {
                         #{idx + 1}
                       </span>
                       <div className="min-w-0 flex-1">
-                        <h3 className="text-xs sm:text-sm font-black text-[#081326] truncate">
-                          {doc.title}
-                        </h3>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className="text-xs sm:text-sm font-black text-[#081326] truncate">
+                            {doc.title}
+                          </h3>
+                          {(doc.password || data?.documentPasswords?.[doc.title] || data?.documentPasswords?.[doc.name]) && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-amber-50 text-amber-900 border border-amber-200/80 px-2 py-0.5 rounded-full">
+                              <Lock className="w-2.5 h-2.5 text-amber-600" />
+                              <span>Password Protected (Auto-unlocked)</span>
+                            </span>
+                          )}
+                        </div>
                         {doc.notes && (
                           <p className="text-[11px] text-amber-700 font-medium truncate">
                             {doc.notes}
@@ -1160,6 +1328,7 @@ const SharedDocuments = () => {
                         {isPdf(fileObj.fileUrl) ? (
                           <PdfViewer
                             url={getAssetUrl(fileObj.fileUrl)}
+                            password={fileObj.password || doc.password || data?.documentPasswords?.[doc.title] || data?.documentPasswords?.[doc.name]}
                             title={fileObj.fileTitle || fileObj.title || doc.title}
                           />
                         ) : (

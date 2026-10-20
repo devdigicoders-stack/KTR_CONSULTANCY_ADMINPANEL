@@ -12,6 +12,9 @@ const PaymentInvoiceModal = ({ isOpen, onClose, invoiceData }) => {
     invoiceNumber = 'KTR/INV/' + new Date().getFullYear() + '/' + Math.floor(10000 + Math.random() * 90000),
     clientName = 'Customer',
     clientMobile = 'N/A',
+    clientPan = '',
+    clientEmail = '',
+    clientAddress = '',
     serviceName = 'Financial Service',
     serviceDetails = '',
     amount = 0,
@@ -20,10 +23,17 @@ const PaymentInvoiceModal = ({ isOpen, onClose, invoiceData }) => {
     discount = 0,
     totalAmount = 0,
     paymentId = 'N/A',
+    referenceNumber = '',
+    paymentMode = 'Online Gateway',
+    isManual = false,
     paidAt = new Date(),
     status = 'Paid',
     type = 'PaymentLink'
   } = invoiceData || {};
+
+  const isNoTax = Number(taxRate) === 0;
+  const isManualPayment = isManual || (paymentMode && !['Online', 'Online Gateway'].includes(paymentMode));
+  const isPaid = status === 'Paid';
 
   const handlePrint = () => {
     window.print();
@@ -32,10 +42,10 @@ const PaymentInvoiceModal = ({ isOpen, onClose, invoiceData }) => {
   const handleDownloadPdf = async () => {
     setDownloading(true);
     const targetId = invoiceData?._id || invoiceData?.linkId || invoiceData?.paymentId || invoiceData?.invoiceNumber;
-    const invNoClean = (invoiceNumber || 'KTR_INVOICE').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const invNoClean = (invoiceNumber || (isNoTax ? 'KTR_RECEIPT' : 'KTR_INVOICE')).replace(/[^a-zA-Z0-9_-]/g, '_');
 
     try {
-      if (targetId) {
+      if (!isNoTax && targetId) {
         try {
           const isCibil = invoiceData.type === 'CIBIL';
           const endpoint = isCibil 
@@ -65,24 +75,24 @@ const PaymentInvoiceModal = ({ isOpen, onClose, invoiceData }) => {
         }
       }
 
-      // Client-Side Fallback if server call not available
+      // Client-Side Fallback or Receipt PDF for 0% non-taxable collections
       if (printRef.current) {
         const element = printRef.current;
         const opt = {
           margin: [6, 6, 6, 6],
-          filename: `Invoice_${invNoClean}.pdf`,
+          filename: isNoTax ? `Receipt_${invNoClean}.pdf` : `Invoice_${invNoClean}.pdf`,
           image: { type: 'jpeg', quality: 0.98 },
           html2canvas: { scale: 2, useCORS: true, logging: false },
           jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
         };
         await html2pdf().set(opt).from(element).save();
-        toast.success('Invoice downloaded successfully!');
+        toast.success(isNoTax ? 'Payment receipt downloaded successfully!' : 'Invoice downloaded successfully!');
       } else {
         throw new Error('Invoice element missing');
       }
     } catch (err) {
       console.error('PDF generation error:', err);
-      toast.error('Failed to download invoice PDF. You can also use Print.');
+      toast.error('Failed to download PDF. You can also use Print.');
     } finally {
       setDownloading(false);
     }
@@ -94,37 +104,44 @@ const PaymentInvoiceModal = ({ isOpen, onClose, invoiceData }) => {
     year: 'numeric'
   });
 
-  const basePrice = amount || 0;
-  const taxableValue = Math.max(0, basePrice - discount);
-  const gstVal = taxAmount || Math.round((taxableValue * taxRate) / 100);
+  const basePrice = parseFloat(amount) || 0;
+  const numDiscount = parseFloat(discount) || 0;
+  const numTaxRate = parseFloat(taxRate) || 0;
+  const taxableValue = invoiceData?.taxableAmount !== undefined && invoiceData?.taxableAmount !== null && invoiceData?.taxableAmount > 0
+    ? parseFloat(invoiceData.taxableAmount)
+    : Math.max(0, basePrice - numDiscount);
+  const gstVal = numTaxRate > 0 ? Math.round((taxableValue * numTaxRate) / 100) : 0;
   const cgst = (gstVal / 2).toFixed(2);
   const sgst = (gstVal / 2).toFixed(2);
-  const finalTotal = totalAmount || (taxableValue + gstVal);
+  const finalTotal = Math.max(0, Math.round(taxableValue + gstVal));
 
   if (!isOpen || !invoiceData) return null;
 
   return (
-    <div className="invoice-modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 md:p-6 bg-[#081326]/80 backdrop-blur-sm overflow-y-auto">
-      {/* Print-only styling */}
+    <div className="fixed inset-0 bg-[#081326]/80 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+      {/* Print-specific style */}
       <style>{`
         @media print {
-          @page {
-            size: portrait;
-            margin: 8mm;
+          body * {
+            visibility: hidden;
           }
-          body {
-            background: #ffffff !important;
-            color: #000000 !important;
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
+          #admin-payment-invoice-print, #admin-payment-invoice-print * {
+            visibility: visible;
+          }
+          #admin-payment-invoice-print {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            margin: 0;
+            padding: 15px;
+            background: white !important;
+            color: black !important;
           }
           .no-print {
             display: none !important;
           }
-          .invoice-modal-backdrop {
-            position: static !important;
-            background: transparent !important;
-            padding: 0 !important;
+          html, body {
             margin: 0 !important;
             overflow: visible !important;
             display: block !important;
@@ -160,7 +177,18 @@ const PaymentInvoiceModal = ({ isOpen, onClose, invoiceData }) => {
         <div className="no-print bg-[#081326] px-5 py-3.5 flex items-center justify-between text-white border-b border-gray-800">
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-[#f59e0b]"></span>
-            <h3 className="text-sm font-bold tracking-wide">Official Tax Invoice</h3>
+            <h3 className="text-sm font-bold tracking-wide">
+              {isNoTax ? 'Payment Voucher / Receipt (0% No Tax)' : 'Official Tax Invoice'}
+            </h3>
+            {isManualPayment ? (
+              <span className="text-[10px] bg-blue-500/20 text-blue-300 font-bold px-2 py-0.5 rounded border border-blue-400/30">
+                Manual ({paymentMode})
+              </span>
+            ) : (
+              <span className="text-[10px] bg-amber-500/20 text-amber-300 font-bold px-2 py-0.5 rounded border border-amber-400/30">
+                Online Gateway
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -169,7 +197,7 @@ const PaymentInvoiceModal = ({ isOpen, onClose, invoiceData }) => {
               className="px-3 py-1.5 bg-[#f59e0b] hover:bg-orange-500 disabled:opacity-50 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer"
             >
               {downloading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
-              <span>{downloading ? 'Downloading...' : 'Download PDF'}</span>
+              <span>{downloading ? 'Downloading...' : (isNoTax ? 'Download Receipt' : 'Download PDF')}</span>
             </button>
             <button
               onClick={handlePrint}
@@ -213,10 +241,10 @@ const PaymentInvoiceModal = ({ isOpen, onClose, invoiceData }) => {
 
             <div className="sm:text-right">
               <span className="inline-block bg-[#081326] text-[#f59e0b] font-black text-[11px] px-3 py-1 rounded-md uppercase tracking-wider mb-2">
-                ORIGINAL TAX INVOICE
+                {isNoTax ? 'PAYMENT RECEIPT (NON-TAXABLE)' : 'ORIGINAL TAX INVOICE'}
               </span>
               <p className="text-[11.5px] font-bold text-gray-800">
-                Invoice No: <span className="font-mono text-[#081326]">{invoiceNumber}</span>
+                {isNoTax ? 'Receipt No: ' : 'Invoice No: '}<span className="font-mono text-[#081326]">{invoiceNumber}</span>
               </p>
               <p className="text-[11px] text-gray-600">
                 Date: <span className="font-semibold text-gray-800">{date}</span>
@@ -237,6 +265,11 @@ const PaymentInvoiceModal = ({ isOpen, onClose, invoiceData }) => {
               <p className="text-xs text-gray-600 mt-0.5">
                 Mobile: <span className="font-semibold text-gray-800">+91 {clientMobile}</span>
               </p>
+              {clientPan && (
+                <p className="text-xs text-gray-600">
+                  PAN: <span className="font-semibold text-gray-800">{clientPan}</span>
+                </p>
+              )}
               <p className="text-xs text-gray-600">
                 Service: <span className="font-semibold text-gray-800">{serviceName}</span>
               </p>
@@ -248,15 +281,21 @@ const PaymentInvoiceModal = ({ isOpen, onClose, invoiceData }) => {
               </h4>
               <p className="text-xs text-gray-600">
                 Payment Status:{' '}
-                <span className={`font-bold px-2 py-0.5 rounded text-[11px] ${status === 'Paid' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                  {status === 'Paid' ? 'PAID / VERIFIED' : 'PENDING'}
+                <span className={`font-bold px-2 py-0.5 rounded text-[11px] ${isPaid ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                  {isPaid ? (isManualPayment ? 'PAID (MANUAL RECEIPT)' : 'PAID / GATEWAY VERIFIED') : 'PAYMENT PENDING'}
                 </span>
               </p>
               <p className="text-xs text-gray-600 mt-1">
-                Transaction ID: <span className="font-mono text-gray-900 font-bold">{paymentId}</span>
+                {isManualPayment ? 'Reference / UTR:' : 'Transaction ID:'}{' '}
+                <span className="font-mono text-gray-900 font-bold">
+                  {referenceNumber || paymentId || (isPaid ? 'Direct Payment' : '—')}
+                </span>
               </p>
               <p className="text-xs text-gray-600">
-                Payment Mode: <span className="font-semibold text-gray-800">Online Gateway</span>
+                Payment Mode:{' '}
+                <span className="font-semibold text-gray-800">
+                  {paymentMode || (isManualPayment ? 'Direct Collection' : 'Online Gateway')}
+                </span>
               </p>
             </div>
           </div>
@@ -269,6 +308,8 @@ const PaymentInvoiceModal = ({ isOpen, onClose, invoiceData }) => {
                   <th className="py-2.5 px-3 rounded-l-lg font-bold">#</th>
                   <th className="py-2.5 px-3 font-bold">Service Description</th>
                   <th className="py-2.5 px-3 font-bold text-right">Base Amount</th>
+                  {numDiscount > 0 && <th className="py-2.5 px-3 font-bold text-right text-emerald-300">Discount</th>}
+                  {numDiscount > 0 && <th className="py-2.5 px-3 font-bold text-right">Taxable Value</th>}
                   <th className="py-2.5 px-3 font-bold text-right">Tax ({taxRate}%)</th>
                   <th className="py-2.5 px-3 rounded-r-lg font-bold text-right">Total Amount</th>
                 </tr>
@@ -285,11 +326,21 @@ const PaymentInvoiceModal = ({ isOpen, onClose, invoiceData }) => {
                   <td className="py-3 px-3 text-right font-mono font-semibold text-gray-800">
                     ₹{basePrice.toLocaleString('en-IN')}
                   </td>
+                  {numDiscount > 0 && (
+                    <td className="py-3 px-3 text-right font-mono text-emerald-600 font-semibold">
+                      -₹{numDiscount.toLocaleString('en-IN')}
+                    </td>
+                  )}
+                  {numDiscount > 0 && (
+                    <td className="py-3 px-3 text-right font-mono font-semibold text-gray-800">
+                      ₹{taxableValue.toLocaleString('en-IN')}
+                    </td>
+                  )}
                   <td className="py-3 px-3 text-right font-mono text-gray-600">
                     ₹{gstVal.toLocaleString('en-IN')}
                   </td>
                   <td className="py-3 px-3 text-right font-mono font-bold text-gray-900">
-                    ₹{(basePrice + gstVal).toLocaleString('en-IN')}
+                    ₹{finalTotal.toLocaleString('en-IN')}
                   </td>
                 </tr>
               </tbody>
@@ -299,11 +350,17 @@ const PaymentInvoiceModal = ({ isOpen, onClose, invoiceData }) => {
           {/* Totals Summary */}
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 border-t border-gray-200 pt-4">
             <div className="text-[11px] text-gray-500 max-w-sm space-y-1">
-              <p className="font-semibold text-gray-700">Tax Breakdown:</p>
-              <p>• CGST ({(taxRate / 2)}%): ₹{cgst}</p>
-              <p>• SGST ({(taxRate / 2)}%): ₹{sgst}</p>
-              {discount > 0 && (
-                <p className="text-emerald-600 font-semibold">• Discount Applied: -₹{discount.toLocaleString('en-IN')}</p>
+              <p className="font-semibold text-gray-700">{isNoTax ? 'Tax Treatment:' : 'Tax Breakdown:'}</p>
+              {isNoTax ? (
+                <p className="text-gray-600 font-medium">• 0% GST (Non-Taxable Collection — No Tax Invoice Issued)</p>
+              ) : (
+                <>
+                  <p>• CGST ({(numTaxRate / 2)}%): ₹{cgst}</p>
+                  <p>• SGST ({(numTaxRate / 2)}%): ₹{sgst}</p>
+                </>
+              )}
+              {numDiscount > 0 && (
+                <p className="text-emerald-600 font-semibold">• Discount Applied: -₹{numDiscount.toLocaleString('en-IN')}</p>
               )}
             </div>
 
@@ -312,16 +369,22 @@ const PaymentInvoiceModal = ({ isOpen, onClose, invoiceData }) => {
                 <span>Subtotal:</span>
                 <span className="font-mono">₹{basePrice.toLocaleString('en-IN')}</span>
               </div>
-              {taxRate > 0 && (
-                <div className="flex justify-between text-xs text-gray-600">
-                  <span>GST ({taxRate}%):</span>
-                  <span className="font-mono">+₹{gstVal.toLocaleString('en-IN')}</span>
-                </div>
-              )}
-              {discount > 0 && (
+              {numDiscount > 0 && (
                 <div className="flex justify-between text-xs text-emerald-600 font-medium">
                   <span>Discount:</span>
-                  <span className="font-mono">-₹{discount.toLocaleString('en-IN')}</span>
+                  <span className="font-mono">-₹{numDiscount.toLocaleString('en-IN')}</span>
+                </div>
+              )}
+              {numDiscount > 0 && (
+                <div className="flex justify-between text-xs text-gray-700 font-semibold">
+                  <span>Taxable Value:</span>
+                  <span className="font-mono">₹{taxableValue.toLocaleString('en-IN')}</span>
+                </div>
+              )}
+              {numTaxRate > 0 && (
+                <div className="flex justify-between text-xs text-gray-600">
+                  <span>GST ({numTaxRate}%):</span>
+                  <span className="font-mono">+₹{gstVal.toLocaleString('en-IN')}</span>
                 </div>
               )}
               <div className="flex justify-between text-sm font-extrabold text-[#081326] border-t border-gray-300 pt-2 mt-1">
@@ -337,13 +400,13 @@ const PaymentInvoiceModal = ({ isOpen, onClose, invoiceData }) => {
           <div className="mt-8 pt-4 border-t border-dashed border-gray-300 flex flex-col sm:flex-row justify-between items-center text-[10.5px] text-gray-500 gap-3">
             <div>
               <p className="font-bold text-gray-700">Terms & Conditions:</p>
-              <p>1. Payments processed are non-refundable once service is rendered.</p>
-              <p>2. Computer generated tax invoice — does not require physical signature.</p>
+              <p>1. Payments processed are non-refundable once service is initiated or rendered.</p>
+              <p>2. Computer generated invoice — does not require physical signature.</p>
             </div>
             <div className="text-center sm:text-right">
               <div className="inline-flex items-center gap-1 bg-emerald-50 border border-emerald-200 text-emerald-700 px-3 py-1.5 rounded-lg text-xs font-bold">
                 <CheckCircle className="w-3.5 h-3.5" />
-                <span>Verified KTR Receipt</span>
+                <span>{isManualPayment ? 'Verified KTR Direct Receipt' : 'Verified KTR Online Receipt'}</span>
               </div>
             </div>
           </div>

@@ -3,12 +3,12 @@ import * as pdfjsLib from 'pdfjs-dist';
 import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.mjs?url';
 import { 
   Loader2, AlertCircle, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, 
-  ExternalLink, RotateCw, RefreshCw, Move
+  ExternalLink, RotateCw, RefreshCw, Move, Lock, Key, Eye, EyeOff
 } from 'lucide-react';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
-export default function PdfViewer({ url, title = 'PDF Document', className = '' }) {
+export default function PdfViewer({ url, password = '', title = 'PDF Document', className = '' }) {
   const containerRef = useRef(null);
   const canvasRef = useRef(null);
   const renderTaskRef = useRef(null);
@@ -23,13 +23,21 @@ export default function PdfViewer({ url, title = 'PDF Document', className = '' 
   const [rendering, setRendering] = useState(false);
   const [error, setError] = useState(null);
 
+  // Password decryption states
+  const [passwordRequired, setPasswordRequired] = useState(false);
+  const [manualPassword, setManualPassword] = useState('');
+  const [inputPassword, setInputPassword] = useState('');
+  const [passwordError, setPasswordError] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const passwordCallbackRef = useRef(null);
+
   // Drag pan & touch pinch refs
   const [isDragging, setIsDragging] = useState(false);
   const dragStartRef = useRef({ x: 0, y: 0 });
   const initialDistanceRef = useRef(null);
   const initialScaleRef = useRef(1);
 
-  // Reset transform when URL changes
+  // Reset transform when URL or password changes
   useEffect(() => {
     let isCancelled = false;
 
@@ -41,16 +49,33 @@ export default function PdfViewer({ url, title = 'PDF Document', className = '' 
 
     setLoading(true);
     setError(null);
+    setPasswordRequired(false);
+    setPasswordError(false);
     setPdfDoc(null);
     setCurrentPage(1);
     setScale(1.0);
     setRotation(0);
     setPosition({ x: 0, y: 0 });
 
+    const currentPassword = (manualPassword || password || '').trim();
     const loadingTask = pdfjsLib.getDocument({
       url,
+      password: currentPassword || undefined,
       withCredentials: false
     });
+
+    loadingTask.onPassword = (callback, reason) => {
+      passwordCallbackRef.current = callback;
+      if (currentPassword && reason !== 2) {
+        callback(currentPassword);
+        return;
+      }
+      setPasswordRequired(true);
+      if (reason === 2) {
+        setPasswordError(true);
+      }
+      setLoading(false);
+    };
 
     loadingTask.promise
       .then((doc) => {
@@ -58,11 +83,21 @@ export default function PdfViewer({ url, title = 'PDF Document', className = '' 
           setPdfDoc(doc);
           setNumPages(doc.numPages);
           setCurrentPage(1);
+          setPasswordRequired(false);
+          setPasswordError(false);
           setLoading(false);
         }
       })
       .catch((err) => {
         if (!isCancelled) {
+          if (err.name === 'PasswordException') {
+            setPasswordRequired(true);
+            if (err.code === 2) {
+              setPasswordError(true);
+            }
+            setLoading(false);
+            return;
+          }
           console.error('PDF.js loading error:', err);
           setError(err.message || 'Failed to load PDF');
           setLoading(false);
@@ -75,7 +110,19 @@ export default function PdfViewer({ url, title = 'PDF Document', className = '' 
         loadingTask.destroy();
       } catch (e) {}
     };
-  }, [url]);
+  }, [url, password, manualPassword]);
+
+  const handleUnlockPassword = (e) => {
+    e?.preventDefault();
+    if (!inputPassword.trim()) return;
+    setPasswordError(false);
+    setLoading(true);
+    if (passwordCallbackRef.current) {
+      passwordCallbackRef.current(inputPassword.trim());
+    } else {
+      setManualPassword(inputPassword.trim());
+    }
+  };
 
   // Reset position when changing pages or resetting
   const handleReset = (e) => {
@@ -354,7 +401,58 @@ export default function PdfViewer({ url, title = 'PDF Document', className = '' 
           </div>
         )}
 
-        {error && (
+        {passwordRequired && !loading && (
+          <div className="m-auto flex flex-col items-center gap-4 p-6 text-center max-w-sm w-full bg-slate-900/95 border border-amber-400/30 rounded-2xl shadow-2xl backdrop-blur-md z-30">
+            <div className="w-12 h-12 rounded-2xl bg-amber-400/10 text-amber-400 flex items-center justify-center ring-1 ring-amber-400/30">
+              <Lock className="w-6 h-6" />
+            </div>
+            <div>
+              <h4 className="text-sm font-bold text-white mb-1">Password Protected PDF</h4>
+              <p className="text-xs text-gray-400">
+                This document is encrypted. Enter the password below to preview.
+              </p>
+            </div>
+            <form onSubmit={handleUnlockPassword} className="w-full space-y-3">
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={inputPassword}
+                  onChange={(e) => {
+                    setInputPassword(e.target.value);
+                    setPasswordError(false);
+                  }}
+                  placeholder="Enter document password"
+                  className="w-full px-3.5 py-2.5 pr-10 bg-slate-950 border border-white/10 focus:border-amber-400 rounded-xl text-xs text-white placeholder-gray-500 focus:outline-none"
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+
+              {passwordError && (
+                <p className="text-[11px] font-semibold text-rose-400">
+                  Incorrect password. Please try again.
+                </p>
+              )}
+
+              <button
+                type="submit"
+                disabled={!inputPassword.trim()}
+                className="w-full py-2.5 bg-amber-400 hover:bg-amber-300 disabled:opacity-40 text-slate-950 font-bold text-xs rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Key className="w-3.5 h-3.5" />
+                <span>Unlock & View</span>
+              </button>
+            </form>
+          </div>
+        )}
+
+        {error && !passwordRequired && (
           <div className="m-auto flex flex-col items-center gap-3 p-6 text-center max-w-sm">
             <div className="w-12 h-12 rounded-full bg-red-500/10 text-red-400 flex items-center justify-center">
               <AlertCircle className="w-6 h-6" />

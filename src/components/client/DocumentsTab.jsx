@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { 
   Eye, Search, FileText, Upload, Trash2, ShieldAlert, X, Download, 
-  FolderPlus, Folder, ArrowLeft, FolderOpen, Copy, Check, ExternalLink 
+  FolderPlus, Folder, ArrowLeft, FolderOpen, Copy, Check, ExternalLink,
+  ClipboardCheck 
 } from 'lucide-react';
 import { getAssetUrl, getPublicShareDocsUrl, getBankerShareMessage } from '../../utils/url';
 import api from '../../api/axios';
 import { useAuth } from '../../context/AuthContext';
+import SubmissionDetailsModal from './SubmissionDetailsModal';
 
 const WhatsAppIcon = ({ className = "w-3.5 h-3.5" }) => (
   <svg className={className} viewBox="0 0 24 24" fill="currentColor">
@@ -20,6 +22,7 @@ const DocumentsTab = ({ client, onRefresh }) => {
   const deletedDocuments = client?.deletedDocuments || [];
   const customFolders = client?.customFolders || [];
 
+  const [selectedSubmission, setSelectedSubmission] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showCreateFolderModal, setShowCreateFolderModal] = useState(false);
@@ -78,7 +81,7 @@ const DocumentsTab = ({ client, onRefresh }) => {
 
   const handleShareDocOnWhatsApp = (docTitle, fileUrl, targetMobile = null) => {
     const clientName = client?.fullName || 'Client';
-    const link = shareBundleUrl || (fileUrl ? getAssetUrl(fileUrl) : '');
+    const link = getPublicShareDocsUrl(client?._id, [docTitle]) || (fileUrl ? getAssetUrl(fileUrl) : '');
     
     const message = `📁 KTR Consultants – Document File\n\nClient: ${clientName}\nDocument: ${docTitle}\n\n🔗 Review Case & Documents: ${link}`;
     
@@ -140,6 +143,24 @@ const DocumentsTab = ({ client, onRefresh }) => {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+    }
+  };
+
+  const handleOpenSubmissionModal = (doc) => {
+    if (doc?.submissionDetails) {
+      setSelectedSubmission(doc.submissionDetails);
+      return;
+    }
+    const submissions = client?.formSubmissions || [];
+    const matched = submissions.find(s => 
+      s.uploadedFiles && s.uploadedFiles.some(f => f.fileUrl === doc?.file || (doc?.files && doc.files.some(df => df.fileUrl === f.fileUrl)))
+    );
+    if (matched) {
+      setSelectedSubmission(matched);
+      return;
+    }
+    if (submissions.length > 0) {
+      setSelectedSubmission(submissions[0]);
     }
   };
 
@@ -557,6 +578,27 @@ const DocumentsTab = ({ client, onRefresh }) => {
                             >
                               {doc.name}
                             </a>
+                            {(doc.isLinkSubmission || (doc.notes && (doc.notes.toLowerCase().includes('link submission') || doc.notes.toLowerCase().includes('submitted via link')))) ? (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  handleOpenSubmissionModal(doc);
+                                }}
+                                className="block mt-1 text-[10px] font-bold bg-amber-100 hover:bg-amber-200 text-amber-950 border border-amber-300 px-2 py-0.5 rounded-full cursor-pointer transition-all shadow-2xs group text-left"
+                                title="Click to view all form details & questions submitted by client"
+                              >
+                                <span className="inline-flex items-center gap-1">
+                                  <ClipboardCheck className="w-3 h-3 text-[#f59e0b]" />
+                                  <span>Link Submission</span>
+                                  <span className="text-[9px] text-amber-800 underline group-hover:text-amber-950 ml-0.5">View Details &rarr;</span>
+                                </span>
+                              </button>
+                            ) : doc.notes ? (
+                              <p className="text-[10px] text-amber-700 font-medium mt-0.5">
+                                Note: {doc.notes}
+                              </p>
+                            ) : null}
                           </div>
                         </div>
                       </td>
@@ -816,8 +858,17 @@ const DocumentsTab = ({ client, onRefresh }) => {
                 <input 
                   type="file" 
                   multiple
-                  onChange={(e) => setSelectedFiles(Array.from(e.target.files || []))}
-                  required
+                  onChange={(e) => {
+                    const incoming = Array.from(e.target.files || []);
+                    if (incoming.length === 0) return;
+                    setSelectedFiles(prev => {
+                      const existing = new Set(prev.map(f => `${f.name}_${f.size}_${f.lastModified}`));
+                      const fresh = incoming.filter(f => !existing.has(`${f.name}_${f.size}_${f.lastModified}`));
+                      return [...prev, ...fresh];
+                    });
+                    if (e.target) e.target.value = '';
+                  }}
+                  required={selectedFiles.length === 0}
                   className="w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
                 />
               </div>
@@ -837,7 +888,17 @@ const DocumentsTab = ({ client, onRefresh }) => {
                   {selectedFiles.map((f, i) => (
                     <div key={i} className="flex justify-between items-center text-xs bg-white p-2 rounded border border-gray-100">
                       <span className="truncate font-medium text-gray-700 max-w-[240px]">{f.name}</span>
-                      <span className="text-[10px] text-gray-400 shrink-0 font-mono">{(f.size / 1024).toFixed(0)} KB</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-gray-400 shrink-0 font-mono">{(f.size / 1024).toFixed(0)} KB</span>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedFiles(prev => prev.filter((_, idx) => idx !== i))}
+                          className="text-red-500 hover:text-red-700 p-0.5 font-bold cursor-pointer"
+                          title="Remove file"
+                        >
+                          ✕
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1131,6 +1192,13 @@ const DocumentsTab = ({ client, onRefresh }) => {
           </div>
         </div>
       )}
+
+      {/* Submission Details Modal */}
+      <SubmissionDetailsModal
+        isOpen={!!selectedSubmission}
+        onClose={() => setSelectedSubmission(null)}
+        submission={selectedSubmission}
+      />
     </div>
   );
 };

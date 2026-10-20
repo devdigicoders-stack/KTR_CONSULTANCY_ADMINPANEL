@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { 
   AlertCircle, CheckCircle2, Clock, PlusCircle, Check, X, 
-  RotateCcw, Trash2, Calendar, User, FileText, ChevronDown, ChevronUp, Share2, Copy
+  RotateCcw, Trash2, Calendar, User, FileText, ChevronDown, ChevronUp, Share2, Copy,
+  HelpCircle
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../api/axios';
@@ -180,21 +181,36 @@ const PendencyTab = ({ client, onRefresh }) => {
         ) : (
           pendingList.map((item, idx) => {
             const hasDetails = showDetails[item._id];
+            const isBankerQuery = (item.title && item.title.startsWith('Banker Query:')) || (item.addedByName && item.addedByName.includes('Banker'));
 
             return (
               <div 
                 key={item._id || idx}
-                className="bg-white rounded-xl border border-amber-200/90 hover:border-amber-300 p-3.5 shadow-xs flex flex-col gap-2 transition-all"
+                className={`bg-white rounded-xl border p-3.5 shadow-xs flex flex-col gap-2 transition-all ${
+                  isBankerQuery ? 'border-purple-200/90 hover:border-purple-300 ring-1 ring-purple-100' : 'border-amber-200/90 hover:border-amber-300'
+                }`}
               >
                 <div className="flex items-start justify-between gap-2.5">
                   <div className="flex items-start gap-2.5 flex-1">
-                    <div className="w-7 h-7 rounded-lg bg-amber-50 text-amber-600 border border-amber-200 flex items-center justify-center shrink-0 mt-0.5">
-                      <AlertCircle className="w-4 h-4" />
+                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${
+                      isBankerQuery ? 'bg-purple-100 text-purple-700 border border-purple-200' : 'bg-amber-50 text-amber-600 border border-amber-200'
+                    }`}>
+                      {isBankerQuery ? <HelpCircle className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
                     </div>
                     <div className="flex-1">
+                      {isBankerQuery && (
+                        <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-purple-100 text-purple-900 border border-purple-200 flex items-center gap-1">
+                            <span>🏦 Banker Query</span>
+                          </span>
+                          <span className="text-[10px] text-purple-700 font-semibold">
+                            Raised from Banker Document Portal
+                          </span>
+                        </div>
+                      )}
                       <h4 className="text-xs sm:text-sm font-black text-[#081326] leading-snug">{item.title}</h4>
                       {item.description && (
-                        <p className="text-[11px] text-gray-600 font-medium mt-0.5 leading-relaxed">{item.description}</p>
+                        <p className="text-[11px] text-gray-600 font-medium mt-0.5 leading-relaxed whitespace-pre-line">{item.description}</p>
                       )}
                     </div>
                   </div>
@@ -264,30 +280,38 @@ const PendencyTab = ({ client, onRefresh }) => {
 
           {showResolvedSection && (
             <div className="space-y-2 pl-2">
-              {resolvedList.slice().reverse().map((item, idx) => (
-                <div key={item._id || idx} className="bg-white rounded-xl border border-green-100 p-3 shadow-xs flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 truncate">
-                    <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
-                    <span className="text-xs font-bold text-[#081326] truncate">{item.title}</span>
-                    {item.resolutionNotes && (
-                      <span className="text-[10px] text-gray-400 truncate italic">({item.resolutionNotes})</span>
-                    )}
-                  </div>
+              {resolvedList.slice().reverse().map((item, idx) => {
+                const isBankerQuery = (item.title && item.title.startsWith('Banker Query:')) || (item.addedByName && item.addedByName.includes('Banker'));
+                return (
+                  <div key={item._id || idx} className="bg-white rounded-xl border border-green-100 p-3 shadow-xs flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 truncate flex-1">
+                      <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
+                      {isBankerQuery && (
+                        <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-purple-100 text-purple-800 shrink-0">
+                          🏦 Banker Query
+                        </span>
+                      )}
+                      <span className="text-xs font-bold text-[#081326] truncate">{item.title}</span>
+                      {item.resolutionNotes && (
+                        <span className="text-[10px] text-gray-400 truncate italic">({item.resolutionNotes})</span>
+                      )}
+                    </div>
 
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <span className="text-[10px] text-gray-400">
-                      {item.resolvedAt ? new Date(item.resolvedAt).toLocaleDateString('en-IN') : ''}
-                    </span>
-                    <button
-                      onClick={() => handleOpenResolve(item)}
-                      className="px-2 py-0.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded text-[10px] font-bold cursor-pointer"
-                      title="Reopen as pending"
-                    >
-                      Reopen
-                    </button>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className="text-[10px] text-gray-400">
+                        {item.resolvedAt ? new Date(item.resolvedAt).toLocaleDateString('en-IN') : ''}
+                      </span>
+                      <button
+                        onClick={() => handleOpenResolve(item)}
+                        className="px-2 py-0.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded text-[10px] font-bold cursor-pointer"
+                        title="Reopen as pending"
+                      >
+                        Reopen
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

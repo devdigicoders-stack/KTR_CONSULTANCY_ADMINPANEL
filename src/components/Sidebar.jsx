@@ -22,7 +22,10 @@ import {
   FileCheck2,
   FolderTree,
   Layers,
-  CheckCircle2
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  Archive
 } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -39,10 +42,14 @@ const Sidebar = ({ isMobileOpen, onClose }) => {
   const [caQuoteNewCount, setCaQuoteNewCount] = useState(0);
   const [chainDeedNewCount, setChainDeedNewCount] = useState(0);
   const [propAssessNewCount, setPropAssessNewCount] = useState(0);
+  const [isPaymentsOpen, setIsPaymentsOpen] = useState(location.pathname.startsWith('/payments'));
 
-  // Close sidebar on mobile whenever the route changes
+  // Close sidebar on mobile whenever the route changes and auto-open payments if on payment route
   useEffect(() => {
     if (onClose) onClose();
+    if (location.pathname.startsWith('/payments')) {
+      setIsPaymentsOpen(true);
+    }
   }, [location.pathname]);
 
   useEffect(() => {
@@ -142,16 +149,14 @@ const Sidebar = ({ isMobileOpen, onClose }) => {
       title: role === 'admin' ? 'CLIENT & DATA' : 'APPLICATIONS & FORMS',
       items: [
         { name: role === 'admin' ? 'Clients' : 'My Applications', icon: Users, path: '/clients' },
-        { name: 'Template Forms', icon: Layers, path: '/template-forms' },
-        { name: 'Create Form & Link', icon: FileCheck2, path: '/client-forms' },
-        { name: 'Request Documents', icon: FileUp, path: '/doc-requests' },
-        { name: 'Filled Forms', icon: CheckCircle2, path: '/filled-forms' },
+        { name: 'Create Form & Links', icon: FileCheck2, path: '/client-forms' },
         { name: 'Bank Forms & Others', icon: FolderOpen, path: '/bank-forms' },
         { name: `${user?.name ? user.name.split(' ')[0] : 'My'} – Private`, icon: Lock, path: '/my-private-docs' },
         ...(role === 'admin' ? [
           { name: 'All Client Documents', icon: FolderTree, path: '/documents' },
           { name: 'CIBIL / Civil Score', icon: ShieldCheck, path: '/cibil' },
           { name: 'CIBIL Case Submissions', icon: FileText, path: '/cibil-cases' },
+          { name: 'Deleted Clients Backup', icon: Archive, path: '/deleted-clients' },
         ] : [])
       ],
       roles: ['admin', 'staff']
@@ -159,8 +164,16 @@ const Sidebar = ({ isMobileOpen, onClose }) => {
     {
       title: 'PAYMENTS & INVOICES',
       items: [
-        { name: 'Create Payment Link', icon: CreditCard, path: '/payments/create' },
-        { name: 'Invoices & Payments', icon: Receipt, path: '/payments/invoices' },
+        { 
+          name: 'Payments & Invoices', 
+          icon: CreditCard, 
+          path: '/payments/invoices',
+          subItems: [
+            { name: 'Generate Payment Link', icon: CreditCard, path: '/payments/create' },
+            { name: 'Generate Invoice', icon: PlusSquare, path: '/payments/generate-invoice' },
+            { name: 'View Payments & Invoices', icon: Receipt, path: '/payments/invoices' },
+          ]
+        },
       ],
       roles: ['admin', 'staff']
     },
@@ -261,7 +274,67 @@ const Sidebar = ({ isMobileOpen, onClose }) => {
               <h4 className="text-gray-500 text-[10px] font-bold tracking-wider mb-2.5 px-4 uppercase">{group.title}</h4>
               <div className="flex flex-col gap-1">
                 {group.items.map((item, itemIdx) => {
-                  const isActive = location.pathname === item.path;
+                  if (item.subItems) {
+                    const isAnyActive = item.subItems.some(sub => location.pathname === sub.path) || location.pathname.startsWith('/payments');
+
+                    return (
+                      <div key={itemIdx} className="flex flex-col">
+                        <button
+                          type="button"
+                          onClick={() => setIsPaymentsOpen(!isPaymentsOpen)}
+                          className={`flex items-center justify-between px-4 py-2.5 rounded-lg transition-colors text-sm cursor-pointer w-full text-left ${
+                            isAnyActive
+                              ? 'bg-white/10 text-white font-bold'
+                              : 'text-gray-300 hover:bg-white/5 hover:text-white'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <item.icon className={`w-4 h-4 ${isAnyActive ? 'text-[#f59e0b]' : 'text-gray-400'}`} />
+                            <span>{item.name}</span>
+                          </div>
+                          {isPaymentsOpen ? (
+                            <ChevronDown className="w-4 h-4 text-gray-400" />
+                          ) : (
+                            <ChevronRight className="w-4 h-4 text-gray-400" />
+                          )}
+                        </button>
+
+                        {isPaymentsOpen && (
+                          <div className="flex flex-col gap-1 pl-3 pt-1.5 pb-1 border-l-2 border-amber-500/40 ml-6 mt-1 animate-in fade-in duration-200">
+                            {item.subItems.map((sub, subIdx) => {
+                              const isSubActive = location.pathname === sub.path || (
+                                sub.path === '/payments/invoices' && ['/payments', '/payments/invoices'].includes(location.pathname)
+                              ) || (
+                                sub.path === '/payments/create' && ['/payments/create', '/payments/generate-link'].includes(location.pathname)
+                              );
+
+                              return (
+                                <Link
+                                  key={subIdx}
+                                  to={sub.path}
+                                  onClick={handleNavClick}
+                                  className={`flex items-center justify-between px-3 py-2 rounded-lg transition-colors text-xs ${
+                                    isSubActive
+                                      ? 'bg-[#f59e0b] text-[#081326] font-bold shadow-md'
+                                      : 'text-gray-400 hover:bg-white/5 hover:text-white font-medium'
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-2.5">
+                                    <sub.icon className={`w-3.5 h-3.5 ${isSubActive ? 'text-[#081326]' : 'text-gray-400'}`} />
+                                    <span>{sub.name}</span>
+                                  </div>
+                                </Link>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
+
+                  const isActive = location.pathname === item.path || (
+                    item.path === '/client-forms' && ['/client-forms', '/template-forms', '/doc-requests', '/filled-forms'].includes(location.pathname)
+                  );
                   return (
                     <Link 
                       key={itemIdx} 

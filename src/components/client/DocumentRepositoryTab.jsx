@@ -4,15 +4,17 @@ import {
   ExternalLink, Search, PlusCircle, X, Trash2,
   Copy, Check, ArrowUp, ArrowDown, GripVertical,
   CheckSquare, Square, Share2, ChevronLeft, ChevronRight,
-  Layers, ArrowLeft, Edit3, StickyNote, Loader2, Printer
+  Layers, ArrowLeft, Edit3, StickyNote, Loader2, Printer,
+  Lock, Key, EyeOff, ClipboardCheck
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.mjs?url';
-import { getAssetUrl, getPublicShareDocsUrl, getBankerShareMessage } from '../../utils/url';
+import { getAssetUrl, getPublicShareDocsUrl, getBankerShareMessage, getSelectedDocsShareMessage, createBrandedShareLink } from '../../utils/url';
 import api from '../../api/axios';
 import PdfViewer from '../common/PdfViewer';
 import ImageViewer from '../common/ImageViewer';
+import SubmissionDetailsModal from './SubmissionDetailsModal';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
@@ -26,6 +28,7 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
   // View Mode: 'list' (default repository table) | 'continuous' (continuous vertical feed)
   const [viewMode, setViewMode] = useState('list');
   const [activeDocIndex, setActiveDocIndex] = useState(0);
+  const [selectedSubmission, setSelectedSubmission] = useState(null);
   const docRefs = useRef([]);
 
   // Preview File State: { title, files: [{ fileUrl, title, docId, docType }], activeIndex: 0 }
@@ -40,11 +43,17 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
   const [customDocNotes, setCustomDocNotes] = useState('');
   const [selectedFiles, setSelectedFiles] = useState([]);
 
-  // Document Notes State
+  // Document Notes & Passwords State
   const [editingNoteDoc, setEditingNoteDoc] = useState(null);
   const [savingNote, setSavingNote] = useState(false);
   const [copiedNoteKey, setCopiedNoteKey] = useState(null);
   const [localNotesMap, setLocalNotesMap] = useState({});
+  const [localPasswordsMap, setLocalPasswordsMap] = useState({});
+  const [showPasswordInModal, setShowPasswordInModal] = useState(false);
+
+  // Document Rename State
+  const [renamingDoc, setRenamingDoc] = useState(null);
+  const [savingRename, setSavingRename] = useState(false);
 
   // Multi-Select for Batch Sharing
   const [selectedDocIds, setSelectedDocIds] = useState([]);
@@ -62,6 +71,13 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
   const [localOrder, setLocalOrder] = useState(null);
   const [savingOrder, setSavingOrder] = useState(false);
   const [draggedIndex, setDraggedIndex] = useState(null);
+
+  // Individual File Drag & Reorder State within a Category
+  const [draggedFile, setDraggedFile] = useState(null);
+  const [touchFileHoverIndex, setTouchFileHoverIndex] = useState(null);
+  const touchFileStartYRef = useRef(null);
+  const touchFileStartIndexRef = useRef(null);
+  const touchFileGroupRef = useRef(null);
 
   const fileInputRef = useRef(null);
 
@@ -172,6 +188,22 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
     return '';
   };
 
+  // Document Passwords Helper
+  const getPasswordForDoc = (groupKey, cd) => {
+    if (localPasswordsMap[groupKey] !== undefined) return localPasswordsMap[groupKey];
+    if (cd?.password) return cd.password;
+    if (client?.documentPasswords) {
+      if (typeof client.documentPasswords.get === 'function') {
+        const val = client.documentPasswords.get(groupKey);
+        if (val) return val;
+      } else if (typeof client.documentPasswords === 'object') {
+        const val = client.documentPasswords[groupKey];
+        if (val) return val;
+      }
+    }
+    return '';
+  };
+
   const handleCopyDocNote = (noteText, docKey) => {
     if (!noteText) return;
     navigator.clipboard.writeText(noteText);
@@ -184,23 +216,80 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
     if (!client?._id || !docName) return;
     setSavingNote(true);
     const newNote = (editingNoteDoc?.text || '').trim();
+    const newPassword = (editingNoteDoc?.password || '').trim();
     try {
       await api.put(`/clients/${client._id}/document-notes`, {
         docName,
         notes: newNote,
+        password: newPassword,
         docId: doc?.files?.[0]?.docId,
         docType: doc?.docType
       });
 
       setLocalNotesMap(prev => ({ ...prev, [docName]: newNote }));
+      setLocalPasswordsMap(prev => ({ ...prev, [docName]: newPassword }));
       setEditingNoteDoc(null);
-      toast.success('Note saved successfully!');
+      toast.success('Document details saved successfully!');
       if (onRefresh) onRefresh();
     } catch (err) {
       console.error('Save doc note error:', err);
-      toast.error('Failed to save note');
+      toast.error('Failed to save document details');
     } finally {
       setSavingNote(false);
+    }
+  };
+
+  // Custom document title helper
+  const getCustomTitle = (key) => {
+    if (!key) return null;
+    if (client?.documentCustomTitles) {
+      if (typeof client.documentCustomTitles.get === 'function') {
+        const val = client.documentCustomTitles.get(key);
+        if (val) return val;
+      } else if (typeof client.documentCustomTitles === 'object') {
+        const val = client.documentCustomTitles[key];
+        if (val) return val;
+      }
+    }
+    return null;
+  };
+
+  const handleSaveRename = async (e) => {
+    if (e) e.preventDefault();
+    if (!renamingDoc || !client?._id) return;
+    const trimmed = (renamingDoc.newTitle || '').trim();
+    if (!trimmed) {
+      toast.error('Document title cannot be empty.');
+      return;
+    }
+
+    try {
+      setSavingRename(true);
+      const res = await api.put(`/clients/${client._id}/document-title`, {
+        targetType: renamingDoc.targetType,
+        oldTitle: renamingDoc.oldTitle,
+        newTitle: trimmed,
+        docId: renamingDoc.docId,
+        fileUrl: renamingDoc.fileUrl,
+        folderId: renamingDoc.folderId
+      });
+
+      if (res.data.success) {
+        toast.success(
+          renamingDoc.targetType === 'group'
+            ? 'Document category renamed successfully!'
+            : 'File title updated successfully!'
+        );
+        setRenamingDoc(null);
+        if (onRefresh) await onRefresh();
+      } else {
+        toast.error(res.data.message || 'Failed to rename document');
+      }
+    } catch (err) {
+      console.error('Rename document error:', err);
+      toast.error(err.response?.data?.message || err.message || 'Failed to rename document');
+    } finally {
+      setSavingRename(false);
     }
   };
 
@@ -228,20 +317,28 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
     if (!cd.fileUrl || seenUrls.has(cd.fileUrl)) return;
     seenUrls.add(cd.fileUrl);
 
-    const rawName = (cd.name || 'Document').trim();
-    const groupKey = getNormalizedDocName(rawName);
-    const docNotes = getNoteForDoc(groupKey, cd) || getNoteForDoc(rawName, cd);
+    const customFileTitle = getCustomTitle(cd.fileUrl) || (cd._id && getCustomTitle(cd._id.toString())) || cd.fileTitle;
+    const rawFileTitle = customFileTitle || (cd.name || 'Document').trim();
+
+    const isGenericCat = !cd.category || ['Document', 'Case Document', 'General Documents', 'Uploaded File'].includes(cd.category);
+    let groupKey = !isGenericCat ? cd.category.trim() : getNormalizedDocName(cd.name);
+    const customGroup = getCustomTitle(groupKey) || getCustomTitle(cd.category);
+    if (customGroup) groupKey = customGroup;
+
+    const docNotes = getNoteForDoc(groupKey, cd) || getNoteForDoc(rawFileTitle, cd);
+    const docPassword = getPasswordForDoc(groupKey, cd) || getPasswordForDoc(rawFileTitle, cd);
     const docEntry = {
       id: `cd_${cd._id || idx}`,
       docId: cd._id,
       name: groupKey,
-      fileTitle: rawName,
+      fileTitle: rawFileTitle,
       fileUrl: cd.fileUrl,
       docType: cd.docType || 'customDocument',
-      category: cd.category || 'Uploaded File',
+      category: cd.category || groupKey,
       uploadedAt: cd.uploadedAt,
       uploadedByName: cd.uploadedByName,
       notes: docNotes,
+      password: docPassword,
       rawDoc: cd
     };
 
@@ -249,6 +346,9 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
       groupedDocsMap.get(groupKey).files.push(docEntry);
       if (docNotes && !groupedDocsMap.get(groupKey).notes) {
         groupedDocsMap.get(groupKey).notes = docNotes;
+      }
+      if (docPassword && !groupedDocsMap.get(groupKey).password) {
+        groupedDocsMap.get(groupKey).password = docPassword;
       }
     } else {
       groupedDocsMap.set(groupKey, {
@@ -259,6 +359,7 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
         uploadedAt: docEntry.uploadedAt,
         uploadedByName: docEntry.uploadedByName,
         notes: docNotes,
+        password: docPassword,
         files: [docEntry]
       });
     }
@@ -270,26 +371,38 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
       if (!fDoc.fileUrl || seenUrls.has(fDoc.fileUrl)) return;
       seenUrls.add(fDoc.fileUrl);
 
-      const rawName = (fDoc.name || 'Folder Document').trim();
-      const groupKey = getNormalizedDocName(rawName);
-      const docNotes = getNoteForDoc(groupKey, fDoc) || getNoteForDoc(rawName, fDoc);
+      const customFileTitle = getCustomTitle(fDoc.fileUrl) || (fDoc._id && getCustomTitle(fDoc._id.toString())) || fDoc.fileTitle;
+      const rawFileTitle = customFileTitle || (fDoc.name || 'Folder Document').trim();
+
+      const isGenericCat = !fDoc.category || ['Document', 'Case Document', 'General Documents', 'Uploaded File', 'Custom File'].includes(fDoc.category);
+      let groupKey = !isGenericCat ? fDoc.category.trim() : getNormalizedDocName(fDoc.name);
+      const customGroup = getCustomTitle(groupKey) || getCustomTitle(fDoc.category);
+      if (customGroup) groupKey = customGroup;
+
+      const docNotes = getNoteForDoc(groupKey, fDoc) || getNoteForDoc(rawFileTitle, fDoc);
+      const docPassword = getPasswordForDoc(groupKey, fDoc) || getPasswordForDoc(rawFileTitle, fDoc);
       const docEntry = {
         id: `folderdoc_${f._id}_${fDoc._id || fIdx}`,
         docId: fDoc._id,
+        folderId: f._id,
         name: groupKey,
-        fileTitle: rawName,
+        fileTitle: rawFileTitle,
         fileUrl: fDoc.fileUrl,
         docType: 'folderDocument',
         category: `Folder: ${f.folderName || f.name}`,
         uploadedAt: fDoc.uploadedAt,
         uploadedByName: fDoc.uploadedByName,
-        notes: docNotes
+        notes: docNotes,
+        password: docPassword
       };
 
       if (groupedDocsMap.has(groupKey)) {
         groupedDocsMap.get(groupKey).files.push(docEntry);
         if (docNotes && !groupedDocsMap.get(groupKey).notes) {
           groupedDocsMap.get(groupKey).notes = docNotes;
+        }
+        if (docPassword && !groupedDocsMap.get(groupKey).password) {
+          groupedDocsMap.get(groupKey).password = docPassword;
         }
       } else {
         groupedDocsMap.set(groupKey, {
@@ -300,6 +413,7 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
           uploadedAt: docEntry.uploadedAt,
           uploadedByName: docEntry.uploadedByName,
           notes: docNotes,
+          password: docPassword,
           files: [docEntry]
         });
       }
@@ -324,21 +438,31 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
   legacyFixedMap.forEach(item => {
     if (client?.[item.key] && !seenUrls.has(client[item.key])) {
       seenUrls.add(client[item.key]);
-      const groupKey = item.label;
+      const customFileTitle = getCustomTitle(client[item.key]);
+      const customGroup = getCustomTitle(item.label) || getCustomTitle(item.key);
+      const groupKey = customGroup || item.label;
+      const rawFileTitle = customFileTitle || groupKey;
+
       const docNotes = getNoteForDoc(groupKey, null);
+      const docPassword = getPasswordForDoc(groupKey, null);
       const docEntry = {
         id: `legacy_${item.key}`,
         name: groupKey,
+        fileTitle: rawFileTitle,
         fileUrl: client[item.key],
         docType: item.key,
         category: 'Client Document',
-        notes: docNotes
+        notes: docNotes,
+        password: docPassword
       };
 
       if (groupedDocsMap.has(groupKey)) {
         groupedDocsMap.get(groupKey).files.push(docEntry);
         if (docNotes && !groupedDocsMap.get(groupKey).notes) {
           groupedDocsMap.get(groupKey).notes = docNotes;
+        }
+        if (docPassword && !groupedDocsMap.get(groupKey).password) {
+          groupedDocsMap.get(groupKey).password = docPassword;
         }
       } else {
         groupedDocsMap.set(groupKey, {
@@ -347,6 +471,7 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
           docType: docEntry.docType,
           category: docEntry.category,
           notes: docNotes,
+          password: docPassword,
           files: [docEntry]
         });
       }
@@ -357,21 +482,32 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
   (client?.otherDocs || []).forEach((url, idx) => {
     if (!seenUrls.has(url)) {
       seenUrls.add(url);
-      const groupKey = `Document ${idx + 1}`;
+      const baseLabel = `Document ${idx + 1}`;
+      const customFileTitle = getCustomTitle(url);
+      const customGroup = getCustomTitle(baseLabel);
+      const groupKey = customGroup || customFileTitle || baseLabel;
+      const rawFileTitle = customFileTitle || groupKey;
+
       const docNotes = getNoteForDoc(groupKey, null);
+      const docPassword = getPasswordForDoc(groupKey, null);
       const docEntry = {
         id: `other_${idx}`,
         name: groupKey,
+        fileTitle: rawFileTitle,
         fileUrl: url,
         docType: 'other',
         category: 'Client Document',
-        notes: docNotes
+        notes: docNotes,
+        password: docPassword
       };
 
       if (groupedDocsMap.has(groupKey)) {
         groupedDocsMap.get(groupKey).files.push(docEntry);
         if (docNotes && !groupedDocsMap.get(groupKey).notes) {
           groupedDocsMap.get(groupKey).notes = docNotes;
+        }
+        if (docPassword && !groupedDocsMap.get(groupKey).password) {
+          groupedDocsMap.get(groupKey).password = docPassword;
         }
       } else {
         groupedDocsMap.set(groupKey, {
@@ -380,6 +516,7 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
           docType: docEntry.docType,
           category: docEntry.category,
           notes: docNotes,
+          password: docPassword,
           files: [docEntry]
         });
       }
@@ -399,6 +536,25 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
     return 0;
   });
 
+  // Sort files within each document category according to activeOrder
+  sortedDocItems.forEach(doc => {
+    if (doc.files && doc.files.length > 1 && activeOrder.length > 0) {
+      doc.files.sort((fileA, fileB) => {
+        const getFileRank = (f) => {
+          let idx = -1;
+          if (f.fileUrl && (idx = activeOrder.indexOf(f.fileUrl)) !== -1) return idx;
+          if (f.docId && (idx = activeOrder.indexOf(f.docId.toString())) !== -1) return idx;
+          if (f.id && (idx = activeOrder.indexOf(f.id)) !== -1) return idx;
+          return 999999;
+        };
+        const rankA = getFileRank(fileA);
+        const rankB = getFileRank(fileB);
+        if (rankA !== rankB) return rankA - rankB;
+        return 0;
+      });
+    }
+  });
+
   // Reorder Handler (Arrows)
   const handleMoveItem = async (index, direction) => {
     const targetIndex = direction === 'up' ? index - 1 : index + 1;
@@ -414,9 +570,11 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
       item.name,
       item.docType,
       `legacy_${item.docType}`,
-      ...item.files.map(f => f.id),
-      ...item.files.map(f => f.docId).filter(Boolean),
-      ...item.files.map(f => f.fileUrl).filter(Boolean)
+      ...item.files.flatMap(f => [
+        f.fileUrl,
+        f.docId ? f.docId.toString() : null,
+        f.id
+      ].filter(Boolean))
     ]);
     setLocalOrder(newOrderKeys);
 
@@ -461,9 +619,11 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
       item.name,
       item.docType,
       `legacy_${item.docType}`,
-      ...item.files.map(f => f.id),
-      ...item.files.map(f => f.docId).filter(Boolean),
-      ...item.files.map(f => f.fileUrl).filter(Boolean)
+      ...item.files.flatMap(f => [
+        f.fileUrl,
+        f.docId ? f.docId.toString() : null,
+        f.id
+      ].filter(Boolean))
     ]);
     setLocalOrder(newOrderKeys);
     setDraggedIndex(null);
@@ -522,6 +682,125 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
 
     if (fromIdx !== null && toIdx !== null && fromIdx !== toIdx) {
       await executeReorder(fromIdx, toIdx);
+    }
+  };
+
+  // ----------------------------------------------------
+  // INDIVIDUAL FILE REORDERING WITHIN CATEGORY
+  // ----------------------------------------------------
+  const handleMoveFileItem = async (groupName, fileIndex, direction) => {
+    const targetFileIndex = direction === 'up' ? fileIndex - 1 : fileIndex + 1;
+    const cat = sortedDocItems.find(item => item.name === groupName || item.id === groupName);
+    if (!cat || !cat.files || targetFileIndex < 0 || targetFileIndex >= cat.files.length) return;
+
+    await executeFileReorder(groupName, fileIndex, targetFileIndex);
+  };
+
+  const handleFileDragStart = (e, groupName, fileIndex, fileObj) => {
+    e.stopPropagation();
+    setDraggedFile({
+      groupName,
+      fileIndex,
+      fileKey: fileObj.fileUrl || fileObj.docId || fileObj.id
+    });
+    e.dataTransfer.effectAllowed = 'move';
+    try {
+      e.dataTransfer.setData('text/plain', JSON.stringify({ groupName, fileIndex }));
+    } catch (err) {}
+  };
+
+  const handleFileDragOver = (e, groupName, fileIndex) => {
+    if (!draggedFile || draggedFile.groupName !== groupName) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleFileDrop = async (e, groupName, targetFileIndex) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!draggedFile || draggedFile.groupName !== groupName) return;
+    await executeFileReorder(groupName, draggedFile.fileIndex, targetFileIndex);
+    setDraggedFile(null);
+  };
+
+  const handleFileDragEnd = (e) => {
+    e.stopPropagation();
+    setDraggedFile(null);
+    setTouchFileHoverIndex(null);
+  };
+
+  const handleFileTouchStart = (e, groupName, fileIndex) => {
+    e.stopPropagation();
+    touchFileGroupRef.current = groupName;
+    touchFileStartIndexRef.current = fileIndex;
+    setDraggedFile({ groupName, fileIndex });
+    setTouchFileHoverIndex(fileIndex);
+    touchFileStartYRef.current = e.touches[0].clientY;
+  };
+
+  const handleFileTouchMove = (e) => {
+    if (!touchFileGroupRef.current || touchFileStartIndexRef.current === null) return;
+    const touch = e.touches[0];
+    const deltaY = touch.clientY - touchFileStartYRef.current;
+    const rowHeight = 44;
+    const indexOffset = Math.round(deltaY / rowHeight);
+    const cat = sortedDocItems.find(item => item.name === touchFileGroupRef.current || item.id === touchFileGroupRef.current);
+    const maxIdx = cat ? cat.files.length - 1 : 0;
+    const newIdx = Math.max(0, Math.min(maxIdx, touchFileStartIndexRef.current + indexOffset));
+    setTouchFileHoverIndex(newIdx);
+  };
+
+  const handleFileTouchEnd = async (e) => {
+    e.stopPropagation();
+    if (touchFileGroupRef.current && touchFileStartIndexRef.current !== null && touchFileHoverIndex !== null) {
+      if (touchFileStartIndexRef.current !== touchFileHoverIndex) {
+        await executeFileReorder(touchFileGroupRef.current, touchFileStartIndexRef.current, touchFileHoverIndex);
+      }
+    }
+    touchFileGroupRef.current = null;
+    touchFileStartIndexRef.current = null;
+    touchFileStartYRef.current = null;
+    setDraggedFile(null);
+    setTouchFileHoverIndex(null);
+  };
+
+  const executeFileReorder = async (groupName, fromIndex, toIndex) => {
+    if (fromIndex === null || toIndex === null || fromIndex === toIndex) return;
+    const cat = sortedDocItems.find(item => item.name === groupName || item.id === groupName);
+    if (!cat || !cat.files) return;
+
+    // Reorder files within this category locally
+    const updatedFiles = [...cat.files];
+    const [movedFile] = updatedFiles.splice(fromIndex, 1);
+    updatedFiles.splice(toIndex, 0, movedFile);
+    cat.files = updatedFiles;
+
+    // Generate comprehensive documentOrder list
+    const newOrderKeys = sortedDocItems.flatMap(item => [
+      item.id,
+      item.name,
+      item.docType,
+      `legacy_${item.docType}`,
+      ...item.files.flatMap(f => [
+        f.fileUrl,
+        f.docId ? f.docId.toString() : null,
+        f.id
+      ].filter(Boolean))
+    ]);
+
+    setLocalOrder(newOrderKeys);
+
+    try {
+      setSavingOrder(true);
+      await api.put(`/clients/${client._id}/document-order`, {
+        documentOrder: newOrderKeys
+      });
+      if (onRefresh) onRefresh();
+    } catch (err) {
+      console.error('Failed to save file order:', err);
+    } finally {
+      setSavingOrder(false);
     }
   };
 
@@ -899,7 +1178,10 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
 
   // Share portal link via chooser / WhatsApp
   const handleSharePortalLink = async () => {
-    const text = getBankerShareMessage(client, shareBundleUrl);
+    toast.loading('Generating branded link...', { id: 'portal-share' });
+    const shortUrl = await createBrandedShareLink(client?._id, null, api);
+    toast.dismiss('portal-share');
+    const text = getBankerShareMessage(client, shortUrl);
     const clientName = client?.fullName || 'Client';
 
     if (navigator.share) {
@@ -1031,7 +1313,8 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
     }
 
     toast.dismiss('share-file-toast');
-    const text = `📁 KTR Consultants – Document File\n\nClient: ${client?.fullName || 'Client'}\nDocument: ${docItem.name}\n\n🔗 Review Case & Documents: ${shareBundleUrl}`;
+    const docUrl = getPublicShareDocsUrl(client?._id, [docItem]);
+    const text = `📁 KTR Consultants – Document File\n\nClient: ${client?.fullName || 'Client'}\nDocument: ${docItem.name}\n\n🔗 Review Case & Documents: ${docUrl}`;
 
     if (navigator.share) {
       try {
@@ -1190,6 +1473,25 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
     setShowUploadModal(true);
   };
 
+  // Helper to open form link submission modal
+  const handleOpenSubmissionModal = (doc) => {
+    if (doc?.submissionDetails) {
+      setSelectedSubmission(doc.submissionDetails);
+      return;
+    }
+    const submissions = client?.formSubmissions || [];
+    const matched = submissions.find(s => 
+      s.uploadedFiles && s.uploadedFiles.some(f => f.fileUrl === doc?.file || (doc?.files && doc.files.some(df => df.fileUrl === f.fileUrl)))
+    );
+    if (matched) {
+      setSelectedSubmission(matched);
+      return;
+    }
+    if (submissions.length > 0) {
+      setSelectedSubmission(submissions[0]);
+    }
+  };
+
   const activeDoc = sortedDocItems[activeDocIndex] || sortedDocItems[0];
 
   return (
@@ -1278,17 +1580,53 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
                           <h3 className="text-xs sm:text-sm font-black text-[#081326] truncate">
                             {doc.name}
                           </h3>
+                          <button
+                            type="button"
+                            onClick={() => setRenamingDoc({
+                              targetType: 'group',
+                              oldTitle: doc.name,
+                              newTitle: doc.name,
+                              fileUrl: doc.files?.[0]?.fileUrl,
+                              doc
+                            })}
+                            className="p-1 text-gray-400 hover:text-amber-600 hover:bg-amber-100/80 rounded cursor-pointer transition-colors"
+                            title="Rename Document / Category"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
                           {doc.files?.length > 1 && (
                             <span className="text-[10px] font-bold bg-blue-50 text-blue-700 px-1.5 py-0.2 rounded border border-blue-200">
                               {doc.files.length} Files
                             </span>
                           )}
                         </div>
-                        {doc.notes && (
-                          <p className="text-[11px] text-amber-700 font-medium truncate mt-0.5">
-                            Note: {doc.notes}
-                          </p>
-                        )}
+                        <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                          {(doc.isLinkSubmission || (doc.notes && (doc.notes.toLowerCase().includes('link submission') || doc.notes.toLowerCase().includes('submitted via link')))) ? (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenSubmissionModal(doc);
+                              }}
+                              className="inline-flex items-center gap-1 text-[10px] font-bold bg-amber-100 hover:bg-amber-200 text-amber-950 border border-amber-300 px-2 py-0.5 rounded-full cursor-pointer transition-all shadow-2xs group"
+                              title="Click to view all form details & questions submitted by client"
+                            >
+                              <ClipboardCheck className="w-3 h-3 text-[#f59e0b]" />
+                              <span>Link Submission</span>
+                              <span className="text-[9px] text-amber-800 underline group-hover:text-amber-950 ml-0.5">View Details &rarr;</span>
+                            </button>
+                          ) : doc.notes ? (
+                            <p className="text-[11px] text-amber-700 font-medium truncate">
+                              Note: {doc.notes}
+                            </p>
+                          ) : null}
+                          {doc.password && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-amber-50 text-amber-900 border border-amber-200/80 px-2 py-0.5 rounded-full">
+                              <Lock className="w-2.5 h-2.5 text-amber-600" />
+                              <span>Password Protected (Auto-unlocked)</span>
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
 
@@ -1339,6 +1677,22 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
                               {fIdx + 1}
                             </span>
                             <span className="truncate">{fileObj.fileTitle || fileObj.name || `${doc.name} (File ${fIdx + 1})`}</span>
+                            <button
+                              type="button"
+                              onClick={() => setRenamingDoc({
+                                targetType: 'file',
+                                oldTitle: fileObj.fileTitle || fileObj.name || `File ${fIdx + 1}`,
+                                newTitle: fileObj.fileTitle || fileObj.name || `File ${fIdx + 1}`,
+                                docId: fileObj.docId,
+                                fileUrl: fileObj.fileUrl,
+                                folderId: fileObj.folderId,
+                                groupName: doc.name
+                              })}
+                              className="p-1 text-gray-400 hover:text-amber-600 hover:bg-amber-100 rounded cursor-pointer transition-colors shrink-0"
+                              title="Rename this file"
+                            >
+                              <Edit3 className="w-3 h-3" />
+                            </button>
                           </span>
                           <div className="flex items-center gap-2 shrink-0">
                             {docFiles.length > 1 && (
@@ -1366,6 +1720,7 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
                           <div className="w-full bg-white rounded-xl overflow-hidden border border-gray-200">
                             <PdfViewer
                               url={getAssetUrl(fileObj.fileUrl)}
+                              password={fileObj.password || doc.password || getPasswordForDoc(doc.name)}
                               title={fileObj.fileTitle || fileObj.name || doc.name}
                             />
                           </div>
@@ -1489,6 +1844,59 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
             </div>
           </div>
 
+          {/* Link Submissions Banner (Internal Staff Visibility Only) */}
+          {client?.formSubmissions && client.formSubmissions.length > 0 && (
+            <div className="bg-gradient-to-r from-amber-50/90 via-white to-amber-50/60 rounded-3xl p-4 sm:p-5 border border-amber-200/90 shadow-xs space-y-3">
+              <div className="flex items-center justify-between flex-wrap gap-2 border-b border-amber-200/60 pb-2.5">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
+                  <h4 className="text-xs font-black text-[#081326] flex items-center gap-1.5 uppercase tracking-wide">
+                    <ClipboardCheck className="w-4 h-4 text-[#f59e0b]" />
+                    <span>Client Form Link Submissions ({client.formSubmissions.length})</span>
+                  </h4>
+                  <span className="text-[10px] font-bold bg-[#081326] text-amber-400 px-2 py-0.5 rounded-md">
+                    Internal Staff Only
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {client.formSubmissions.map((sub, sIdx) => (
+                  <div key={sIdx} className="p-3.5 bg-white rounded-2xl border border-amber-200/90 shadow-2xs flex flex-col justify-between gap-3">
+                    <div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-black text-xs text-[#081326]">{sub.formTitle || 'Data Form'}</span>
+                        <span className="text-[10px] font-bold bg-amber-100 text-amber-950 border border-amber-300 px-2 py-0.5 rounded-full">
+                          Link Submission
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-gray-400 font-medium mt-1">
+                        Submitted: {new Date(sub.submittedAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })}
+                      </p>
+                      {sub.summaryText && (
+                        <p className="text-[11px] text-gray-700 font-medium mt-2 line-clamp-2 bg-amber-50/40 p-2 rounded-xl border border-amber-100">
+                          {sub.summaryText}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-between pt-2 border-t border-gray-100 text-xs">
+                      <span className="text-[11px] text-amber-800 font-bold">
+                        {sub.uploadedFiles?.length || 0} File(s) • {sub.submittedFields?.length || 0} Field(s)
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedSubmission(sub)}
+                        className="px-3 py-1 bg-[#081326] hover:bg-[#11203d] text-white text-[11px] font-bold rounded-lg transition-colors flex items-center gap-1 cursor-pointer shadow-2xs"
+                      >
+                        <Eye className="w-3 h-3 text-[#f59e0b]" /> View Details
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Multi-Select Toolbar (If 1 or more documents selected) */}
           {selectedDocIds.length > 0 && (
             <div className="bg-amber-500/10 border border-amber-300/80 rounded-2xl p-3 px-5 flex flex-wrap items-center justify-between gap-3 animate-in fade-in duration-150">
@@ -1498,6 +1906,22 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
               </div>
 
               <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const selected = sortedDocItems.filter(item => selectedDocIds.includes(item.id));
+                    setShareDocModal({
+                      isBulk: true,
+                      docs: selected,
+                      name: `${selected.length} Selected Document${selected.length > 1 ? 's' : ''}`
+                    });
+                  }}
+                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs cursor-pointer transition-all"
+                >
+                  <Share2 className="w-3.5 h-3.5" />
+                  <span>Share Selected ({selectedDocIds.length})</span>
+                </button>
+
                 <button
                   type="button"
                   onClick={handleBulkDownload}
@@ -1673,6 +2097,23 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
                             <h4 className="text-xs sm:text-sm font-black text-[#081326] hover:text-amber-600 transition-colors truncate">
                               {doc.name}
                             </h4>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setRenamingDoc({
+                                  targetType: 'group',
+                                  oldTitle: doc.name,
+                                  newTitle: doc.name,
+                                  fileUrl: primaryUrl,
+                                  doc
+                                });
+                              }}
+                              className="p-1 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded cursor-pointer transition-colors"
+                              title="Rename Document / Category Title"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                            </button>
                             {fileCount > 1 && (
                               <button
                                 type="button"
@@ -1690,12 +2131,34 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
                             </span>
                           </div>
 
-                          {/* Notes snippet */}
-                          {doc.notes && (
-                            <p className="text-[11px] text-amber-700 font-medium truncate mt-0.5">
-                              Note: {doc.notes}
-                            </p>
-                          )}
+                          {/* Notes & Password snippets */}
+                          <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                            {(doc.isLinkSubmission || (doc.notes && (doc.notes.toLowerCase().includes('link submission') || doc.notes.toLowerCase().includes('submitted via link')))) ? (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOpenSubmissionModal(doc);
+                                }}
+                                className="inline-flex items-center gap-1 text-[10px] font-bold bg-amber-100 hover:bg-amber-200 text-amber-950 border border-amber-300 px-2 py-0.5 rounded-full cursor-pointer transition-all shadow-2xs group"
+                                title="Click to view all form details & questions submitted by client"
+                              >
+                                <ClipboardCheck className="w-3 h-3 text-[#f59e0b]" />
+                                <span>Link Submission</span>
+                                <span className="text-[9px] text-amber-800 underline group-hover:text-amber-950 ml-0.5">View Details &rarr;</span>
+                              </button>
+                            ) : doc.notes ? (
+                              <p className="text-[11px] text-amber-700 font-medium truncate max-w-xs">
+                                Note: {doc.notes}
+                              </p>
+                            ) : null}
+                            {doc.password && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-amber-50 text-amber-900 border border-amber-200/80 px-2 py-0.5 rounded-full">
+                                <Lock className="w-2.5 h-2.5 text-amber-600" />
+                                <span>Password Protected (Auto-unlocked)</span>
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
 
@@ -1748,9 +2211,18 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
 
                         <button
                           type="button"
-                          onClick={() => setEditingNoteDoc({ docName: doc.name, text: doc.notes || '', doc })}
-                          className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-gray-100 rounded-lg cursor-pointer transition-colors"
-                          title="Add / Edit Note"
+                          onClick={() => setEditingNoteDoc({
+                            docName: doc.name,
+                            text: doc.notes || '',
+                            password: doc.password || '',
+                            doc
+                          })}
+                          className={`p-1.5 rounded-lg cursor-pointer transition-colors ${
+                            doc.notes || doc.password
+                              ? 'text-amber-600 bg-amber-50 hover:bg-amber-100 ring-1 ring-amber-300/50'
+                              : 'text-gray-400 hover:text-amber-600 hover:bg-gray-100'
+                          }`}
+                          title="Add / Edit Note & Password"
                         >
                           <StickyNote className="w-4 h-4" />
                         </button>
@@ -1779,49 +2251,117 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
                             + Add File to {doc.name}
                           </button>
                         </div>
-                        {doc.files.map((fileObj, fIdx) => (
-                          <div
-                            key={fIdx}
-                            className="flex items-center justify-between p-2 bg-white rounded-xl border border-gray-200 text-xs hover:border-gray-300"
-                          >
-                            <div className="flex items-center gap-2 min-w-0 flex-1">
-                              <span className="w-5 h-5 rounded-md bg-gray-100 text-gray-600 font-mono font-bold flex items-center justify-center text-[10px] shrink-0">
-                                {fIdx + 1}
-                              </span>
-                              <span className="font-medium text-gray-800 truncate">
-                                {fileObj.fileTitle || fileObj.name || `File ${fIdx + 1}`}
-                              </span>
-                            </div>
+                        {doc.files.map((fileObj, fIdx) => {
+                          const isFirstFile = fIdx === 0;
+                          const isLastFile = fIdx === doc.files.length - 1;
+                          const isBeingDragged = draggedFile?.groupName === doc.name && draggedFile?.fileIndex === fIdx;
+                          const isTouchHovered = touchFileGroupRef.current === doc.name && touchFileHoverIndex === fIdx;
 
-                            <div className="flex items-center gap-1 shrink-0">
-                              <a
-                                href={getAssetUrl(fileObj.fileUrl)}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="p-1 text-blue-600 hover:bg-blue-50 rounded"
-                                title="Open File"
-                              >
-                                <ExternalLink className="w-3.5 h-3.5" />
-                              </a>
-                              <button
-                                type="button"
-                                onClick={(e) => handleDownloadFile(e, fileObj.fileUrl, `${doc.name}_file_${fIdx + 1}`)}
-                                className="p-1 text-gray-600 hover:bg-gray-100 rounded"
-                                title="Download File"
-                              >
-                                <Download className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteSingleFileInGroup(fileObj, doc.name)}
-                                className="p-1 text-red-500 hover:bg-red-50 rounded"
-                                title="Delete Single File"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
+                          return (
+                            <div
+                              key={fileObj.id || fileObj.fileUrl || fIdx}
+                              draggable={doc.files.length > 1}
+                              onDragStart={(e) => handleFileDragStart(e, doc.name, fIdx, fileObj)}
+                              onDragOver={(e) => handleFileDragOver(e, doc.name, fIdx)}
+                              onDrop={(e) => handleFileDrop(e, doc.name, fIdx)}
+                              onDragEnd={handleFileDragEnd}
+                              className={`flex items-center justify-between p-2 rounded-xl border text-xs transition-all ${
+                                isBeingDragged || isTouchHovered
+                                  ? 'bg-amber-100/70 border-amber-400 ring-2 ring-amber-300 shadow-sm'
+                                  : 'bg-white border-gray-200 hover:border-gray-300'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
+                                {/* Drag Handle & Move Up/Down buttons for files */}
+                                {doc.files.length > 1 && (
+                                  <div className="flex items-center gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                                    <button
+                                      type="button"
+                                      onTouchStart={(e) => handleFileTouchStart(e, doc.name, fIdx)}
+                                      onTouchMove={handleFileTouchMove}
+                                      onTouchEnd={handleFileTouchEnd}
+                                      className="p-1 text-gray-400 hover:text-amber-600 hover:bg-gray-100 rounded cursor-grab active:cursor-grabbing touch-none select-none transition-colors"
+                                      title="Drag to rearrange file order"
+                                    >
+                                      <GripVertical className="w-3.5 h-3.5" />
+                                    </button>
+                                    <div className="flex flex-col">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleMoveFileItem(doc.name, fIdx, 'up')}
+                                        disabled={isFirstFile || savingOrder}
+                                        className="p-0.5 text-gray-400 hover:text-[#081326] disabled:opacity-20 transition-colors cursor-pointer"
+                                        title="Move File Up"
+                                      >
+                                        <ArrowUp className="w-2.5 h-2.5" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleMoveFileItem(doc.name, fIdx, 'down')}
+                                        disabled={isLastFile || savingOrder}
+                                        className="p-0.5 text-gray-400 hover:text-[#081326] disabled:opacity-20 transition-colors cursor-pointer"
+                                        title="Move File Down"
+                                      >
+                                        <ArrowDown className="w-2.5 h-2.5" />
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+
+                                <span className="w-5 h-5 rounded-md bg-gray-100 text-gray-600 font-mono font-bold flex items-center justify-center text-[10px] shrink-0">
+                                  {fIdx + 1}
+                                </span>
+                                <span className="font-medium text-gray-800 truncate">
+                                  {fileObj.fileTitle || fileObj.name || `File ${fIdx + 1}`}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => setRenamingDoc({
+                                    targetType: 'file',
+                                    oldTitle: fileObj.fileTitle || fileObj.name || `File ${fIdx + 1}`,
+                                    newTitle: fileObj.fileTitle || fileObj.name || `File ${fIdx + 1}`,
+                                    docId: fileObj.docId,
+                                    fileUrl: fileObj.fileUrl,
+                                    folderId: fileObj.folderId,
+                                    groupName: doc.name
+                                  })}
+                                  className="p-1 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded cursor-pointer transition-colors shrink-0"
+                                  title="Rename this file"
+                                >
+                                  <Edit3 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+
+                              <div className="flex items-center gap-1 shrink-0">
+                                <a
+                                  href={getAssetUrl(fileObj.fileUrl)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                                  title="Open File"
+                                >
+                                  <ExternalLink className="w-3.5 h-3.5" />
+                                </a>
+                                <button
+                                  type="button"
+                                  onClick={(e) => handleDownloadFile(e, fileObj.fileUrl, `${doc.name}_file_${fIdx + 1}`)}
+                                  className="p-1 text-gray-600 hover:bg-gray-100 rounded"
+                                  title="Download File"
+                                >
+                                  <Download className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteSingleFileInGroup(fileObj, doc.name)}
+                                  className="p-1 text-red-500 hover:bg-red-50 rounded"
+                                  title="Delete Single File"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -1930,6 +2470,7 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
                 <PdfViewer
                   key={activePreviewFile.fileUrl}
                   url={getAssetUrl(activePreviewFile.fileUrl)}
+                  password={activePreviewFile.password || previewData.password || getPasswordForDoc(previewData.title)}
                   title={previewData.title}
                   className="w-full h-full"
                 />
@@ -2093,7 +2634,90 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
       )}
 
       {/* ---------------------------------------------------- */}
-      {/* 3. EDIT DOCUMENT NOTE MODAL */}
+      {/* 2.5 RENAME DOCUMENT / CATEGORY / FILE MODAL */}
+      {/* ---------------------------------------------------- */}
+      {renamingDoc && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#081326]/60 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="relative bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center font-bold">
+                  <Edit3 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-[#081326]">
+                    {renamingDoc.targetType === 'group' ? 'Rename Document Category' : 'Rename Document File'}
+                  </h3>
+                  <p className="text-[11px] text-gray-400 font-medium">
+                    {renamingDoc.targetType === 'group'
+                      ? 'Update category title across all views'
+                      : `Update title for this file in "${renamingDoc.groupName || 'Document'}"`}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRenamingDoc(null)}
+                className="text-gray-400 hover:text-black p-1 rounded-lg cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveRename} className="space-y-4 pt-3">
+              <div className="bg-amber-50/70 border border-amber-200/60 rounded-xl p-2.5">
+                <span className="text-[10px] font-bold text-amber-800 uppercase tracking-wider block">
+                  Current Name
+                </span>
+                <span className="text-xs font-black text-[#081326] break-all">
+                  {renamingDoc.oldTitle}
+                </span>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-gray-700 flex items-center justify-between">
+                  <span>New Document Title <span className="text-red-500">*</span></span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  autoFocus
+                  value={renamingDoc.newTitle || ''}
+                  onChange={(e) => setRenamingDoc(prev => ({ ...prev, newTitle: e.target.value }))}
+                  placeholder="Enter corrected or renamed document title..."
+                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold outline-none focus:border-amber-500 focus:bg-white transition-all text-[#081326]"
+                />
+                <p className="text-[10px] text-gray-500">
+                  {renamingDoc.targetType === 'group'
+                    ? 'Changes the category header and preserves all uploaded files, notes, and passwords.'
+                    : 'Renames this individual file without re-uploading or altering other files in the group.'}
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setRenamingDoc(null)}
+                  className="px-4 py-2 text-xs font-bold text-gray-600 hover:bg-gray-100 rounded-xl cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingRename || !renamingDoc.newTitle?.trim()}
+                  className="px-5 py-2 bg-[#081326] text-white hover:bg-[#11203d] rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-40"
+                >
+                  {savingRename && <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />}
+                  <span>{savingRename ? 'Saving...' : 'Save Title'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ---------------------------------------------------- */}
+      {/* 3. EDIT DOCUMENT NOTE & PASSWORD MODAL */}
       {/* ---------------------------------------------------- */}
       {editingNoteDoc && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#081326]/60 backdrop-blur-sm animate-in fade-in duration-150">
@@ -2101,7 +2725,7 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
             <div className="flex items-center justify-between pb-3 border-b border-gray-100">
               <div className="flex items-center gap-2">
                 <StickyNote className="w-5 h-5 text-amber-600" />
-                <h3 className="text-sm font-black text-[#081326]">Document Note</h3>
+                <h3 className="text-sm font-black text-[#081326]">Document Notes & Password</h3>
               </div>
               <button
                 type="button"
@@ -2113,18 +2737,58 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
             </div>
 
             <div className="space-y-4 pt-3">
-              <p className="text-xs text-gray-500 font-medium">
-                Add special instructions, verification notes, or status for <strong>{editingNoteDoc.docName}</strong>:
-              </p>
-              <textarea
-                rows={4}
-                value={editingNoteDoc.text}
-                onChange={(e) => setEditingNoteDoc(prev => ({ ...prev, text: e.target.value }))}
-                placeholder="Enter note details..."
-                className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-amber-500 focus:bg-white transition-all resize-none"
-              />
+              <div className="bg-amber-50/70 border border-amber-200/60 rounded-xl p-2.5">
+                <span className="text-[10px] font-bold text-amber-800 uppercase tracking-wider block">Document</span>
+                <span className="text-xs font-black text-[#081326]">{editingNoteDoc.docName}</span>
+              </div>
 
-              <div className="flex justify-end gap-2">
+              {/* Option 1: General Notes / Remarks */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-gray-700 flex items-center justify-between">
+                  <span>General Notes / Remarks</span>
+                  <span className="text-[10px] font-normal text-gray-400">Optional</span>
+                </label>
+                <textarea
+                  rows={3}
+                  value={editingNoteDoc.text || ''}
+                  onChange={(e) => setEditingNoteDoc(prev => ({ ...prev, text: e.target.value }))}
+                  placeholder="Enter remarks, verification notes, or status..."
+                  className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-amber-500 focus:bg-white transition-all resize-none"
+                />
+              </div>
+
+              {/* Option 2: Document Password */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-gray-700 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <Lock className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Document Password</span>
+                  </span>
+                  <span className="text-[10px] font-normal text-amber-600 font-medium">Auto-unlocks for staff & bankers</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPasswordInModal ? 'text' : 'password'}
+                    value={editingNoteDoc.password || ''}
+                    onChange={(e) => setEditingNoteDoc(prev => ({ ...prev, password: e.target.value }))}
+                    placeholder="e.g., DOB (DDMMYYYY) or PAN"
+                    className="w-full px-3.5 py-2.5 pr-10 bg-gray-50 border border-gray-200 focus:border-amber-500 focus:bg-white rounded-xl text-xs font-medium text-gray-900 outline-none transition-all"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPasswordInModal(!showPasswordInModal)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 p-0.5"
+                    title={showPasswordInModal ? 'Hide password' : 'Show password'}
+                  >
+                    {showPasswordInModal ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                <p className="text-[10px] text-gray-500 leading-normal">
+                  💡 If this PDF is password-protected, the system will automatically decrypt and display it during single preview and continuous viewing without prompting for password.
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
                 <button
                   type="button"
                   onClick={() => setEditingNoteDoc(null)}
@@ -2139,7 +2803,7 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
                   className="px-5 py-2 bg-[#081326] text-white hover:bg-[#11203d] rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-40"
                 >
                   {savingNote && <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />}
-                  <span>{savingNote ? 'Saving...' : 'Save Note'}</span>
+                  <span>{savingNote ? 'Saving...' : 'Save Changes'}</span>
                 </button>
               </div>
             </div>
@@ -2159,7 +2823,9 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
           <div className="relative bg-white w-full max-w-sm rounded-t-3xl sm:rounded-2xl p-5 shadow-2xl space-y-4 animate-in slide-in-from-bottom duration-200">
             <div className="flex items-center justify-between pb-3 border-b border-gray-100">
               <div className="min-w-0 flex-1">
-                <h3 className="text-sm font-black text-[#081326] truncate">Share {shareDocModal.name}</h3>
+                <h3 className="text-sm font-black text-[#081326] truncate">
+                  {shareDocModal.isBulk ? shareDocModal.name : `Share ${shareDocModal.name}`}
+                </h3>
                 <p className="text-[11px] text-gray-400">Select sharing method</p>
               </div>
               <button
@@ -2174,12 +2840,18 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
             <div className="space-y-2.5">
               <button
                 type="button"
-                onClick={() => handleShareSingleDocFile(shareDocModal)}
+                onClick={() => {
+                  if (shareDocModal.isBulk) {
+                    handleShareAllFiles(shareDocModal.docs);
+                  } else {
+                    handleShareSingleDocFile(shareDocModal);
+                  }
+                }}
                 className="w-full p-3.5 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl text-left text-xs font-black text-amber-950 flex items-center gap-3 transition-colors cursor-pointer"
               >
                 <FileText className="w-5 h-5 text-amber-600 shrink-0" />
                 <div>
-                  <p className="text-xs font-black text-[#081326]">Share File</p>
+                  <p className="text-xs font-black text-[#081326]">{shareDocModal.isBulk ? 'Share File(s)' : 'Share File'}</p>
                   <p className="text-[10px] text-gray-500 font-medium">Send actual document file (WhatsApp, Email, Drive...)</p>
                 </div>
               </button>
@@ -2187,7 +2859,11 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
               <button
                 type="button"
                 onClick={async () => {
-                  const text = getBankerShareMessage(client, shareBundleUrl);
+                  const targetDocs = shareDocModal.isBulk ? shareDocModal.docs : [shareDocModal];
+                  toast.loading('Generating short link...', { id: 'modal-share' });
+                  const shortUrl = await createBrandedShareLink(client?._id, targetDocs, api);
+                  toast.dismiss('modal-share');
+                  const text = getSelectedDocsShareMessage(client, targetDocs, shortUrl);
                   if (navigator.share) {
                     try {
                       await navigator.share({
@@ -2261,7 +2937,10 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
               <button
                 type="button"
                 onClick={async () => {
-                  const text = getBankerShareMessage(client, shareBundleUrl);
+                  toast.loading('Generating short link...', { id: 'top-share' });
+                  const shortUrl = await createBrandedShareLink(client?._id, null, api);
+                  toast.dismiss('top-share');
+                  const text = getBankerShareMessage(client, shortUrl);
                   if (navigator.share) {
                     try {
                       await navigator.share({
@@ -2320,6 +2999,13 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
           </div>
         </div>
       )}
+
+      {/* Submission Details Modal */}
+      <SubmissionDetailsModal
+        isOpen={!!selectedSubmission}
+        onClose={() => setSelectedSubmission(null)}
+        submission={selectedSubmission}
+      />
 
     </div>
   );
