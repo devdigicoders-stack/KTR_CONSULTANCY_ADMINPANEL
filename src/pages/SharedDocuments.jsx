@@ -507,8 +507,8 @@ const SharedDocuments = () => {
   // 3. Legacy Fixed Standard Fields
   const legacyFixedMap = [
     { key: 'propertyDocUrl', label: 'Property Papers', icon: Building },
-    { key: 'bankStatementUrl', label: 'Bank Statements', icon: FileSpreadsheet },
-    { key: 'salarySlipUrl', label: 'Salary Slips', icon: FileText },
+    { key: 'bankStatementUrl', label: 'Bank Statement', icon: FileSpreadsheet },
+    { key: 'salarySlipUrl', label: 'Salary Slip', icon: FileText },
     { key: 'itrUrl', label: 'Income Tax Return (ITR)', icon: FileText },
     { key: 'panCardUrl', label: 'PAN Card', icon: FileText },
     { key: 'aadhaarUrl', label: 'Aadhaar Card', icon: FileText },
@@ -607,19 +607,50 @@ const SharedDocuments = () => {
 
   const allAvailableDocs = Array.from(groupedDocsMap.values());
 
+  const GENERIC_TYPES = new Set(['customDocument', 'folderDocument', 'other', 'otherDocs', 'customFolderDoc', 'legacy_customDocument', 'legacy_folderDocument', 'legacy_other', 'legacy_otherDocs']);
+
   // Respect exact sort order
   const docOrder = data?.documentOrder || [];
   const baseSortedDocs = [...allAvailableDocs].sort((a, b) => {
     if (docOrder.length === 0) return 0;
     const findIndex = (item) => {
-      return docOrder.findIndex(key => 
-        key === item.id ||
-        key === item.groupId ||
-        key === item.title ||
-        key === item.name ||
-        key === item.docType ||
-        (item.files && item.files.some(f => f.id === key || f.fileUrl === key || f.name === key))
-      );
+      return docOrder.findIndex(key => {
+        if (!key) return false;
+        // Never match non-unique generic types against docOrder
+        if (GENERIC_TYPES.has(key)) return false;
+
+        // Use smart unified token matcher first
+        if (matchesDocToken(item, key)) return true;
+
+        // Exact ID & Group ID match
+        if (key === item.id || key === item.groupId) return true;
+
+        // Exact Title & Name match
+        if (item.title && key === item.title) return true;
+        if (item.name && key === item.name) return true;
+        if (item.title && key.toLowerCase() === item.title.toLowerCase()) return true;
+        if (item.name && key.toLowerCase() === item.name.toLowerCase()) return true;
+
+        // Only match unique legacy docTypes (e.g. panCardUrl, aadhaarUrl, salarySlipUrl)
+        if (item.docType && !GENERIC_TYPES.has(item.docType)) {
+          if (key === item.docType || key === `legacy_${item.docType}`) return true;
+        }
+
+        // Match against files inside this document group
+        if (Array.isArray(item.files) && item.files.length > 0) {
+          return item.files.some(f => {
+            if (!f) return false;
+            if (f.id && f.id === key) return true;
+            if (f.fileUrl && f.fileUrl === key) return true;
+            if (f.docId && String(f.docId) === key) return true;
+            if (f.docId && `cd_${f.docId}` === key) return true;
+            if (f.fileTitle && (f.fileTitle === key || f.fileTitle.toLowerCase() === key.toLowerCase())) return true;
+            if (f.name && (f.name === key || f.name.toLowerCase() === key.toLowerCase())) return true;
+            return false;
+          });
+        }
+        return false;
+      });
     };
 
     const indexA = findIndex(a);
@@ -637,7 +668,10 @@ const SharedDocuments = () => {
         const getFileRank = (f) => {
           let idx = -1;
           if (f.fileUrl && (idx = docOrder.indexOf(f.fileUrl)) !== -1) return idx;
+          if (f.docId && (idx = docOrder.indexOf(String(f.docId))) !== -1) return idx;
+          if (f.docId && (idx = docOrder.indexOf(`cd_${f.docId}`)) !== -1) return idx;
           if (f.id && (idx = docOrder.indexOf(f.id)) !== -1) return idx;
+          if (f.fileTitle && (idx = docOrder.indexOf(f.fileTitle)) !== -1) return idx;
           if (f.name && (idx = docOrder.indexOf(f.name)) !== -1) return idx;
           return 999999;
         };

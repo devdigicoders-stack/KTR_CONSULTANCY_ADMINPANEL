@@ -5,7 +5,7 @@ import {
   Copy, Check, ArrowUp, ArrowDown, GripVertical,
   CheckSquare, Square, Share2, ChevronLeft, ChevronRight,
   Layers, ArrowLeft, Edit3, StickyNote, Loader2, Printer,
-  Lock, Key, EyeOff, ClipboardCheck
+  Lock, Key, EyeOff, ClipboardCheck, MoreVertical, Plus
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import * as pdfjsLib from 'pdfjs-dist';
@@ -29,6 +29,7 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
   const [viewMode, setViewMode] = useState('list');
   const [activeDocIndex, setActiveDocIndex] = useState(0);
   const [selectedSubmission, setSelectedSubmission] = useState(null);
+  const [openActionMenuId, setOpenActionMenuId] = useState(null);
   const docRefs = useRef([]);
 
   // Preview File State: { title, files: [{ fileUrl, title, docId, docType }], activeIndex: 0 }
@@ -112,6 +113,57 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
       setViewMode('list');
     }
   }, []);
+
+  // Close 3-dot dropdown menu on outside click
+  useEffect(() => {
+    const handleOutsideClick = () => setOpenActionMenuId(null);
+    window.addEventListener('click', handleOutsideClick);
+    return () => window.removeEventListener('click', handleOutsideClick);
+  }, []);
+
+  // Track active visible document on continuous scroll so header title & #X/Total updates in real time
+  useEffect(() => {
+    if (viewMode !== 'continuous') return;
+
+    let ticking = false;
+    const handleScroll = () => {
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          const headerOffset = 130;
+          let currentVisible = 0;
+
+          for (let i = 0; i < sortedDocItems.length; i++) {
+            const el = docRefs.current[i] || document.getElementById(`staff-doc-section-${i}`);
+            if (el) {
+              const rect = el.getBoundingClientRect();
+              if (rect.top <= headerOffset + 80 && rect.bottom > headerOffset) {
+                currentVisible = i;
+                break;
+              } else if (rect.top > headerOffset + 80) {
+                break;
+              } else {
+                currentVisible = i;
+              }
+            }
+          }
+
+          setActiveDocIndex(currentVisible);
+          ticking = false;
+        });
+        ticking = true;
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    const t1 = setTimeout(handleScroll, 150);
+    const t2 = setTimeout(handleScroll, 500);
+
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, [viewMode, sortedDocItems.length]);
 
   const closePreview = useCallback(() => {
     if (window.history.state?.ktrPreviewModal) {
@@ -525,11 +577,47 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
 
   const rawDocs = Array.from(groupedDocsMap.values());
 
+  const GENERIC_TYPES = ['customDocument', 'folderDocument', 'other', 'otherDocs', 'customFolderDoc', 'legacy_customDocument', 'legacy_folderDocument', 'legacy_other', 'legacy_otherDocs'];
+
+  const buildOrderKeys = (items) => {
+    return items.flatMap(item => [
+      item.id,
+      item.name,
+      ...(item.docType && !GENERIC_TYPES.includes(item.docType) ? [item.docType, `legacy_${item.docType}`] : []),
+      ...item.files.flatMap(f => [
+        f.fileUrl,
+        f.docId ? f.docId.toString() : null,
+        f.docId ? `cd_${f.docId}` : null,
+        f.id,
+        f.fileTitle,
+        f.name
+      ].filter(Boolean))
+    ]);
+  };
+
   // Sort by saved serial order
   const activeOrder = localOrder || client?.documentOrder || [];
   const sortedDocItems = [...rawDocs].sort((a, b) => {
-    const indexA = activeOrder.findIndex(key => key === a.id || key === a.name || a.files.some(f => f.id === key || f.docId === key || f.fileUrl === key));
-    const indexB = activeOrder.findIndex(key => key === b.id || key === b.name || b.files.some(f => f.id === key || f.docId === key || f.fileUrl === key));
+    const getDocIndex = (item) => {
+      return activeOrder.findIndex(key => {
+        if (!key || GENERIC_TYPES.includes(key)) return false;
+        if (key === item.id || key === item.name) return true;
+        if (item.docType && !GENERIC_TYPES.includes(item.docType)) {
+          if (key === item.docType || key === `legacy_${item.docType}`) return true;
+        }
+        if (item.files && item.files.some(f => 
+          f.id === key || 
+          f.fileUrl === key || 
+          (f.docId && String(f.docId) === key) ||
+          (f.docId && `cd_${f.docId}` === key) ||
+          f.fileTitle === key ||
+          f.name === key
+        )) return true;
+        return false;
+      });
+    };
+    const indexA = getDocIndex(a);
+    const indexB = getDocIndex(b);
     if (indexA !== -1 && indexB !== -1) return indexA - indexB;
     if (indexA !== -1) return -1;
     if (indexB !== -1) return 1;
@@ -544,7 +632,10 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
           let idx = -1;
           if (f.fileUrl && (idx = activeOrder.indexOf(f.fileUrl)) !== -1) return idx;
           if (f.docId && (idx = activeOrder.indexOf(f.docId.toString())) !== -1) return idx;
+          if (f.docId && (idx = activeOrder.indexOf(`cd_${f.docId}`)) !== -1) return idx;
           if (f.id && (idx = activeOrder.indexOf(f.id)) !== -1) return idx;
+          if (f.fileTitle && (idx = activeOrder.indexOf(f.fileTitle)) !== -1) return idx;
+          if (f.name && (idx = activeOrder.indexOf(f.name)) !== -1) return idx;
           return 999999;
         };
         const rankA = getFileRank(fileA);
@@ -565,17 +656,7 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
     newItems[index] = newItems[targetIndex];
     newItems[targetIndex] = temp;
 
-    const newOrderKeys = newItems.flatMap(item => [
-      item.id,
-      item.name,
-      item.docType,
-      `legacy_${item.docType}`,
-      ...item.files.flatMap(f => [
-        f.fileUrl,
-        f.docId ? f.docId.toString() : null,
-        f.id
-      ].filter(Boolean))
-    ]);
+    const newOrderKeys = buildOrderKeys(newItems);
     setLocalOrder(newOrderKeys);
 
     try {
@@ -614,17 +695,7 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
     newItems.splice(fromIndex, 1);
     newItems.splice(toIndex, 0, draggedItem);
 
-    const newOrderKeys = newItems.flatMap(item => [
-      item.id,
-      item.name,
-      item.docType,
-      `legacy_${item.docType}`,
-      ...item.files.flatMap(f => [
-        f.fileUrl,
-        f.docId ? f.docId.toString() : null,
-        f.id
-      ].filter(Boolean))
-    ]);
+    const newOrderKeys = buildOrderKeys(newItems);
     setLocalOrder(newOrderKeys);
     setDraggedIndex(null);
     setTouchHoverIndex(null);
@@ -777,17 +848,7 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
     cat.files = updatedFiles;
 
     // Generate comprehensive documentOrder list
-    const newOrderKeys = sortedDocItems.flatMap(item => [
-      item.id,
-      item.name,
-      item.docType,
-      `legacy_${item.docType}`,
-      ...item.files.flatMap(f => [
-        f.fileUrl,
-        f.docId ? f.docId.toString() : null,
-        f.id
-      ].filter(Boolean))
-    ]);
+    const newOrderKeys = buildOrderKeys(sortedDocItems);
 
     setLocalOrder(newOrderKeys);
 
@@ -861,6 +922,10 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
       const fresh = incoming.filter(f => !existing.has(`${f.name}_${f.size}_${f.lastModified}`));
       return [...prev, ...fresh];
     });
+
+    if (e.target) {
+      e.target.value = '';
+    }
   };
 
   const handleRemoveSelectedFile = (idx) => {
@@ -2162,79 +2227,149 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
                         </div>
                       </div>
 
-                      {/* Right: Quick Action Buttons (Add more files, Eye, Share, Print, Download, Note, Delete) */}
-                      <div className="flex items-center gap-1 shrink-0 w-full sm:w-auto justify-end pt-2 sm:pt-0 border-t sm:border-t-0 border-gray-100">
-                        <button
-                          type="button"
-                          onClick={() => openUploadForExistingCategory(doc.name)}
-                          className="p-1.5 text-amber-700 hover:bg-amber-50 rounded-lg cursor-pointer transition-colors"
-                          title="Add more files to this category"
-                        >
-                          <PlusCircle className="w-4 h-4 text-amber-600" />
-                        </button>
-
+                      {/* Right: Sleek Banker-Style Compact Controls (Chevron & 3-Dot Action Menu) */}
+                      <div className="flex items-center gap-1 shrink-0 relative" onClick={(e) => e.stopPropagation()}>
                         <button
                           type="button"
                           onClick={() => openContinuousView(index)}
-                          className="p-1.5 text-gray-600 hover:text-amber-600 hover:bg-gray-100 rounded-lg cursor-pointer transition-colors"
-                          title="Preview Document"
+                          className="p-1.5 text-gray-400 hover:text-[#081326] hover:bg-gray-100 rounded-lg cursor-pointer transition-colors"
+                          title="View Document"
                         >
-                          <Eye className="w-4 h-4" />
+                          <ChevronRight className="w-5 h-5" />
                         </button>
 
                         <button
                           type="button"
-                          onClick={() => setShareDocModal(doc)}
-                          className="p-1.5 text-gray-600 hover:text-blue-600 hover:bg-gray-100 rounded-lg cursor-pointer transition-colors"
-                          title="Share Document (File / Link)"
-                        >
-                          <Share2 className="w-4 h-4" />
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => handleSmartPrint([doc], `${doc.name} - ${client?.fullName || 'Client'}`)}
-                          className="p-1.5 text-gray-600 hover:text-purple-600 hover:bg-gray-100 rounded-lg cursor-pointer transition-colors"
-                          title="Smart Print Document"
-                        >
-                          <Printer className="w-4 h-4" />
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={(e) => handleDownloadFile(e, primaryUrl, doc.name)}
-                          className="p-1.5 text-gray-600 hover:text-emerald-600 hover:bg-gray-100 rounded-lg cursor-pointer transition-colors"
-                          title="Download File"
-                        >
-                          <Download className="w-4 h-4" />
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => setEditingNoteDoc({
-                            docName: doc.name,
-                            text: doc.notes || '',
-                            password: doc.password || '',
-                            doc
-                          })}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setOpenActionMenuId(openActionMenuId === (doc.id || index) ? null : (doc.id || index));
+                          }}
                           className={`p-1.5 rounded-lg cursor-pointer transition-colors ${
-                            doc.notes || doc.password
-                              ? 'text-amber-600 bg-amber-50 hover:bg-amber-100 ring-1 ring-amber-300/50'
-                              : 'text-gray-400 hover:text-amber-600 hover:bg-gray-100'
+                            openActionMenuId === (doc.id || index)
+                              ? 'bg-amber-100 text-[#081326]'
+                              : 'text-gray-400 hover:text-[#081326] hover:bg-gray-100'
                           }`}
-                          title="Add / Edit Note & Password"
+                          title="More Actions"
                         >
-                          <StickyNote className="w-4 h-4" />
+                          <MoreVertical className="w-4 h-4" />
                         </button>
 
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteGroup(doc)}
-                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg cursor-pointer transition-colors"
-                          title="Delete Category"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        {/* 3-Dot Dropdown Menu */}
+                        {openActionMenuId === (doc.id || index) && (
+                          <div 
+                            className="absolute right-0 top-full mt-1 w-52 bg-white rounded-xl shadow-xl border border-gray-100 py-1.5 z-30 animate-in fade-in zoom-in-95 duration-100 text-xs font-bold text-gray-700"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setOpenActionMenuId(null);
+                                openContinuousView(index);
+                              }}
+                              className="w-full px-3 py-2 text-left hover:bg-amber-50 hover:text-amber-800 flex items-center gap-2.5 transition-colors cursor-pointer"
+                            >
+                              <Eye className="w-3.5 h-3.5 text-blue-600" />
+                              <span>View / Preview</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setOpenActionMenuId(null);
+                                openUploadForExistingCategory(doc.name);
+                              }}
+                              className="w-full px-3 py-2 text-left hover:bg-amber-50 hover:text-amber-800 flex items-center gap-2.5 transition-colors cursor-pointer"
+                            >
+                              <PlusCircle className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>Add More Files</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setOpenActionMenuId(null);
+                                setShareDocModal(doc);
+                              }}
+                              className="w-full px-3 py-2 text-left hover:bg-amber-50 hover:text-amber-800 flex items-center gap-2.5 transition-colors cursor-pointer"
+                            >
+                              <Share2 className="w-3.5 h-3.5 text-indigo-600" />
+                              <span>Share Document</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setOpenActionMenuId(null);
+                                handleSmartPrint([doc], `${doc.name} - ${client?.fullName || 'Client'}`);
+                              }}
+                              className="w-full px-3 py-2 text-left hover:bg-amber-50 hover:text-amber-800 flex items-center gap-2.5 transition-colors cursor-pointer"
+                            >
+                              <Printer className="w-3.5 h-3.5 text-purple-600" />
+                              <span>Smart Print</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                setOpenActionMenuId(null);
+                                handleDownloadFile(e, primaryUrl, doc.name);
+                              }}
+                              className="w-full px-3 py-2 text-left hover:bg-amber-50 hover:text-amber-800 flex items-center gap-2.5 transition-colors cursor-pointer"
+                            >
+                              <Download className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>Download File</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setOpenActionMenuId(null);
+                                setEditingNoteDoc({
+                                  docName: doc.name,
+                                  text: doc.notes || '',
+                                  password: doc.password || '',
+                                  doc
+                                });
+                              }}
+                              className="w-full px-3 py-2 text-left hover:bg-amber-50 hover:text-amber-800 flex items-center gap-2.5 transition-colors cursor-pointer"
+                            >
+                              <StickyNote className="w-3.5 h-3.5 text-amber-600" />
+                              <span>Edit Note / Password</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setOpenActionMenuId(null);
+                                setRenamingDoc({
+                                  targetType: 'group',
+                                  oldTitle: doc.name,
+                                  newTitle: doc.name,
+                                  fileUrl: primaryUrl,
+                                  doc
+                                });
+                              }}
+                              className="w-full px-3 py-2 text-left hover:bg-amber-50 hover:text-amber-800 flex items-center gap-2.5 transition-colors cursor-pointer"
+                            >
+                              <Edit3 className="w-3.5 h-3.5 text-gray-600" />
+                              <span>Rename Category</span>
+                            </button>
+
+                            <div className="my-1 border-t border-gray-100"></div>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setOpenActionMenuId(null);
+                                handleDeleteGroup(doc);
+                              }}
+                              className="w-full px-3 py-2 text-left text-red-600 hover:bg-red-50 flex items-center gap-2.5 transition-colors cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5 text-red-600" />
+                              <span>Delete Document</span>
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -2608,6 +2743,13 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
                       </button>
                     </div>
                   ))}
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-full py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer border border-amber-200 mt-2"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Add More Files
+                  </button>
                 </div>
               )}
 

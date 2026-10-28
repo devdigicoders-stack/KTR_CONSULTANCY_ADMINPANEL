@@ -25,7 +25,8 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronRight,
-  Archive
+  Archive,
+  BookOpen
 } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -149,6 +150,7 @@ const Sidebar = ({ isMobileOpen, onClose }) => {
       title: role === 'admin' ? 'CLIENT & DATA' : 'APPLICATIONS & FORMS',
       items: [
         { name: role === 'admin' ? 'Clients' : 'My Applications', icon: Users, path: '/clients' },
+        { name: 'Case Studies', icon: BookOpen, path: '/case-studies' },
         { name: 'Create Form & Links', icon: FileCheck2, path: '/client-forms' },
         { name: 'Bank Forms & Others', icon: FolderOpen, path: '/bank-forms' },
         { name: `${user?.name ? user.name.split(' ')[0] : 'My'} – Private`, icon: Lock, path: '/my-private-docs' },

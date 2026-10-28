@@ -2,10 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Users, UserCheck, UserMinus, FileWarning, Search, Eye, EyeOff, X, RefreshCcw, Download, 
-  CheckCircle, Trash2, Edit, AlertTriangle, History, Clock, Phone, Mail, FileText, 
+  CheckCircle, Trash2, Edit, Edit3, AlertTriangle, History, Clock, Phone, Mail, FileText, 
   Briefcase, IndianRupee, FileCheck, AlertCircle, CheckCircle2, Upload, FileUp, Folder, UserPlus,
   Share2, Copy, Check, ChevronDown, ChevronUp, ArrowRight, Lock, Plus, Tag, Calendar, CreditCard, ShieldCheck,
-  GripVertical, ArrowUp, ArrowDown, Archive, BarChart2, StickyNote
+  GripVertical, ArrowUp, ArrowDown, Archive, BarChart2, StickyNote, MoreVertical, ChevronRight
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../api/axios';
@@ -45,8 +45,10 @@ export const getStatusBadgeStyle = (status) => {
     case 'Rejected':
       return 'text-red-800 bg-red-50 border-red-200';
     case 'Pending':
-    default:
       return 'text-orange-800 bg-orange-50 border-orange-200';
+    default:
+      // Custom Staff Status style: prominent purple badge with clean border
+      return 'text-purple-900 bg-purple-50 border-purple-300 shadow-2xs';
   }
 };
 
@@ -69,8 +71,9 @@ export const getStatusDotColor = (status) => {
     case 'Rejected':
       return 'bg-red-500';
     case 'Pending':
-    default:
       return 'bg-orange-500';
+    default:
+      return 'bg-purple-600';
   }
 };
 
@@ -84,31 +87,177 @@ const StatusBadge = ({ status, isDoc }) => {
   );
 };
 
-const StatusSelectDropdown = ({ client, onChange, isUpdating }) => {
+export const StatusSelectDropdown = ({ client, onChange, isUpdating, className = '' }) => {
+  const [showCustomModal, setShowCustomModal] = useState(false);
+  const [customInput, setCustomInput] = useState('');
   const currentStatus = client?.status || 'Documents Pending';
+  const isCustom = !CASE_STATUS_OPTIONS.includes(currentStatus);
+
+  const handleSelectChange = (e) => {
+    const val = e.target.value;
+    if (val === '__custom__') {
+      setCustomInput(isCustom ? currentStatus : '');
+      setShowCustomModal(true);
+    } else {
+      onChange(client._id, val);
+    }
+  };
+
+  const handleSaveCustom = (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    const trimmed = customInput.trim();
+    if (!trimmed) {
+      toast.error('Please enter a custom status');
+      return;
+    }
+    onChange(client._id, trimmed);
+    setShowCustomModal(false);
+  };
+
+  const QUICK_SUGGESTIONS = [
+    'Login in Bank',
+    'Valuation in Progress',
+    'Legal Search Pending',
+    'Credit Query Awaited',
+    'Sanction Letter Awaited',
+    'Disbursement in Progress',
+    'Cheque Handover Pending'
+  ];
 
   return (
-    <div className="relative inline-block text-left" onClick={(e) => e.stopPropagation()}>
-      <select
-        value={currentStatus}
-        onChange={(e) => onChange(client._id, e.target.value)}
-        disabled={isUpdating}
-        title="Click to select and update case status"
-        className={`appearance-none text-[11px] font-bold px-2.5 py-1.5 pr-6 rounded-lg border cursor-pointer outline-none transition-all shadow-xs ${getStatusBadgeStyle(currentStatus)} ${isUpdating ? 'opacity-50 pointer-events-none' : 'hover:brightness-95'}`}
-      >
-        {!CASE_STATUS_OPTIONS.includes(currentStatus) && (
-          <option value={currentStatus} className="bg-white text-gray-800 font-bold">
-            {currentStatus}
+    <>
+      <div className={`relative inline-block text-left ${className}`} onClick={(e) => e.stopPropagation()}>
+        <select
+          value={isCustom ? '__current_custom__' : currentStatus}
+          onChange={handleSelectChange}
+          disabled={isUpdating}
+          title="Click to select or write custom status"
+          className={`appearance-none text-[11px] font-bold px-2.5 py-1.5 pr-6 rounded-lg border cursor-pointer outline-none transition-all shadow-xs ${getStatusBadgeStyle(currentStatus)} ${isUpdating ? 'opacity-50 pointer-events-none' : 'hover:brightness-95'}`}
+        >
+          {/* Active Custom Status */}
+          {isCustom && (
+            <option value="__current_custom__" className="bg-purple-50 text-purple-950 font-black">
+              ★ {currentStatus} (Custom)
+            </option>
+          )}
+
+          {/* Predefined Standard Options */}
+          {CASE_STATUS_OPTIONS.map((opt) => (
+            <option key={opt} value={opt} className="bg-white text-gray-800 font-bold">
+              {opt}
+            </option>
+          ))}
+
+          {/* Option for Staff to Type Custom Status */}
+          <option value="__custom__" className="bg-amber-100 text-amber-950 font-black">
+            ✏️ + Custom Status (Write your own)...
           </option>
-        )}
-        {CASE_STATUS_OPTIONS.map((opt) => (
-          <option key={opt} value={opt} className="bg-white text-gray-800 font-bold">
-            {opt}
-          </option>
-        ))}
-      </select>
-      <ChevronDown className="w-3 h-3 text-gray-500 absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-    </div>
+        </select>
+        <ChevronDown className="w-3 h-3 text-gray-500 absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+      </div>
+
+      {/* Modal Dialog for Writing Custom Status */}
+      {showCustomModal && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#081326]/60 backdrop-blur-xs animate-in fade-in duration-150"
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowCustomModal(false);
+          }}
+        >
+          <div 
+            className="bg-white rounded-2xl shadow-2xl border border-gray-100 w-full max-w-md p-5 sm:p-6 animate-in zoom-in-95 duration-150 text-left"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-gray-100 mb-4">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-700 flex items-center justify-center">
+                  <Edit3 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm sm:text-base font-black text-[#081326]">Write Custom Status</h3>
+                  <p className="text-[11px] text-gray-500 font-medium truncate max-w-[240px]">
+                    {client?.fullName || 'Client Case'}
+                  </p>
+                </div>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setShowCustomModal(false)}
+                className="w-7 h-7 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveCustom} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1.5">
+                  Custom Status Text
+                </label>
+                <input
+                  type="text"
+                  autoFocus
+                  maxLength={60}
+                  value={customInput}
+                  onChange={(e) => setCustomInput(e.target.value)}
+                  placeholder="e.g. Login in HDFC / Valuation Pending"
+                  className="w-full px-3.5 py-2.5 text-xs font-bold text-[#081326] bg-gray-50 focus:bg-white border border-gray-200 focus:border-purple-600 rounded-xl outline-none transition-all shadow-2xs"
+                />
+                <div className="flex justify-between items-center text-[10px] text-gray-400 mt-1">
+                  <span>Enter the exact status for this client</span>
+                  <span>{customInput.length}/60</span>
+                </div>
+              </div>
+
+              {/* Quick Suggestion Chips */}
+              <div>
+                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">
+                  Quick Suggestions:
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {QUICK_SUGGESTIONS.map(s => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => setCustomInput(s)}
+                      className={`text-[10px] font-bold px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
+                        customInput === s
+                          ? 'bg-purple-100 text-purple-950 border-purple-400 shadow-2xs'
+                          : 'bg-gray-50 hover:bg-gray-100 text-gray-700 border-gray-200'
+                      }`}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setShowCustomModal(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-gray-600 hover:bg-gray-100 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!customInput.trim()}
+                  className="px-5 py-2 rounded-xl text-xs font-black text-white bg-purple-700 hover:bg-purple-800 disabled:opacity-50 transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  <span>Save Status</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </>
   );
 };
 
@@ -154,6 +303,7 @@ const Clients = () => {
   const [clientToDelete, setClientToDelete] = useState(null);
   const [deleteReason, setDeleteReason] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
+  const [openActionMenuId, setOpenActionMenuId] = useState(null);
 
   // Quick Edit Contact Info Modal State
   const [showEditContactModal, setShowEditContactModal] = useState(false);
@@ -189,6 +339,34 @@ const Clients = () => {
   const [showPendencyModal, setShowPendencyModal] = useState(false);
   const [pendencyModalClient, setPendencyModalClient] = useState(null);
   const [copiedPendencyId, setCopiedPendencyId] = useState(null);
+
+  // Close 3-dot dropdown menu on outside click
+  useEffect(() => {
+    const handleCloseMenu = () => setOpenActionMenuId(null);
+    window.addEventListener('click', handleCloseMenu);
+    return () => window.removeEventListener('click', handleCloseMenu);
+  }, []);
+
+  // Phone back button closes open drawer / modals first
+  useEffect(() => {
+    const handlePopState = () => {
+      if (showPreview) {
+        setShowPreview(false);
+      } else if (showUploadModal) {
+        setShowUploadModal(false);
+      } else if (showDeleteModal) {
+        setShowDeleteModal(false);
+      } else if (showEditContactModal) {
+        setShowEditContactModal(false);
+      } else if (showApplicantsModal) {
+        setShowApplicantsModal(false);
+      } else if (showPendencyModal) {
+        setShowPendencyModal(false);
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [showPreview, showUploadModal, showDeleteModal, showEditContactModal, showApplicantsModal, showPendencyModal]);
 
   const handleOpenPendencyModal = (client, e) => {
     if (e) e.stopPropagation();
@@ -975,14 +1153,17 @@ const Clients = () => {
                     onClick={() => openPreview(client)}
                     className={`p-3 bg-white hover:bg-gray-50/90 active:bg-gray-100 transition-colors flex flex-col gap-2 cursor-pointer ${client.isHidden ? 'bg-gray-50/70 opacity-90' : ''}`}
                   >
-                    {/* Row 1: Name + Age + Status Dropdown (Banker Portal Style) */}
+                    {/* Row 1: Serial + Name + Age + Status Dropdown (Banker Portal Style) */}
                     <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <span className="px-2 py-0.5 bg-[#081326] text-amber-400 rounded-md text-[10px] font-mono font-bold shrink-0">
+                          #{index + 1}
+                        </span>
                         <h4 className="text-sm font-black text-[#081326] truncate tracking-tight">
                           {client.fullName}
                         </h4>
                         {clientAge && (
-                          <span className="text-[11px] font-bold text-amber-800 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200/80 shrink-0">
+                          <span className="text-[10px] font-bold text-amber-800 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200/80 shrink-0">
                             ({clientAge} Yrs)
                           </span>
                         )}
@@ -1082,93 +1263,125 @@ const Clients = () => {
                         )}
                       </div>
 
-                      {/* Essential Actions: View Case, Add Docs, Co-Applicant, Move Up/Down, Hide/Unhide, Delete */}
-                      <div className="flex items-center gap-1 ml-auto" onClick={(e) => e.stopPropagation()}>
-                        {/* 1. View Case Button */}
+                      {/* Compact Banker-Style Controls: Chevron & 3-Dot Menu */}
+                      <div className="flex items-center gap-1 ml-auto relative" onClick={(e) => e.stopPropagation()}>
                         <button
                           type="button"
                           onClick={() => openPreview(client)}
-                          className="px-2 py-1 bg-[#081326] text-white hover:bg-[#11203d] rounded-lg text-[10px] font-bold flex items-center gap-1 transition-colors shadow-2xs cursor-pointer"
-                          title="View Client Case Review"
+                          className="p-1.5 text-gray-400 hover:text-[#081326] hover:bg-gray-100 rounded-lg cursor-pointer"
+                          title="Review Case"
                         >
-                          <Eye className="w-3 h-3 text-amber-400" />
-                          <span>View</span>
+                          <ChevronRight className="w-5 h-5" />
                         </button>
 
-                        {/* 2. Add Docs Button */}
                         <button
                           type="button"
-                          onClick={(e) => handleOpenUploadModal(client, e)}
-                          className="px-2 py-1 bg-amber-50 text-amber-900 hover:bg-amber-100 border border-amber-200 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-colors cursor-pointer"
-                          title="Quick Add Documents"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setOpenActionMenuId(openActionMenuId === client._id ? null : client._id);
+                          }}
+                          className={`p-1.5 rounded-lg cursor-pointer transition-colors ${
+                            openActionMenuId === client._id ? 'bg-amber-100 text-[#081326]' : 'text-gray-400 hover:text-[#081326] hover:bg-gray-100'
+                          }`}
+                          title="Actions"
                         >
-                          <FileUp className="w-3 h-3 text-amber-700" />
-                          <span>Docs</span>
+                          <MoreVertical className="w-4 h-4" />
                         </button>
 
-                        {/* 3. Co-Applicant Button */}
-                        <button
-                          type="button"
-                          onClick={(e) => handleOpenApplicantsModal(client, e)}
-                          className="px-2 py-1 bg-purple-50 text-purple-900 hover:bg-purple-100 border border-purple-200 rounded-lg text-[10px] font-bold flex items-center gap-1 cursor-pointer transition-colors"
-                          title="Manage Applicants & Co-Applicants"
-                        >
-                          <Users className="w-3 h-3 text-purple-700" />
-                          <span>Co-App</span>
-                        </button>
+                        {/* 3-Dot Dropdown Menu */}
+                        {openActionMenuId === client._id && (
+                          <div
+                            className="absolute right-0 top-full mt-1 w-52 bg-white rounded-xl shadow-xl border border-gray-100 py-1.5 z-30 animate-in fade-in zoom-in-95 duration-100 text-xs font-bold text-gray-700"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setOpenActionMenuId(null);
+                                navigate(`/clients/${client._id}`);
+                              }}
+                              className="w-full px-3 py-2 text-left hover:bg-amber-50 hover:text-amber-800 flex items-center gap-2.5 transition-colors cursor-pointer"
+                            >
+                              <Eye className="w-3.5 h-3.5 text-blue-600" />
+                              <span>View Client Case</span>
+                            </button>
 
-                        {/* 4. Drag / Move Step */}
-                        <div className="flex items-center border border-gray-200 rounded-lg overflow-hidden bg-gray-50">
-                          <button
-                            type="button"
-                            onClick={() => handleMoveStep(client._id, 'up')}
-                            disabled={index === 0}
-                            className="p-1 hover:bg-gray-200 disabled:opacity-20 disabled:pointer-events-none text-gray-600"
-                            title="Move Up"
-                          >
-                            <ArrowUp className="w-3 h-3" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleMoveStep(client._id, 'down')}
-                            disabled={index === filteredClients.length - 1}
-                            className="p-1 hover:bg-gray-200 disabled:opacity-20 disabled:pointer-events-none text-gray-600 border-l border-gray-200"
-                            title="Move Down"
-                          >
-                            <ArrowDown className="w-3 h-3" />
-                          </button>
-                        </div>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                setOpenActionMenuId(null);
+                                handleOpenUploadModal(client, e);
+                              }}
+                              className="w-full px-3 py-2 text-left hover:bg-amber-50 hover:text-amber-800 flex items-center gap-2.5 transition-colors cursor-pointer"
+                            >
+                              <FileUp className="w-3.5 h-3.5 text-amber-600" />
+                              <span>Add Documents</span>
+                            </button>
 
-                        {/* 5. Show / Hide Client */}
-                        {client.isHidden ? (
-                          <button
-                            type="button"
-                            onClick={() => handleToggleHide(client._id, false)}
-                            className="p-1 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200 rounded-lg text-xs font-bold transition-colors cursor-pointer"
-                            title="Unhide Client"
-                          >
-                            <Eye className="w-3.5 h-3.5 text-emerald-600" />
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => handleToggleHide(client._id, true)}
-                            className="p-1 bg-gray-50 text-gray-500 hover:bg-gray-100 border border-gray-200 rounded-lg text-xs font-bold transition-colors cursor-pointer"
-                            title="Hide Client"
-                          >
-                            <EyeOff className="w-3.5 h-3.5" />
-                          </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                setOpenActionMenuId(null);
+                                handleOpenApplicantsModal(client, e);
+                              }}
+                              className="w-full px-3 py-2 text-left hover:bg-amber-50 hover:text-amber-800 flex items-center gap-2.5 transition-colors cursor-pointer"
+                            >
+                              <Users className="w-3.5 h-3.5 text-purple-600" />
+                              <span>Manage Applicants ({client.applicants?.length || 1})</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setOpenActionMenuId(null);
+                                handleToggleHide(client._id, !client.isHidden);
+                              }}
+                              className="w-full px-3 py-2 text-left hover:bg-amber-50 hover:text-amber-800 flex items-center gap-2.5 transition-colors cursor-pointer"
+                            >
+                              {client.isHidden ? (
+                                <>
+                                  <Eye className="w-3.5 h-3.5 text-emerald-600" />
+                                  <span>Unhide Client</span>
+                                </>
+                              ) : (
+                                <>
+                                  <EyeOff className="w-3.5 h-3.5 text-gray-500" />
+                                  <span>Hide from Active List</span>
+                                </>
+                              )}
+                            </button>
+
+                            {role === 'admin' && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setOpenActionMenuId(null);
+                                  navigate(`/clients/edit/${client._id}`);
+                                }}
+                                className="w-full px-3 py-2 text-left hover:bg-amber-50 hover:text-amber-800 flex items-center gap-2.5 transition-colors cursor-pointer"
+                              >
+                                <Edit className="w-3.5 h-3.5 text-orange-600" />
+                                <span>Edit Profile</span>
+                              </button>
+                            )}
+
+                            <div className="my-1 border-t border-gray-100"></div>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setOpenActionMenuId(null);
+                                setClientToDelete(client);
+                                setDeleteReason('');
+                                setShowDeleteModal(true);
+                              }}
+                              className="w-full px-3 py-2 text-left text-red-600 hover:bg-red-50 flex items-center gap-2.5 transition-colors cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5 text-red-600" />
+                              <span>Delete Client</span>
+                            </button>
+                          </div>
                         )}
-
-                        {/* 6. Delete Button */}
-                        <button
-                          type="button"
-                          onClick={() => { setClientToDelete(client); setDeleteReason(''); setShowDeleteModal(true); }}
-                          className="p-1 bg-red-50 text-red-600 hover:bg-red-600 hover:text-white border border-red-200 rounded-lg text-xs font-bold transition-colors cursor-pointer"
-                          title="Delete Client (Backed up for Super Admin)"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
                       </div>
                     </div>
                   </div>
@@ -1339,28 +1552,11 @@ const Clients = () => {
                           )}
                         </td>
 
-                        {/* 7. Action: Add Docs + Applicants + Review + Show/Hide + Edit/Delete */}
+                        {/* 7. Action: 3-Dot Action Menu + Review */}
                         <td className="px-5 py-3.5 whitespace-nowrap text-center">
-                          <div className="flex justify-center items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex justify-center items-center gap-1.5 relative" onClick={(e) => e.stopPropagation()}>
                             <button 
-                              onClick={(e) => handleOpenUploadModal(client, e)}
-                              className="px-2.5 py-1.5 rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-600 hover:text-white border border-amber-200 hover:border-amber-600 flex items-center gap-1 text-[11px] font-bold transition-all shadow-xs cursor-pointer"
-                              title="Upload / Add Documents for this Client"
-                            >
-                              <FileUp className="w-3.5 h-3.5 stroke-[2.5]" />
-                              <span>Add Docs</span>
-                            </button>
-
-                            <button 
-                              onClick={(e) => handleOpenApplicantsModal(client, e)}
-                              className="px-2.5 py-1.5 rounded-lg bg-purple-50 text-purple-700 hover:bg-purple-600 hover:text-white border border-purple-200 hover:border-purple-600 flex items-center gap-1 text-[11px] font-bold transition-all shadow-xs cursor-pointer"
-                              title="Manage Applicants & Guarantors"
-                            >
-                              <Users className="w-3.5 h-3.5 stroke-[2.5]" />
-                              <span>{client.applicants?.length > 1 ? `${client.applicants.length} Applicants` : (client.hasCoApplicant ? '2 Applicants' : 'Applicants')}</span>
-                            </button>
-
-                            <button 
+                              type="button"
                               onClick={() => openPreview(client)}
                               className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white flex items-center justify-center transition-all shadow-xs cursor-pointer"
                               title="Review Case"
@@ -1368,41 +1564,116 @@ const Clients = () => {
                               <Eye className="w-4 h-4 stroke-[2.5]" />
                             </button>
 
-                            {/* Show / Hide Client Button */}
-                            {client.isHidden ? (
-                              <button 
-                                onClick={() => handleToggleHide(client._id, false)}
-                                className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white flex items-center justify-center transition-all shadow-xs cursor-pointer"
-                                title="Unhide / Restore Client to Active List"
-                              >
-                                <Eye className="w-4 h-4 stroke-[2.5]" />
-                              </button>
-                            ) : (
-                              <button 
-                                onClick={() => handleToggleHide(client._id, true)}
-                                className="w-8 h-8 rounded-lg bg-gray-50 text-gray-500 hover:bg-amber-500 hover:text-white flex items-center justify-center transition-all shadow-xs cursor-pointer"
-                                title="Hide Client from Active List (never deletes records)"
-                              >
-                                <EyeOff className="w-4 h-4 stroke-[2.5]" />
-                              </button>
-                            )}
-
-                            {role === 'admin' && (
-                              <button 
-                                onClick={() => navigate(`/clients/edit/${client._id}`)}
-                                className="w-8 h-8 rounded-lg bg-orange-50 text-orange-600 hover:bg-orange-600 hover:text-white flex items-center justify-center transition-all shadow-xs cursor-pointer"
-                                title="Edit Profile"
-                              >
-                                <Edit className="w-4 h-4 stroke-[2.5]" />
-                              </button>
-                            )}
-                            <button 
-                              onClick={() => { setClientToDelete(client); setDeleteReason(''); setShowDeleteModal(true); }}
-                              className="w-8 h-8 rounded-lg bg-red-50 text-red-600 hover:bg-red-600 hover:text-white flex items-center justify-center transition-all shadow-xs cursor-pointer"
-                              title="Delete Client (Backed up for Super Admin)"
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setOpenActionMenuId(openActionMenuId === client._id ? null : client._id);
+                              }}
+                              className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all shadow-xs cursor-pointer ${
+                                openActionMenuId === client._id
+                                  ? 'bg-amber-100 text-[#081326]'
+                                  : 'bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-800'
+                              }`}
+                              title="More Actions"
                             >
-                              <Trash2 className="w-4 h-4 stroke-[2.5]" />
+                              <MoreVertical className="w-4 h-4" />
                             </button>
+
+                            {/* 3-Dot Dropdown Menu */}
+                            {openActionMenuId === client._id && (
+                              <div 
+                                className="absolute right-0 top-full mt-1 w-52 bg-white rounded-xl shadow-xl border border-gray-100 py-1.5 z-30 animate-in fade-in zoom-in-95 duration-100 text-xs font-bold text-gray-700 text-left"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setOpenActionMenuId(null);
+                                    navigate(`/clients/${client._id}`);
+                                  }}
+                                  className="w-full px-3 py-2 text-left hover:bg-amber-50 hover:text-amber-800 flex items-center gap-2.5 transition-colors cursor-pointer"
+                                >
+                                  <Eye className="w-3.5 h-3.5 text-blue-600" />
+                                  <span>View Details</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    setOpenActionMenuId(null);
+                                    handleOpenUploadModal(client, e);
+                                  }}
+                                  className="w-full px-3 py-2 text-left hover:bg-amber-50 hover:text-amber-800 flex items-center gap-2.5 transition-colors cursor-pointer"
+                                >
+                                  <FileUp className="w-3.5 h-3.5 text-amber-600" />
+                                  <span>Add Documents</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    setOpenActionMenuId(null);
+                                    handleOpenApplicantsModal(client, e);
+                                  }}
+                                  className="w-full px-3 py-2 text-left hover:bg-amber-50 hover:text-amber-800 flex items-center gap-2.5 transition-colors cursor-pointer"
+                                >
+                                  <Users className="w-3.5 h-3.5 text-purple-600" />
+                                  <span>Co-Applicants ({client.applicants?.length || 1})</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setOpenActionMenuId(null);
+                                    handleToggleHide(client._id, !client.isHidden);
+                                  }}
+                                  className="w-full px-3 py-2 text-left hover:bg-amber-50 hover:text-amber-800 flex items-center gap-2.5 transition-colors cursor-pointer"
+                                >
+                                  {client.isHidden ? (
+                                    <>
+                                      <Eye className="w-3.5 h-3.5 text-emerald-600" />
+                                      <span>Unhide Client</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <EyeOff className="w-3.5 h-3.5 text-gray-500" />
+                                      <span>Hide Client</span>
+                                    </>
+                                  )}
+                                </button>
+
+                                {role === 'admin' && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setOpenActionMenuId(null);
+                                      navigate(`/clients/edit/${client._id}`);
+                                    }}
+                                    className="w-full px-3 py-2 text-left hover:bg-amber-50 hover:text-amber-800 flex items-center gap-2.5 transition-colors cursor-pointer"
+                                  >
+                                    <Edit className="w-3.5 h-3.5 text-orange-600" />
+                                    <span>Edit Profile</span>
+                                  </button>
+                                )}
+
+                                <div className="my-1 border-t border-gray-100"></div>
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setOpenActionMenuId(null);
+                                    setClientToDelete(client);
+                                    setDeleteReason('');
+                                    setShowDeleteModal(true);
+                                  }}
+                                  className="w-full px-3 py-2 text-left text-red-600 hover:bg-red-50 flex items-center gap-2.5 transition-colors cursor-pointer"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5 text-red-600" />
+                                  <span>Delete Client</span>
+                                </button>
+                              </div>
+                            )}
                           </div>
                         </td>
 
@@ -1750,18 +2021,44 @@ const Clients = () => {
 
                 {/* Case Status */}
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">Case Status</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-bold text-gray-700">Case Status</label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const current = contactFormData.status || '';
+                        const next = prompt('Enter custom status for this case:', current);
+                        if (next && next.trim()) {
+                          setContactFormData({ ...contactFormData, status: next.trim().substring(0, 60) });
+                        }
+                      }}
+                      className="text-[10px] font-bold text-purple-700 hover:text-purple-900 cursor-pointer"
+                    >
+                      + Write Custom
+                    </button>
+                  </div>
                   <select 
-                    value={contactFormData.status || 'Documents Pending'}
-                    onChange={(e) => setContactFormData({ ...contactFormData, status: e.target.value })}
+                    value={!CASE_STATUS_OPTIONS.includes(contactFormData.status) ? '__custom__' : (contactFormData.status || 'Documents Pending')}
+                    onChange={(e) => {
+                      if (e.target.value === '__custom__') {
+                        const current = !CASE_STATUS_OPTIONS.includes(contactFormData.status) ? contactFormData.status : '';
+                        const next = prompt('Enter custom status for this case:', current);
+                        if (next && next.trim()) {
+                          setContactFormData({ ...contactFormData, status: next.trim().substring(0, 60) });
+                        }
+                      } else {
+                        setContactFormData({ ...contactFormData, status: e.target.value });
+                      }
+                    }}
                     className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg outline-none focus:border-[#f59e0b] font-bold cursor-pointer bg-white"
                   >
                     {!CASE_STATUS_OPTIONS.includes(contactFormData.status) && contactFormData.status && (
-                      <option value={contactFormData.status}>{contactFormData.status}</option>
+                      <option value="__custom__">★ {contactFormData.status} (Custom)</option>
                     )}
                     {CASE_STATUS_OPTIONS.map(opt => (
                       <option key={opt} value={opt}>{opt}</option>
                     ))}
+                    <option value="__custom__">✏️ + Write Custom Status...</option>
                   </select>
                 </div>
 

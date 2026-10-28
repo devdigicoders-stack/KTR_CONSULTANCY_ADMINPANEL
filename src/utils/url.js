@@ -161,15 +161,20 @@ export const matchesDocToken = (doc, rawToken) => {
     }
   }
 
-  // 5. doc.title & doc.name checks (Case-insensitive & normalized)
+  // 5. doc.title & doc.name checks (Case-insensitive & normalized & plural-tolerant)
   const docTitle = (doc.title || doc.name || '').trim().toLowerCase();
   if (docTitle && (docTitle === token || docTitle === cleanToken)) {
     return true;
   }
 
+  // Plural stripping match (e.g. "Bank Statements" === "Bank Statement", "Salary Slips" === "Salary Slip")
+  if (docTitle && (docTitle.replace(/s$/, '') === token.replace(/s$/, '') || docTitle.replace(/s$/, '') === cleanToken.replace(/s$/, ''))) {
+    return true;
+  }
+
   const normDocTitle = getNormalizedDocName(doc.title || doc.name || '').toLowerCase();
   const normToken = getNormalizedDocName(rawToken).toLowerCase();
-  if (normDocTitle && (normDocTitle === normToken || normDocTitle === token || normDocTitle === cleanToken)) {
+  if (normDocTitle && (normDocTitle === normToken || normDocTitle === token || normDocTitle === cleanToken || normDocTitle.replace(/s$/, '') === normToken.replace(/s$/, ''))) {
     return true;
   }
 
@@ -186,16 +191,18 @@ export const matchesDocToken = (doc, rawToken) => {
         if (fMongoId === token || fMongoId === cleanToken) return true;
       }
 
+      if (f.fileUrl && f.fileUrl.toLowerCase() === token) return true;
+
       if (f.docType) {
         const fdt = String(f.docType).toLowerCase().replace(/^(legacy_)/, '');
         if (fdt === cleanToken || fdt === token) return true;
       }
 
       const fTitle = (f.fileTitle || f.title || f.name || '').trim().toLowerCase();
-      if (fTitle && (fTitle === token || fTitle === cleanToken)) return true;
+      if (fTitle && (fTitle === token || fTitle === cleanToken || fTitle.replace(/s$/, '') === token.replace(/s$/, ''))) return true;
 
       const normFTitle = getNormalizedDocName(fTitle).toLowerCase();
-      if (normFTitle && (normFTitle === normToken || normFTitle === token || normFTitle === cleanToken)) return true;
+      if (normFTitle && (normFTitle === normToken || normFTitle === token || normFTitle === cleanToken || normFTitle.replace(/s$/, '') === normToken.replace(/s$/, ''))) return true;
 
       return false;
     });
@@ -211,6 +218,22 @@ export const matchesDocToken = (doc, rawToken) => {
   const isPanToken = token === 'pan' || token === 'pancard' || token.includes('pan card') || token.includes('pancard');
   const isPanDoc = docTitle.includes('pan card') || docTitle.includes('pancard') || (doc.docType || '').toLowerCase().includes('pan');
   if (isPanToken && isPanDoc) return true;
+
+  const isBankToken = token.includes('bank statement') || token.includes('bankstatement') || (token.includes('statement') && !token.includes('financial'));
+  const isBankDoc = docTitle.includes('bank statement') || docTitle.includes('bankstatement') || (doc.docType || '').toLowerCase().includes('bankstatement');
+  if (isBankToken && isBankDoc) return true;
+
+  const isSalaryToken = token.includes('salary');
+  const isSalaryDoc = docTitle.includes('salary') || (doc.docType || '').toLowerCase().includes('salary');
+  if (isSalaryToken && isSalaryDoc) return true;
+
+  const isItrToken = token.includes('itr') || token.includes('income tax');
+  const isItrDoc = docTitle.includes('itr') || docTitle.includes('income tax') || (doc.docType || '').toLowerCase().includes('itr');
+  if (isItrToken && isItrDoc) return true;
+
+  const isPropToken = token.includes('property') || token.includes('registry') || token.includes('khatauni');
+  const isPropDoc = docTitle.includes('property') || docTitle.includes('registry') || docTitle.includes('khatauni') || (doc.docType || '').toLowerCase().includes('prop');
+  if (isPropToken && isPropDoc) return true;
 
   const isPhotoToken = token.includes('photo');
   const isPhotoDoc = docTitle.includes('photo') || (doc.docType || '').toLowerCase().includes('photo');

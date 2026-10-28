@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { 
   Folder, FolderPlus, FileText, Upload, Plus, Search, Eye, Download, 
@@ -26,6 +26,7 @@ const BankFormsRepository = ({ defaultScope = 'common' }) => {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const uploadFileInputRef = useRef(null);
 
   // Multi-Selection State
   const [selectedItemIds, setSelectedItemIds] = useState([]);
@@ -39,6 +40,7 @@ const BankFormsRepository = ({ defaultScope = 'common' }) => {
 
   // Form States
   const [newFolderName, setNewFolderName] = useState('');
+  const [subfolderParent, setSubfolderParent] = useState(null);
   const [renameFolderName, setRenameFolderName] = useState('');
   const [uploadFolder, setUploadFolder] = useState('General');
   const [uploadDocName, setUploadDocName] = useState('');
@@ -46,6 +48,8 @@ const BankFormsRepository = ({ defaultScope = 'common' }) => {
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [isUploading, setIsUploading] = useState(false);
   const [copiedId, setCopiedId] = useState(null);
+  const [shareModalData, setShareModalData] = useState(null);
+  const [isGeneratingShare, setIsGeneratingShare] = useState(false);
 
   const fetchFolders = async () => {
     try {
@@ -101,7 +105,7 @@ const BankFormsRepository = ({ defaultScope = 'common' }) => {
     setShowUploadModal(true);
   };
 
-  // Create permanent folder
+  // Create permanent folder or subfolder
   const handleCreateFolder = async (e) => {
     e.preventDefault();
     const clean = newFolderName.trim();
@@ -110,6 +114,7 @@ const BankFormsRepository = ({ defaultScope = 'common' }) => {
     try {
       const res = await api.post('/repository/folders', {
         folderName: clean,
+        parentFolderName: subfolderParent || null,
         name: clean,
         scope
       });
@@ -119,6 +124,7 @@ const BankFormsRepository = ({ defaultScope = 'common' }) => {
         setSelectedFolder(clean);
         setUploadFolder(clean);
         setNewFolderName('');
+        setSubfolderParent(null);
         setShowNewFolderModal(false);
       }
     } catch (err) {
@@ -181,6 +187,10 @@ const BankFormsRepository = ({ defaultScope = 'common' }) => {
       const fresh = incoming.filter(f => !existing.has(`${f.name}_${f.size}_${f.lastModified}`));
       return [...prev, ...fresh];
     });
+
+    if (e.target) {
+      e.target.value = '';
+    }
   };
 
   const handleRemoveFileFromQueue = (index) => {
@@ -291,27 +301,33 @@ const BankFormsRepository = ({ defaultScope = 'common' }) => {
     }
   };
 
+  // Open secure share modal with generated link
+  const openShareModalForItems = async (itemIds, title) => {
+    if (!itemIds || itemIds.length === 0) return;
+    try {
+      setIsGeneratingShare(true);
+      const res = await api.post('/repository/share', { itemIds, title });
+      if (res.data.success) {
+        setShareModalData({
+          code: res.data.code,
+          shortUrl: res.data.shortUrl,
+          title,
+          itemCount: itemIds.length
+        });
+      }
+    } catch (err) {
+      toast.error('Failed to create share link: ' + (err.response?.data?.message || err.message));
+    } finally {
+      setIsGeneratingShare(false);
+    }
+  };
+
   // Bulk Share
   const handleBulkShare = async () => {
     const selected = items.filter(i => selectedItemIds.includes(i._id));
     if (selected.length === 0) return;
-
-    const text = `📁 KTR Consultants – Repository Documents (${selected.length} files)\n\n` +
-      selected.map((item, idx) => `${idx + 1}. ${item.name} (${item.folderName})\n🔗 ${getAssetUrl(item.fileUrl)}`).join('\n\n');
-
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: 'KTR Repository Documents',
-          text
-        });
-        return;
-      } catch (e) {}
-    }
-
-    navigator.clipboard.writeText(text);
-    toast.success('Document links copied to clipboard!');
-    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
+    const title = `${selectedFolder !== 'All' ? selectedFolder : 'Repository'} - ${selected.length} Files`;
+    await openShareModalForItems(selectedItemIds, title);
   };
 
   const toggleSelectItem = (id) => {
@@ -337,22 +353,7 @@ const BankFormsRepository = ({ defaultScope = 'common' }) => {
   };
 
   const handleShareFile = async (item) => {
-    const fullUrl = getAssetUrl(item.fileUrl);
-    const text = `📄 KTR Consultants - Document\n\nName: ${item.name}\nFolder: ${item.folderName}\n${item.notes ? `Note: ${item.notes}\n` : ''}\n🔗 View file:\n${fullUrl}`;
-    
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: item.name,
-          text
-        });
-        return;
-      } catch (e) {}
-    }
-    
-    navigator.clipboard.writeText(text);
-    toast.success('Share link copied!');
-    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
+    await openShareModalForItems([item._id], item.name);
   };
 
   const filteredItems = items.filter(item => {
@@ -410,8 +411,24 @@ const BankFormsRepository = ({ defaultScope = 'common' }) => {
         </div>
 
         <div className="flex items-center gap-2.5 w-full md:w-auto">
+          {selectedFolder !== 'All' && (
+            <button
+              onClick={() => {
+                setSubfolderParent(selectedFolder);
+                setNewFolderName('');
+                setShowNewFolderModal(true);
+              }}
+              className="px-3 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+              title={`Create subfolder inside ${selectedFolder}`}
+            >
+              <FolderPlus className="w-4 h-4 text-amber-700" /> + Subfolder
+            </button>
+          )}
           <button
-            onClick={() => setShowNewFolderModal(true)}
+            onClick={() => {
+              setSubfolderParent(null);
+              setShowNewFolderModal(true);
+            }}
             className="px-3.5 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-800 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
           >
             <FolderPlus className="w-4 h-4 text-gray-600" /> + New Folder
@@ -758,13 +775,14 @@ const BankFormsRepository = ({ defaultScope = 'common' }) => {
               <div>
                 <label className="block text-[11px] font-bold text-gray-500 mb-1.5">Select Files (Selecting more will append)</label>
                 <input
+                  ref={uploadFileInputRef}
                   type="file"
                   multiple
                   onChange={handleFileSelect}
                   className="w-full text-xs text-gray-500 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-[#081326] file:text-white hover:file:bg-[#11203d] cursor-pointer"
                 />
                 {selectedFiles.length > 0 && (
-                  <div className="mt-2 space-y-1 max-h-32 overflow-y-auto pr-1">
+                  <div className="mt-2 space-y-1 max-h-36 overflow-y-auto pr-1">
                     <div className="flex justify-between items-center text-[11px] font-bold text-gray-500">
                       <span>{selectedFiles.length} file(s) staged:</span>
                       <button
@@ -781,12 +799,19 @@ const BankFormsRepository = ({ defaultScope = 'common' }) => {
                         <button
                           type="button"
                           onClick={() => handleRemoveFileFromQueue(fIdx)}
-                          className="text-red-500 hover:text-red-700 font-bold ml-2"
+                          className="text-red-500 hover:text-red-700 font-bold ml-2 cursor-pointer"
                         >
                           ✕
                         </button>
                       </div>
                     ))}
+                    <button
+                      type="button"
+                      onClick={() => uploadFileInputRef.current?.click()}
+                      className="w-full mt-2 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5 text-amber-700" /> + Add More Files
+                    </button>
                   </div>
                 )}
               </div>
@@ -813,25 +838,27 @@ const BankFormsRepository = ({ defaultScope = 'common' }) => {
         </div>
       )}
 
-      {/* New Folder Modal */}
+      {/* New Folder / Subfolder Modal */}
       {showNewFolderModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#081326]/70 backdrop-blur-xs">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
             <div className="flex justify-between items-center mb-3">
               <h3 className="font-black text-sm text-[#081326] flex items-center gap-2">
-                <FolderPlus className="w-4 h-4 text-[#f59e0b]" /> Create New Folder
+                <FolderPlus className="w-4 h-4 text-[#f59e0b]" /> {subfolderParent ? `New Subfolder in "${subfolderParent}"` : 'Create New Folder'}
               </h3>
-              <button onClick={() => setShowNewFolderModal(false)} className="text-gray-400 hover:text-gray-600">
+              <button onClick={() => { setShowNewFolderModal(false); setSubfolderParent(null); }} className="text-gray-400 hover:text-gray-600">
                 <X className="w-4 h-4" />
               </button>
             </div>
             <form onSubmit={handleCreateFolder} className="space-y-4">
               <div>
-                <label className="block text-[11px] font-bold text-gray-500 mb-1.5">Folder Name</label>
+                <label className="block text-[11px] font-bold text-gray-500 mb-1.5">
+                  {subfolderParent ? 'Subfolder Name' : 'Folder Name'}
+                </label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. HDFC Bank Kit"
+                  placeholder={subfolderParent ? "e.g. Current Year Forms" : "e.g. HDFC Bank Kit"}
                   value={newFolderName}
                   onChange={(e) => setNewFolderName(e.target.value)}
                   autoFocus
@@ -841,7 +868,7 @@ const BankFormsRepository = ({ defaultScope = 'common' }) => {
               <div className="flex gap-2">
                 <button
                   type="button"
-                  onClick={() => setShowNewFolderModal(false)}
+                  onClick={() => { setShowNewFolderModal(false); setSubfolderParent(null); }}
                   className="flex-1 py-2 border border-gray-200 text-gray-700 rounded-xl text-xs font-bold"
                 >
                   Cancel
@@ -854,6 +881,96 @@ const BankFormsRepository = ({ defaultScope = 'common' }) => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Share Repository Documents Modal */}
+      {shareModalData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#081326]/70 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 animate-in fade-in zoom-in duration-200">
+            <div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-xl bg-amber-500/10 flex items-center justify-center text-[#f59e0b]">
+                  <Share2 className="w-5 h-5 stroke-[2.5]" />
+                </div>
+                <div>
+                  <h3 className="font-black text-sm text-[#081326]">Share Repository Documents</h3>
+                  <p className="text-[11px] text-gray-500 font-medium">{shareModalData.itemCount} document(s) included</p>
+                </div>
+              </div>
+              <button onClick={() => setShareModalData(null)} className="text-gray-400 hover:text-gray-600 cursor-pointer">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-[11px] font-bold text-gray-500 mb-1.5 uppercase">Secure Shareable Link</label>
+                <div className="flex items-center gap-2 p-1.5 bg-gray-50 border border-gray-200 rounded-xl">
+                  <input
+                    type="text"
+                    readOnly
+                    value={shareModalData.shortUrl}
+                    className="flex-1 px-2.5 py-1.5 bg-transparent text-xs font-mono font-bold text-gray-800 outline-none select-all"
+                  />
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(shareModalData.shortUrl);
+                      toast.success('Share link copied to clipboard!');
+                    }}
+                    className="px-3 py-1.5 bg-[#081326] text-white rounded-lg text-xs font-bold hover:bg-[#11203d] flex items-center gap-1.5 transition-all cursor-pointer shadow-xs shrink-0"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                    <span>Copy</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const text = `📁 KTR Consultants – Repository Documents\n\n${shareModalData.title}\n🔗 View & Download:\n${shareModalData.shortUrl}`;
+                    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
+                  }}
+                  className="py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-colors cursor-pointer shadow-xs"
+                >
+                  <Share2 className="w-3.5 h-3.5" />
+                  <span>WhatsApp</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (navigator.share) {
+                      try {
+                        await navigator.share({
+                          title: shareModalData.title,
+                          url: shareModalData.shortUrl
+                        });
+                        return;
+                      } catch (e) {}
+                    }
+                    navigator.clipboard.writeText(shareModalData.shortUrl);
+                    toast.success('Link copied to clipboard!');
+                  }}
+                  className="py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-colors cursor-pointer shadow-xs"
+                >
+                  <Share2 className="w-3.5 h-3.5" />
+                  <span>Share via Device</span>
+                </button>
+              </div>
+
+              <div className="bg-amber-50 rounded-xl p-3 border border-amber-200/60 text-[11px] text-amber-900 font-medium space-y-1">
+                <p className="font-bold flex items-center gap-1.5 text-amber-950">
+                  <Lock className="w-3.5 h-3.5 text-amber-700" /> Secure Link with Document Viewer
+                </p>
+                <p className="text-[10px] text-amber-800">
+                  Bankers and recipients can view, scroll, and download these documents directly in the secure document portal.
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       )}

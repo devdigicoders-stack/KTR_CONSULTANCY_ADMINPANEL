@@ -37,6 +37,9 @@ import FilledForms from './pages/FilledForms';
 import PublicClientForm from './pages/PublicClientForm';
 import PublicDocUpload from './pages/PublicDocUpload';
 import DeletedClientsBackup from './pages/DeletedClientsBackup';
+import CaseStudies from './pages/CaseStudies';
+import CaseStudyDetails from './pages/CaseStudyDetails';
+import SharedCaseStudy from './pages/SharedCaseStudy';
 
 // ProtectedRoute component
 const ProtectedRoute = ({ children }) => {
@@ -61,6 +64,8 @@ function App() {
           <Route path="/login" element={<Login />} />
           
           {/* Public Shared Client Documents & Forms (Clean Short URLs + Legacy URLs) */}
+          <Route path="/d/case/:id" element={<SharedCaseStudy />} />
+          <Route path="/case-studies/shared/:id" element={<SharedCaseStudy />} />
           <Route path="/d/:id" element={<SharedDocuments />} />
           <Route path="/s/:id" element={<SharedDocuments />} />
           <Route path="/shared-docs/:id" element={<SharedDocuments />} />
@@ -80,6 +85,10 @@ function App() {
             <Route path="clients/new" element={<AddNewClient />} />
             <Route path="clients/edit/:id" element={<EditClient />} />
             <Route path="clients/:id" element={<ClientDetails />} />
+            
+            {/* Case Studies Discussion Portal */}
+            <Route path="case-studies" element={<CaseStudies />} />
+            <Route path="case-studies/:id" element={<CaseStudyDetails />} />
             
             {/* Repository & Client Data Collection for Staff & Admin */}
             <Route path="bank-forms" element={<BankFormsRepository defaultScope="common" />} />

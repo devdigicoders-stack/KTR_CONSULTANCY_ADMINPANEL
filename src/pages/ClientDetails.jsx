@@ -2,11 +2,12 @@ import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { 
   ChevronRight, Search, Bell, Edit, Trash2, AlertTriangle, 
-  History, Clock, Phone, Briefcase, IndianRupee, FileCheck, AlertCircle
+  History, Clock, Phone, Briefcase, IndianRupee, FileCheck, AlertCircle, ArrowLeft
 } from 'lucide-react';
 import api from '../api/axios';
+import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
-import { getStatusBadgeStyle, getStatusDotColor } from './Clients';
+import { getStatusBadgeStyle, getStatusDotColor, StatusSelectDropdown } from './Clients';
 
 import OverviewTab from '../components/client/OverviewTab';
 import DocumentRepositoryTab from '../components/client/DocumentRepositoryTab';
@@ -52,6 +53,39 @@ const ClientDetails = () => {
     window.addEventListener('focus', handleFocus);
     return () => window.removeEventListener('focus', handleFocus);
   }, [id]);
+
+  // Phone Back Button interception: Return to Client List (/clients)
+  useEffect(() => {
+    try {
+      window.history.pushState({ ktrClientDetails: true }, '');
+    } catch (e) {}
+
+    const handlePopState = (e) => {
+      // If modal or continuous view was open, those components handle closing themselves
+      if (window.history.state?.ktrStaffDocView || window.history.state?.ktrPreviewModal || window.history.state?.ktrModalOpen) {
+        return;
+      }
+      navigate('/clients', { replace: true });
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [navigate]);
+
+  const handleStatusChange = async (id, newStatus) => {
+    try {
+      const res = await api.patch(`/clients/${id}/status`, { status: newStatus });
+      if (res.data.success) {
+        setClient(prev => ({ ...prev, status: newStatus }));
+        toast.success(`Case status updated to "${newStatus}"`);
+      }
+    } catch (err) {
+      console.error('Failed to update status:', err);
+      toast.error('Failed to update case status');
+    }
+  };
 
   const bankerQueriesCount = (client?.bankerQueries || []).filter(q => q.status !== 'Resolved').length;
 
@@ -112,17 +146,26 @@ const ClientDetails = () => {
     <div className="flex flex-col space-y-6 max-w-[1600px] mx-auto pb-8">
       
       {/* Top Header Row with Breadcrumbs */}
-      <div className="flex justify-between items-center bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
-        <div>
-          <h2 className="text-xl font-black text-[#081326] flex items-center gap-2">
-            {headerInfo.title}
-          </h2>
-          <div className="flex items-center gap-2 text-[11px] font-medium text-gray-500 mt-1">
-            <Link to="/" className="hover:text-[#f59e0b] transition-colors">Home</Link>
-            <ChevronRight className="w-3 h-3" />
-            <Link to="/clients" className="hover:text-[#f59e0b] transition-colors">Clients</Link>
-            <ChevronRight className="w-3 h-3" />
-            <span className="text-[#081326] font-bold">{headerInfo.breadcrumb}</span>
+      <div className={`justify-between items-center bg-white p-4 rounded-2xl shadow-sm border border-gray-100 ${activeTab === 'Documents' ? 'hidden md:flex' : 'flex'}`}>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => navigate('/clients')}
+            className="p-2 hover:bg-gray-100 text-[#081326] rounded-xl transition-colors cursor-pointer border border-gray-200 shrink-0"
+            title="Back to Clients"
+          >
+            <ArrowLeft className="w-4 h-4 stroke-[2.5]" />
+          </button>
+          <div>
+            <h2 className="text-xl font-black text-[#081326] flex items-center gap-2">
+              {headerInfo.title}
+            </h2>
+            <div className="flex items-center gap-2 text-[11px] font-medium text-gray-500 mt-1">
+              <Link to="/" className="hover:text-[#f59e0b] transition-colors">Home</Link>
+              <ChevronRight className="w-3 h-3" />
+              <Link to="/clients" className="hover:text-[#f59e0b] transition-colors">Clients</Link>
+              <ChevronRight className="w-3 h-3" />
+              <span className="text-[#081326] font-bold">{headerInfo.breadcrumb}</span>
+            </div>
           </div>
         </div>
         
@@ -155,9 +198,34 @@ const ClientDetails = () => {
         </div>
       </div>
 
+      {/* Compact Mobile Header when on Documents tab */}
+      {activeTab === 'Documents' && (
+        <div className="md:hidden flex items-center justify-between bg-white px-4 py-3 rounded-2xl shadow-xs border border-gray-100">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <button
+              onClick={() => navigate('/clients')}
+              className="p-1.5 bg-gray-100 hover:bg-gray-200 text-[#081326] rounded-xl cursor-pointer shrink-0"
+              title="Back to Clients"
+            >
+              <ArrowLeft className="w-4 h-4 stroke-[2.5]" />
+            </button>
+            <div className="truncate">
+              <h3 className="text-sm font-black text-[#081326] truncate">{client.fullName}</h3>
+              <p className="text-[10px] text-gray-500 font-bold uppercase">{client.caseType || client.loanType || 'General Loan'}</p>
+            </div>
+          </div>
+          <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
+            <StatusSelectDropdown
+              client={client}
+              onChange={handleStatusChange}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Main Client Profile Header Card */}
       <div className="bg-white rounded-2xl shadow-[0_0_20px_rgba(0,0,0,0.03)] border border-gray-100 flex flex-col">
-        <div className="p-6 md:p-8 flex flex-col md:flex-row gap-6 md:items-center justify-between">
+        <div className={`p-6 md:p-8 flex flex-col md:flex-row gap-6 md:items-center justify-between ${activeTab === 'Documents' ? 'hidden md:flex' : 'flex'}`}>
           <div className="flex items-center gap-6">
             <div className="w-20 h-20 rounded-full bg-[#081326] flex items-center justify-center text-white text-3xl font-black shadow-lg">
               {getInitials(client.fullName)}
@@ -172,10 +240,12 @@ const ClientDetails = () => {
                     </span>
                   )}
                 </h2>
-                <span className={`${getStatusBadgeStyle(client.status)} px-2.5 py-1 rounded-md font-bold flex items-center gap-1.5 text-xs border`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${getStatusDotColor(client.status)}`}></span>
-                  {client.status || 'Documents Pending'}
-                </span>
+                <div onClick={(e) => e.stopPropagation()}>
+                  <StatusSelectDropdown
+                    client={client}
+                    onChange={handleStatusChange}
+                  />
+                </div>
                 {client.applicants && client.applicants.length > 1 && (
                   <span className="bg-blue-50 text-blue-700 border border-blue-200 px-2.5 py-1 rounded-md font-bold text-xs">
                     {client.applicants.length} Applicants
