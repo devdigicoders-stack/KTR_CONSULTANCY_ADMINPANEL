@@ -308,11 +308,13 @@ const BankFormsRepository = ({ defaultScope = 'common' }) => {
       setIsGeneratingShare(true);
       const res = await api.post('/repository/share', { itemIds, title });
       if (res.data.success) {
+        const selectedItems = items.filter(i => itemIds.includes(i._id));
         setShareModalData({
           code: res.data.code,
           shortUrl: res.data.shortUrl,
           title,
-          itemCount: itemIds.length
+          itemCount: itemIds.length,
+          items: selectedItems
         });
       }
     } catch (err) {
@@ -904,7 +906,54 @@ const BankFormsRepository = ({ defaultScope = 'common' }) => {
               </button>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-3.5">
+              <button
+                type="button"
+                onClick={async () => {
+                  if (shareModalData.items && shareModalData.items.length === 1) {
+                    const item = shareModalData.items[0];
+                    try {
+                      const fullUrl = getAssetUrl(item.fileUrl);
+                      const res = await fetch(fullUrl);
+                      const blob = await res.blob();
+                      const ext = item.fileUrl.split('.').pop()?.split('?')[0] || 'pdf';
+                      const file = new File([blob], `${item.name}.${ext}`, { type: blob.type || 'application/pdf' });
+                      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                        await navigator.share({
+                          files: [file],
+                          title: item.name
+                        });
+                        setShareModalData(null);
+                        return;
+                      }
+                    } catch (e) {
+                      console.warn('Native file share fallback:', e);
+                    }
+                  }
+                  if (shareModalData.items && shareModalData.items.length > 0) {
+                    for (const it of shareModalData.items) {
+                      const fullUrl = getAssetUrl(it.fileUrl);
+                      const a = document.createElement('a');
+                      a.href = fullUrl;
+                      a.download = it.name;
+                      a.target = '_blank';
+                      document.body.appendChild(a);
+                      a.click();
+                      document.body.removeChild(a);
+                      await new Promise(r => setTimeout(r, 400));
+                    }
+                    toast.success('Downloaded file(s) for direct sharing');
+                  }
+                }}
+                className="w-full p-3 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl text-left text-xs font-bold text-amber-950 flex items-center gap-3 transition-colors cursor-pointer"
+              >
+                <FileText className="w-5 h-5 text-amber-600 shrink-0" />
+                <div>
+                  <p className="text-xs font-black text-[#081326]">Share / Send Actual File{shareModalData.itemCount > 1 ? 's' : ''}</p>
+                  <p className="text-[10px] text-gray-500 font-medium">Download / send original file directly on device or WhatsApp</p>
+                </div>
+              </button>
+
               <div>
                 <label className="block text-[11px] font-bold text-gray-500 mb-1.5 uppercase">Secure Shareable Link</label>
                 <div className="flex items-center gap-2 p-1.5 bg-gray-50 border border-gray-200 rounded-xl">

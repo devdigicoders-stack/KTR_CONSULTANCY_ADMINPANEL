@@ -1,15 +1,15 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { 
   BookOpen, Eye, Download, Printer, Share2, MessageSquare, 
   MapPin, CheckCircle2, AlertCircle, X, Send, Copy, ArrowLeft, 
-  Lock, FileText, ChevronRight, Check
+  Lock, FileText, ChevronRight, Check, Key, ShieldAlert, Clock
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
-import axios from 'axios';
 import PdfViewer from '../components/common/PdfViewer';
 import ImageViewer from '../components/common/ImageViewer';
 import caseStudyService from '../utils/caseStudyStore';
+import { getCaseTypeBadge } from './CaseStudies';
 
 const getAssetUrl = (url) => {
   if (!url) return '';
@@ -25,6 +25,11 @@ const SharedCaseStudy = () => {
   const [caseStudy, setCaseStudy] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  
+  // Passcode Protection State
+  const [requiresPasscode, setRequiresPasscode] = useState(false);
+  const [passcodeInput, setPasscodeInput] = useState('');
+  const [passcodeMeta, setPasscodeMeta] = useState(null);
 
   // Preview Modal
   const [previewDoc, setPreviewDoc] = useState(null);
@@ -33,25 +38,33 @@ const SharedCaseStudy = () => {
   const [showQueryModal, setShowQueryModal] = useState(false);
   const [querySubmitting, setQuerySubmitting] = useState(false);
   const [queryForm, setQueryForm] = useState({
-    bankerName: '',
+    authorName: '',
+    authorRole: 'banker',
     bankName: '',
-    bankerPhone: '',
+    authorPhone: '',
     queryText: ''
   });
 
-  const fetchSharedCase = async () => {
+  const fetchSharedCase = async (passcodeToUse = '') => {
     try {
       setLoading(true);
       setError('');
-      const res = await caseStudyService.getSharedCase(shareCode);
+      const res = await caseStudyService.getSharedCase(shareCode, passcodeToUse);
       if (res.success && res.data) {
         setCaseStudy(res.data);
+        setRequiresPasscode(false);
+      } else if (res.requiresPasscode) {
+        setRequiresPasscode(true);
+        setPasscodeMeta({
+          caseNumber: res.caseNumber,
+          recipientType: res.recipientType
+        });
       } else {
-        setError(res.message || 'Case Study not found or link has expired.');
+        setError(res.message || 'Case discussion not found or link has expired.');
       }
     } catch (err) {
       console.error('Fetch shared case study error:', err);
-      setError('Case Study not found or link has expired.');
+      setError('Case discussion not found or link has expired.');
     } finally {
       setLoading(false);
     }
@@ -60,6 +73,15 @@ const SharedCaseStudy = () => {
   useEffect(() => {
     if (shareCode) fetchSharedCase();
   }, [shareCode]);
+
+  const handlePasscodeSubmit = (e) => {
+    e.preventDefault();
+    if (!passcodeInput.trim()) {
+      toast.error('Please enter the security passcode');
+      return;
+    }
+    fetchSharedCase(passcodeInput.trim());
+  };
 
   const handleQuerySubmit = async (e) => {
     e.preventDefault();
@@ -70,12 +92,15 @@ const SharedCaseStudy = () => {
 
     try {
       setQuerySubmitting(true);
-      const res = await caseStudyService.submitBankerQueryFromShare(shareCode, queryForm);
+      const res = await caseStudyService.submitBankerQueryFromShare(shareCode, {
+        ...queryForm,
+        passcode: passcodeInput
+      });
       if (res.success) {
-        toast.success('Query submitted successfully! Staff will review and update.');
+        toast.success('Query submitted! Staff will review and provide expert clarification.');
         setShowQueryModal(false);
-        setQueryForm({ bankerName: '', bankName: '', bankerPhone: '', queryText: '' });
-        fetchSharedCase();
+        setQueryForm({ authorName: '', authorRole: 'banker', bankName: '', authorPhone: '', queryText: '' });
+        fetchSharedCase(passcodeInput);
       } else {
         toast.error(res.message || 'Failed to submit query');
       }
@@ -91,7 +116,52 @@ const SharedCaseStudy = () => {
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
         <div className="text-center space-y-3">
           <div className="w-10 h-10 border-4 border-[#081326] border-t-amber-400 rounded-full animate-spin mx-auto"></div>
-          <p className="text-xs font-bold text-gray-500">Loading Case Study Portal...</p>
+          <p className="text-xs font-bold text-gray-500">Loading Case Discussion Portal...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Passcode Protection Screen
+  if (requiresPasscode) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+        <Toaster position="top-right" />
+        <div className="max-w-md w-full bg-white p-8 rounded-3xl shadow-xl border border-gray-100 text-center space-y-5 animate-in fade-in zoom-in-95 duration-200">
+          <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-[#f59e0b] flex items-center justify-center mx-auto shadow-xs">
+            <Lock className="w-6 h-6 stroke-[2.5]" />
+          </div>
+
+          <div className="space-y-1">
+            <h2 className="text-lg font-black text-[#081326]">Protected Case Discussion</h2>
+            <p className="text-xs text-gray-500 font-medium">
+              This case ({passcodeMeta?.caseNumber || 'Confidential'}) is passcode-protected for authorized {passcodeMeta?.recipientType || 'stakeholders'}.
+            </p>
+          </div>
+
+          <form onSubmit={handlePasscodeSubmit} className="space-y-3 pt-2">
+            <div>
+              <input
+                type="password"
+                required
+                autoFocus
+                placeholder="Enter Passcode / PIN"
+                value={passcodeInput}
+                onChange={(e) => setPasscodeInput(e.target.value)}
+                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-center text-sm font-mono font-bold tracking-widest outline-none focus:border-[#f59e0b]"
+              />
+            </div>
+            <button
+              type="submit"
+              className="w-full py-3 bg-[#081326] hover:bg-[#11203d] text-white rounded-xl text-xs font-black shadow-md cursor-pointer transition-all"
+            >
+              Verify Passcode & Enter
+            </button>
+          </form>
+
+          <p className="text-[10px] text-gray-400 font-medium">
+            Contact KTR Consultants if you do not have the passcode for this discussion.
+          </p>
         </div>
       </div>
     );
@@ -111,12 +181,13 @@ const SharedCaseStudy = () => {
 
   const sortedFields = (caseStudy.customFields || []).slice().sort((a, b) => (a.order || 0) - (b.order || 0));
   const sortedDocs = (caseStudy.documents || []).slice().sort((a, b) => (a.order || 0) - (b.order || 0));
+  const queriesList = caseStudy.queries || caseStudy.bankerQueries || [];
 
   return (
     <div className="min-h-screen bg-slate-50 text-gray-800 pb-20">
       <Toaster position="top-right" />
 
-      {/* Top Banker Header */}
+      {/* Top Participant Header */}
       <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-gray-200 shadow-xs px-4 sm:px-8 py-3">
         <div className="max-w-5xl mx-auto flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
@@ -129,23 +200,25 @@ const SharedCaseStudy = () => {
                   KTR Consultants
                 </span>
                 <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded shrink-0">
-                  Banker Portal
+                  {caseStudy.recipientType || 'Expert'} Portal
                 </span>
               </div>
               <p className="text-[10px] text-gray-400 font-medium truncate">
-                Case Study Discussion: {caseStudy.caseNumber}
+                Case Discussion: {caseStudy.caseNumber}
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            <button
-              onClick={() => setShowQueryModal(true)}
-              className="px-3 sm:px-4 py-2 bg-amber-500 hover:bg-amber-600 text-[#081326] rounded-xl text-xs font-black transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
-            >
-              <MessageSquare className="w-3.5 h-3.5" />
-              <span>Raise Query</span>
-            </button>
+            {caseStudy.allowQueries !== false && (
+              <button
+                onClick={() => setShowQueryModal(true)}
+                className="px-3 sm:px-4 py-2 bg-amber-500 hover:bg-amber-600 text-[#081326] rounded-xl text-xs font-black transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+              >
+                <MessageSquare className="w-3.5 h-3.5" />
+                <span>Raise Query</span>
+              </button>
+            )}
             <button
               onClick={() => window.print()}
               className="p-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl transition-colors cursor-pointer hidden sm:flex"
@@ -168,6 +241,9 @@ const SharedCaseStudy = () => {
                 <span className="px-3 py-1 bg-[#081326] text-amber-400 rounded-lg text-xs font-mono font-black">
                   {caseStudy.caseNumber}
                 </span>
+                <span className={`${getCaseTypeBadge(caseStudy.caseType)} px-2 py-0.5 rounded-md text-[10px] font-bold border shrink-0`}>
+                  {caseStudy.caseType || 'Case Discussion'}
+                </span>
                 <span className="px-2.5 py-0.5 rounded-md text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">
                   {caseStudy.status}
                 </span>
@@ -177,25 +253,29 @@ const SharedCaseStudy = () => {
               </h1>
             </div>
 
-            <div className="text-left sm:text-right shrink-0">
-              <p className="text-[10px] font-bold text-gray-400 uppercase">Estimated Loan Amount</p>
-              <p className="text-lg sm:text-xl font-black text-emerald-700">
-                {caseStudy.estimatedLoanAmount ? `₹ ${Number(caseStudy.estimatedLoanAmount).toLocaleString('en-IN')}` : 'As Discussed'}
-              </p>
-            </div>
+            {caseStudy.estimatedLoanAmount > 0 && (
+              <div className="text-left sm:text-right shrink-0">
+                <p className="text-[10px] font-bold text-gray-400 uppercase">Estimated Value / Loan</p>
+                <p className="text-lg sm:text-xl font-black text-emerald-700">
+                  ₹ {Number(caseStudy.estimatedLoanAmount).toLocaleString('en-IN')}
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="flex flex-wrap gap-4 text-xs font-medium text-gray-500 pt-2 border-t border-gray-100">
+            {caseStudy.clientName && (
+              <div className="flex items-center gap-1.5 text-gray-700">
+                <span className="text-gray-400">Client / Ref:</span>
+                <span className="font-bold">{caseStudy.clientName}</span>
+              </div>
+            )}
             {caseStudy.propertyLocation && (
               <div className="flex items-center gap-1.5 text-gray-700">
                 <MapPin className="w-3.5 h-3.5 text-gray-400" />
                 <span>{caseStudy.propertyLocation}</span>
               </div>
             )}
-            <div className="flex items-center gap-1 text-gray-700">
-              <span className="text-gray-400">Type:</span>
-              <span className="font-bold">{caseStudy.propertyType}</span>
-            </div>
             {sortedDocs.length > 0 && (
               <div className="flex items-center gap-1 text-gray-700">
                 <span className="text-gray-400">Evidence:</span>
@@ -207,14 +287,14 @@ const SharedCaseStudy = () => {
           {/* Issue & Complication Summary */}
           {caseStudy.caseIssue && (
             <div className="p-4 bg-slate-50 rounded-2xl border border-gray-100 space-y-1">
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Case Discussion Matter</p>
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Subject Matter & Discussion Focus</p>
               <p className="text-xs sm:text-sm font-medium text-gray-800 leading-relaxed">{caseStudy.caseIssue}</p>
             </div>
           )}
 
           {caseStudy.legalComplications && (
             <div className="p-4 bg-amber-50/50 rounded-2xl border border-amber-200/80 space-y-1">
-              <p className="text-[10px] font-black text-amber-900 uppercase tracking-wider">Title & Legal Specifics</p>
+              <p className="text-[10px] font-black text-amber-900 uppercase tracking-wider">Technical Observations</p>
               <p className="text-xs sm:text-sm font-medium text-amber-950 leading-relaxed">{caseStudy.legalComplications}</p>
             </div>
           )}
@@ -249,7 +329,7 @@ const SharedCaseStudy = () => {
           </div>
         )}
 
-        {/* Documents Section (Clean Banker List matching Screenshot) */}
+        {/* Supporting Documents Section */}
         <div className="space-y-3">
           <div className="flex items-center justify-between px-1">
             <h2 className="text-xs font-black text-gray-400 uppercase tracking-wider">
@@ -317,19 +397,24 @@ const SharedCaseStudy = () => {
         </div>
 
         {/* Existing Queries & Clarifications */}
-        {(caseStudy.bankerQueries || []).length > 0 && (
+        {queriesList.length > 0 && (
           <div className="space-y-3">
             <h2 className="text-xs font-black text-gray-400 uppercase tracking-wider px-1">
-              Recorded Queries & Clarifications ({(caseStudy.bankerQueries || []).length})
+              Recorded Discussion & Clarifications ({queriesList.length})
             </h2>
 
-            <div className="space-y-2.5">
-              {(caseStudy.bankerQueries || []).map((q, qIdx) => (
-                <div key={q.id || qIdx} className="bg-white p-4 sm:p-5 rounded-3xl shadow-sm border border-gray-100 space-y-2.5">
+            <div className="space-y-3">
+              {queriesList.map((q, qIdx) => (
+                <div key={q.id || q._id || qIdx} className="bg-white p-5 rounded-3xl shadow-sm border border-gray-100 space-y-3">
                   <div className="flex items-center justify-between gap-2 flex-wrap">
-                    <span className="font-bold text-xs text-[#081326]">
-                      {q.bankerName} ({q.bankName || 'Bank'})
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-xs text-[#081326]">
+                        {q.authorName} {q.bankName ? `(${q.bankName})` : ''}
+                      </span>
+                      <span className="text-[10px] font-bold uppercase bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full border">
+                        {q.authorRole || 'Participant'}
+                      </span>
+                    </div>
                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
                       q.status === 'Resolved' || q.status === 'Answered'
                         ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
@@ -339,11 +424,26 @@ const SharedCaseStudy = () => {
                     </span>
                   </div>
 
-                  <div className="p-3 bg-gray-50 rounded-2xl text-xs font-medium text-gray-700">
+                  <div className="p-3.5 bg-gray-50 rounded-2xl text-xs font-medium text-gray-700">
                     {q.queryText}
                   </div>
 
-                  {q.staffReply && (
+                  {/* Threaded replies */}
+                  {q.replies && q.replies.length > 0 && (
+                    <div className="space-y-2 pl-3 border-l-2 border-blue-200">
+                      {q.replies.map((rep, rIdx) => (
+                        <div key={rep.id || rep._id || rIdx} className="p-3 bg-blue-50/70 rounded-2xl text-xs text-blue-950 font-medium border border-blue-100 space-y-1">
+                          <div className="flex justify-between items-center text-[10px] text-blue-700 font-bold uppercase">
+                            <span>{rep.repliedByName || 'Staff Response'}</span>
+                            <span className="font-medium text-blue-500">{new Date(rep.repliedAt).toLocaleDateString()}</span>
+                          </div>
+                          <p>{rep.replyText}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {(!q.replies || q.replies.length === 0) && q.staffReply && (
                     <div className="p-3 bg-blue-50/70 rounded-2xl text-xs text-blue-950 font-medium border border-blue-100 space-y-1">
                       <p className="text-[10px] font-bold text-blue-700 uppercase">Consultant Resolution:</p>
                       <p>{q.staffReply}</p>
@@ -357,15 +457,17 @@ const SharedCaseStudy = () => {
       </main>
 
       {/* Floating Raise Query Pill on Mobile */}
-      <div className="fixed bottom-4 right-4 z-30 sm:hidden">
-        <button
-          onClick={() => setShowQueryModal(true)}
-          className="px-5 py-3 bg-[#081326] text-amber-400 hover:bg-[#11203d] rounded-full text-xs font-black shadow-2xl flex items-center gap-2 border border-amber-400/40 cursor-pointer"
-        >
-          <MessageSquare className="w-4 h-4" />
-          <span>Raise Query</span>
-        </button>
-      </div>
+      {caseStudy.allowQueries !== false && (
+        <div className="fixed bottom-4 right-4 z-30 sm:hidden">
+          <button
+            onClick={() => setShowQueryModal(true)}
+            className="px-5 py-3 bg-[#081326] text-amber-400 hover:bg-[#11203d] rounded-full text-xs font-black shadow-2xl flex items-center gap-2 border border-amber-400/40 cursor-pointer"
+          >
+            <MessageSquare className="w-4 h-4" />
+            <span>Raise Query</span>
+          </button>
+        </div>
+      )}
 
       {/* DOCUMENT PREVIEW MODAL */}
       {previewDoc && (
@@ -382,14 +484,14 @@ const SharedCaseStudy = () => {
                   download={previewDoc.name}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="p-1.5 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-bold"
+                  className="p-1.5 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-bold cursor-pointer"
                   title="Download"
                 >
                   <Download className="w-4 h-4" />
                 </a>
                 <button
                   onClick={() => setPreviewDoc(null)}
-                  className="p-1.5 hover:bg-red-50 text-gray-400 hover:text-red-500 rounded-lg"
+                  className="p-1.5 hover:bg-red-50 text-gray-400 hover:text-red-500 rounded-lg cursor-pointer"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -412,9 +514,9 @@ const SharedCaseStudy = () => {
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 animate-in fade-in zoom-in duration-200">
             <div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-3">
               <h3 className="font-black text-sm text-[#081326] flex items-center gap-2">
-                <MessageSquare className="w-4 h-4 text-amber-500" /> Raise Banker Query / Requirement
+                <MessageSquare className="w-4 h-4 text-amber-500" /> Raise Case Query / Requirement
               </h3>
-              <button onClick={() => setShowQueryModal(false)} className="text-gray-400 hover:text-gray-600">
+              <button onClick={() => setShowQueryModal(false)} className="text-gray-400 hover:text-gray-600 cursor-pointer">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -422,38 +524,54 @@ const SharedCaseStudy = () => {
             <form onSubmit={handleQuerySubmit} className="space-y-3.5">
               <div className="grid grid-cols-2 gap-3">
                 <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Your Role</label>
+                  <select
+                    value={queryForm.authorRole}
+                    onChange={(e) => setQueryForm({ ...queryForm, authorRole: e.target.value })}
+                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold outline-none"
+                  >
+                    <option value="banker">Banker / Credit</option>
+                    <option value="advocate">Panel Advocate</option>
+                    <option value="valuer">Valuer / Technical</option>
+                    <option value="ca">Chartered Accountant</option>
+                    <option value="client">Client</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+                <div>
                   <label className="block text-xs font-bold text-gray-700 mb-1">Your Name</label>
                   <input
                     type="text"
                     required
                     placeholder="e.g. Rahul Sharma"
-                    value={queryForm.bankerName}
-                    onChange={(e) => setQueryForm({ ...queryForm, bankerName: e.target.value })}
+                    value={queryForm.authorName}
+                    onChange={(e) => setQueryForm({ ...queryForm, authorName: e.target.value })}
                     className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-[#f59e0b]"
                   />
                 </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">Bank / Institution</label>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Institution / Firm</label>
                   <input
                     type="text"
-                    required
                     placeholder="e.g. State Bank of India"
                     value={queryForm.bankName}
                     onChange={(e) => setQueryForm({ ...queryForm, bankName: e.target.value })}
                     className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-[#f59e0b]"
                   />
                 </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1">Phone Number (Optional)</label>
-                <input
-                  type="text"
-                  placeholder="e.g. 9876543210"
-                  value={queryForm.bankerPhone}
-                  onChange={(e) => setQueryForm({ ...queryForm, bankerPhone: e.target.value })}
-                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-[#f59e0b]"
-                />
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">Contact Number</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 9876543210"
+                    value={queryForm.authorPhone}
+                    onChange={(e) => setQueryForm({ ...queryForm, authorPhone: e.target.value })}
+                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-[#f59e0b]"
+                  />
+                </div>
               </div>
 
               <div>
@@ -463,7 +581,7 @@ const SharedCaseStudy = () => {
                 <textarea
                   rows="3"
                   required
-                  placeholder="Describe legal pendency, missing link deed, or clarification required..."
+                  placeholder="Describe pendency, missing deed, or clarification required on this case..."
                   value={queryForm.queryText}
                   onChange={(e) => setQueryForm({ ...queryForm, queryText: e.target.value })}
                   className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-[#f59e0b]"
@@ -474,14 +592,14 @@ const SharedCaseStudy = () => {
                 <button
                   type="button"
                   onClick={() => setShowQueryModal(false)}
-                  className="flex-1 py-2.5 border border-gray-200 text-gray-700 rounded-xl text-xs font-bold"
+                  className="flex-1 py-2.5 border border-gray-200 text-gray-700 rounded-xl text-xs font-bold cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={querySubmitting}
-                  className="flex-1 py-2.5 bg-[#081326] text-white rounded-xl text-xs font-bold hover:bg-[#11203d] flex items-center justify-center gap-1.5 disabled:opacity-50"
+                  className="flex-1 py-2.5 bg-[#081326] text-white rounded-xl text-xs font-bold hover:bg-[#11203d] flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
                 >
                   <Send className="w-3.5 h-3.5 text-amber-400" />
                   <span>{querySubmitting ? 'Submitting...' : 'Submit Query'}</span>
@@ -497,4 +615,3 @@ const SharedCaseStudy = () => {
 };
 
 export default SharedCaseStudy;
-

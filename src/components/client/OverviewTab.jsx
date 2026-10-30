@@ -34,17 +34,6 @@ const OverviewTab = ({ client, onEditClick, onManageApplicants }) => {
     });
   };
 
-  const getStatusBadge = (status) => {
-    switch (status) {
-      case 'Approved':
-        return <span className="px-2 py-0.5 bg-green-50 text-green-700 border border-green-200 rounded-md text-[10px] font-black">Approved</span>;
-      case 'Rejected':
-        return <span className="px-2 py-0.5 bg-red-50 text-red-600 border border-red-200 rounded-md text-[10px] font-black">Rejected</span>;
-      default:
-        return <span className="px-2 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-md text-[10px] font-black">Pending</span>;
-    }
-  };
-
   // Primary Applicant extraction
   const primaryApp = (client.applicants && client.applicants.length > 0) ? client.applicants[0] : null;
   const primaryName = primaryApp?.fullName || client.fullName || 'Client Case';
@@ -75,23 +64,11 @@ const OverviewTab = ({ client, onEditClick, onManageApplicants }) => {
         {/* Core Highlighted Card: Applicant Name, Loan Amount, Case Type, Profession */}
         <div className="bg-white rounded-2xl shadow-xs border border-gray-100 p-4 sm:p-5 space-y-3.5">
           
-          {/* Top Bar with Edit button & Status */}
-          <div className="flex items-center justify-between border-b border-gray-100 pb-2.5">
+          {/* Top Bar */}
+          <div className="border-b border-gray-100 pb-2">
             <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
               Loan Case Overview
             </span>
-            <div className="flex items-center gap-2">
-              {getStatusBadge(client.status)}
-              {onEditClick && (
-                <button 
-                  onClick={onEditClick}
-                  className="px-2.5 py-1 bg-amber-50 text-amber-900 hover:bg-amber-100 border border-amber-200 rounded-lg text-[11px] font-bold transition-colors flex items-center gap-1 cursor-pointer"
-                  title="Edit Case Details"
-                >
-                  <Edit className="w-3 h-3 text-amber-700" /> Edit Case
-                </button>
-              )}
-            </div>
           </div>
 
           {/* 4 Highlighted Focus Items */}
@@ -102,7 +79,7 @@ const OverviewTab = ({ client, onEditClick, onManageApplicants }) => {
               <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">
                 Applicant Name
               </span>
-              <p className="text-base sm:text-lg font-black text-[#081326] truncate" title={primaryName}>
+              <p className="text-base sm:text-lg font-black text-[#081326] break-words" title={primaryName}>
                 {primaryName}
               </p>
             </div>

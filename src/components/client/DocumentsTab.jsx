@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { 
   Eye, Search, FileText, Upload, Trash2, ShieldAlert, X, Download, 
   FolderPlus, Folder, ArrowLeft, FolderOpen, Copy, Check, ExternalLink,
-  ClipboardCheck 
+  ClipboardCheck, Edit3 
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { getAssetUrl, getPublicShareDocsUrl, getBankerShareMessage } from '../../utils/url';
 import api from '../../api/axios';
 import { useAuth } from '../../context/AuthContext';
@@ -53,6 +54,10 @@ const DocumentsTab = ({ client, onRefresh }) => {
   // Form states
   const [newFolderName, setNewFolderName] = useState('');
   const [newFolderDescription, setNewFolderDescription] = useState('');
+  const [subfolderParent, setSubfolderParent] = useState(null);
+  const [renameFolderModal, setRenameFolderModal] = useState(null); // { id, oldName }
+  const [renameInput, setRenameInput] = useState('');
+  const [renamingFolder, setRenamingFolder] = useState(false);
 
   const [docType, setDocType] = useState('otherDocs');
   const [docName, setDocName] = useState('');
@@ -167,7 +172,7 @@ const DocumentsTab = ({ client, onRefresh }) => {
   const handleCreateFolderSubmit = async (e) => {
     e.preventDefault();
     if (!newFolderName.trim()) {
-      alert('Folder name is required.');
+      toast.error('Folder name is required.');
       return;
     }
     try {
@@ -175,20 +180,45 @@ const DocumentsTab = ({ client, onRefresh }) => {
       const res = await api.post(`/clients/${client._id}/folders`, {
         folderName: newFolderName.trim(),
         name: newFolderName.trim(),
+        parentFolderName: subfolderParent || (activeFolder ? (activeFolder.folderName || activeFolder.name) : null),
         description: newFolderDescription.trim()
       });
       if (res.data.success) {
+        toast.success(`Folder "${newFolderName.trim()}" created!`);
         setShowCreateFolderModal(false);
         setNewFolderName('');
         setNewFolderDescription('');
+        setSubfolderParent(null);
         if (onRefresh) onRefresh();
-        else window.location.reload();
       }
     } catch (err) {
       console.error('Create folder error:', err);
-      alert('Failed to create folder: ' + (err.response?.data?.message || err.message));
+      toast.error('Failed to create folder: ' + (err.response?.data?.message || err.message));
     } finally {
       setCreatingFolder(false);
+    }
+  };
+
+  const handleRenameFolderSubmit = async (e) => {
+    e.preventDefault();
+    if (!renameFolderModal || !renameInput.trim()) return;
+    try {
+      setRenamingFolder(true);
+      const res = await api.put(`/clients/${client._id}/folders/${renameFolderModal.id}`, {
+        folderName: renameInput.trim(),
+        name: renameInput.trim()
+      });
+      if (res.data.success) {
+        toast.success(`Folder renamed to "${renameInput.trim()}"`);
+        setRenameFolderModal(null);
+        setRenameInput('');
+        if (onRefresh) onRefresh();
+      }
+    } catch (err) {
+      console.error('Rename folder error:', err);
+      toast.error('Failed to rename folder: ' + (err.response?.data?.message || err.message));
+    } finally {
+      setRenamingFolder(false);
     }
   };
 
@@ -322,7 +352,15 @@ const DocumentsTab = ({ client, onRefresh }) => {
     (d && typeof d.category === 'string' && d.category.toLowerCase().includes(query))
   );
 
-  const filteredFolders = (customFolders || []).filter(f => 
+  const currentFolderName = activeFolder ? (activeFolder.folderName || activeFolder.name) : null;
+  const visibleFolders = (customFolders || []).filter(f => {
+    if (currentFolderName) {
+      return (f.parentFolderName || null) === currentFolderName;
+    }
+    return !f.parentFolderName;
+  });
+
+  const filteredFolders = (visibleFolders || []).filter(f => 
     f && typeof (f.folderName || f.name) === 'string' && (f.folderName || f.name).toLowerCase().includes(query)
   );
 
@@ -441,20 +479,124 @@ const DocumentsTab = ({ client, onRefresh }) => {
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 w-full sm:w-auto">
+                <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
                   <button
                     onClick={() => setShowUploadModal(true)}
-                    className="flex-1 sm:flex-none px-4 py-2.5 bg-[#081326] text-white rounded-xl text-xs font-bold hover:bg-[#11203d] transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer"
+                    className="px-3.5 py-2 bg-[#081326] text-white rounded-xl text-xs font-bold hover:bg-[#11203d] transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
                   >
-                    <Upload className="w-3.5 h-3.5 text-[#f59e0b]" /> Upload Document to this Folder
+                    <Upload className="w-3.5 h-3.5 text-[#f59e0b]" /> Upload File
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSubfolderParent(activeFolder.folderName || activeFolder.name);
+                      setNewFolderName('');
+                      setNewFolderDescription('');
+                      setShowCreateFolderModal(true);
+                    }}
+                    className="px-3 py-2 bg-amber-50 text-amber-900 border border-amber-200 rounded-xl text-xs font-bold hover:bg-amber-100 transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                    title="Create Subfolder inside this folder"
+                  >
+                    <FolderPlus className="w-3.5 h-3.5 text-amber-700" /> + Subfolder
+                  </button>
+                  <button
+                    onClick={() => {
+                      setRenameFolderModal({ id: activeFolder._id, oldName: activeFolder.folderName || activeFolder.name });
+                      setRenameInput(activeFolder.folderName || activeFolder.name);
+                    }}
+                    className="px-3 py-2 bg-white text-gray-700 border border-gray-200 rounded-xl text-xs font-bold hover:bg-gray-50 transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                    title="Rename this Folder"
+                  >
+                    <Edit3 className="w-3.5 h-3.5 text-gray-500" /> Rename
                   </button>
                   <button
                     onClick={() => setCurrentFolder(null)}
-                    className="px-3.5 py-2.5 bg-white text-gray-600 border border-gray-200 rounded-xl text-xs font-bold hover:bg-gray-50 transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                    className="px-3 py-2 bg-white text-gray-600 border border-gray-200 rounded-xl text-xs font-bold hover:bg-gray-50 transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
                   >
                     <ArrowLeft className="w-3.5 h-3.5" /> Back
                   </button>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* Subfolders Section (When inside a folder with child subfolders) */}
+          {activeFolder && filteredFolders.length > 0 && (
+            <div className="px-6">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-3 flex items-center gap-1.5">
+                <Folder className="w-3.5 h-3.5 text-amber-500 fill-amber-400" /> Subfolders in {activeFolder.folderName || activeFolder.name}
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filteredFolders.map((folder) => {
+                  const fTitle = folder.folderName || folder.name;
+                  const fDocCount = folder.documents ? folder.documents.length : 0;
+                  return (
+                    <div 
+                      key={folder._id}
+                      className="p-4 rounded-xl border border-gray-200 bg-white hover:border-amber-400 hover:shadow-md transition-all group flex flex-col justify-between cursor-pointer gap-3"
+                      onClick={() => setCurrentFolder(folder)}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-3 overflow-hidden">
+                          <div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center shrink-0 border border-amber-100 group-hover:bg-amber-100 transition-colors">
+                            <Folder className="w-5 h-5 text-amber-500 fill-amber-400" />
+                          </div>
+                          <div className="truncate">
+                            <h5 className="font-bold text-[#081326] text-xs truncate group-hover:text-amber-600 transition-colors">
+                              {fTitle}
+                            </h5>
+                            <p className="text-[10px] text-gray-400 font-medium">
+                              {fDocCount} file{fDocCount === 1 ? '' : 's'}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setRenameFolderModal({ id: folder._id, oldName: fTitle });
+                              setRenameInput(fTitle);
+                            }}
+                            className="p-1.5 rounded-lg text-gray-400 hover:text-amber-600 hover:bg-amber-50 transition-colors cursor-pointer"
+                            title="Rename Folder"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setFolderToDelete(folder);
+                              setShowFolderDeleteModal(true);
+                            }}
+                            className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                            title="Delete Folder"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="pt-2 border-t border-gray-100 flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-amber-600 group-hover:translate-x-0.5 transition-transform flex items-center gap-1">
+                          Open Subfolder &rarr;
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setCurrentFolder(folder);
+                            setShowUploadModal(true);
+                          }}
+                          className="px-2.5 py-1 bg-amber-50 text-amber-800 hover:bg-amber-100 rounded-lg text-[10px] font-bold border border-amber-200 flex items-center gap-1 cursor-pointer"
+                          title="Direct Upload to Subfolder"
+                        >
+                          <Upload className="w-3 h-3 text-[#f59e0b]" /> + Upload
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -487,17 +629,32 @@ const DocumentsTab = ({ client, onRefresh }) => {
                             </p>
                           </div>
                         </div>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setFolderToDelete(folder);
-                            setShowFolderDeleteModal(true);
-                          }}
-                          className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
-                          title="Delete Folder"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setRenameFolderModal({ id: folder._id, oldName: fTitle });
+                              setRenameInput(fTitle);
+                            }}
+                            className="p-1.5 rounded-lg text-gray-400 hover:text-amber-600 hover:bg-amber-50 transition-colors cursor-pointer"
+                            title="Rename Folder"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setFolderToDelete(folder);
+                              setShowFolderDeleteModal(true);
+                            }}
+                            className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                            title="Delete Folder"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
 
                       <div className="pt-2 border-t border-gray-100 flex items-center justify-between">
@@ -725,18 +882,21 @@ const DocumentsTab = ({ client, onRefresh }) => {
           <div className="relative bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl animate-in fade-in zoom-in-95 duration-200">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-base font-black text-[#081326] flex items-center gap-2">
-                <FolderPlus className="w-5 h-5 text-[#f59e0b]" /> Create Custom Folder
+                <FolderPlus className="w-5 h-5 text-[#f59e0b]" /> 
+                {subfolderParent ? `Create Subfolder in "${subfolderParent}"` : 'Create Custom Folder'}
               </h3>
-              <button onClick={() => setShowCreateFolderModal(false)} className="text-gray-400 hover:text-gray-600">
+              <button onClick={() => { setShowCreateFolderModal(false); setSubfolderParent(null); }} className="text-gray-400 hover:text-gray-600 cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
             <form onSubmit={handleCreateFolderSubmit} className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1">Folder Name *</label>
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  {subfolderParent ? 'Subfolder Name *' : 'Folder Name *'}
+                </label>
                 <input 
                   type="text" 
-                  placeholder="e.g. Property Documents, GST Returns, Personal Records"
+                  placeholder={subfolderParent ? "e.g. Year 2024, Chain Deeds, Sanction Letters" : "e.g. Property Documents, GST Returns, Personal Records"}
                   value={newFolderName}
                   onChange={(e) => setNewFolderName(e.target.value)}
                   required
@@ -764,9 +924,9 @@ const DocumentsTab = ({ client, onRefresh }) => {
                 <button 
                   type="submit" 
                   disabled={creatingFolder}
-                  className="flex-1 py-2.5 bg-[#081326] text-white rounded-xl text-xs font-bold hover:bg-[#11203d] disabled:opacity-50"
+                  className="flex-1 py-2.5 bg-[#081326] text-white rounded-xl text-xs font-bold hover:bg-[#11203d] disabled:opacity-50 cursor-pointer"
                 >
-                  {creatingFolder ? 'Creating...' : 'Create Folder'}
+                  {creatingFolder ? 'Creating...' : (subfolderParent ? 'Create Subfolder' : 'Create Folder')}
                 </button>
               </div>
             </form>
@@ -856,6 +1016,7 @@ const DocumentsTab = ({ client, onRefresh }) => {
                   Select Files (Multiple Allowed: PDF / Images / Docs) *
                 </label>
                 <input 
+                  id="docstab-file-input"
                   type="file" 
                   multiple
                   onChange={(e) => {
@@ -901,6 +1062,13 @@ const DocumentsTab = ({ client, onRefresh }) => {
                       </div>
                     </div>
                   ))}
+                  <button
+                    type="button"
+                    onClick={() => document.getElementById('docstab-file-input')?.click()}
+                    className="w-full py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer border border-blue-200 mt-2"
+                  >
+                    + Add More Files
+                  </button>
                 </div>
               )}
 
@@ -1189,6 +1357,55 @@ const DocumentsTab = ({ client, onRefresh }) => {
                 </a>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Rename Folder Modal */}
+      {renameFolderModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#081326]/70 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 animate-in zoom-in-95 duration-150">
+            <div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-3">
+              <h3 className="font-black text-sm text-[#081326] flex items-center gap-2">
+                <Edit3 className="w-4 h-4 text-[#f59e0b]" /> Rename Folder
+              </h3>
+              <button 
+                type="button" 
+                onClick={() => setRenameFolderModal(null)} 
+                className="text-gray-400 hover:text-gray-600 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <form onSubmit={handleRenameFolderSubmit} className="space-y-4">
+              <div>
+                <label className="block text-[11px] font-bold text-gray-500 mb-1.5 uppercase">New Folder Name</label>
+                <input
+                  type="text"
+                  required
+                  value={renameInput}
+                  onChange={(e) => setRenameInput(e.target.value)}
+                  autoFocus
+                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold outline-none focus:border-[#f59e0b]"
+                />
+              </div>
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setRenameFolderModal(null)}
+                  className="flex-1 py-2 text-xs font-bold text-gray-500 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={renamingFolder}
+                  className="flex-1 py-2 text-xs font-bold text-white bg-[#081326] hover:bg-[#11203d] rounded-xl transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  {renamingFolder ? 'Renaming...' : 'Save Name'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

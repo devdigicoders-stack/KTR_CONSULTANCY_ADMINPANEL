@@ -18,6 +18,8 @@ import SubmissionDetailsModal from './SubmissionDetailsModal';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
+const isPdf = (url) => url && url.toLowerCase().split('?')[0].endsWith('.pdf');
+
 const WhatsAppIcon = ({ className = "w-3.5 h-3.5" }) => (
   <svg className={className} viewBox="0 0 24 24" fill="currentColor">
     <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.82 11.82 0 00-3.48-8.413Z"/>
@@ -120,50 +122,6 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
     window.addEventListener('click', handleOutsideClick);
     return () => window.removeEventListener('click', handleOutsideClick);
   }, []);
-
-  // Track active visible document on continuous scroll so header title & #X/Total updates in real time
-  useEffect(() => {
-    if (viewMode !== 'continuous') return;
-
-    let ticking = false;
-    const handleScroll = () => {
-      if (!ticking) {
-        window.requestAnimationFrame(() => {
-          const headerOffset = 130;
-          let currentVisible = 0;
-
-          for (let i = 0; i < sortedDocItems.length; i++) {
-            const el = docRefs.current[i] || document.getElementById(`staff-doc-section-${i}`);
-            if (el) {
-              const rect = el.getBoundingClientRect();
-              if (rect.top <= headerOffset + 80 && rect.bottom > headerOffset) {
-                currentVisible = i;
-                break;
-              } else if (rect.top > headerOffset + 80) {
-                break;
-              } else {
-                currentVisible = i;
-              }
-            }
-          }
-
-          setActiveDocIndex(currentVisible);
-          ticking = false;
-        });
-        ticking = true;
-      }
-    };
-
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    const t1 = setTimeout(handleScroll, 150);
-    const t2 = setTimeout(handleScroll, 500);
-
-    return () => {
-      window.removeEventListener('scroll', handleScroll);
-      clearTimeout(t1);
-      clearTimeout(t2);
-    };
-  }, [viewMode, sortedDocItems.length]);
 
   const closePreview = useCallback(() => {
     if (window.history.state?.ktrPreviewModal) {
@@ -759,6 +717,35 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
   // ----------------------------------------------------
   // INDIVIDUAL FILE REORDERING WITHIN CATEGORY
   // ----------------------------------------------------
+  const executeFileReorder = async (groupName, fromIndex, toIndex) => {
+    if (fromIndex === null || toIndex === null || fromIndex === toIndex) return;
+    const cat = sortedDocItems.find(item => item.name === groupName || item.id === groupName);
+    if (!cat || !cat.files) return;
+
+    // Reorder files within this category locally
+    const updatedFiles = [...cat.files];
+    const [movedFile] = updatedFiles.splice(fromIndex, 1);
+    updatedFiles.splice(toIndex, 0, movedFile);
+    cat.files = updatedFiles;
+
+    // Generate comprehensive documentOrder list
+    const newOrderKeys = buildOrderKeys(sortedDocItems);
+
+    setLocalOrder(newOrderKeys);
+
+    try {
+      setSavingOrder(true);
+      await api.put(`/clients/${client._id}/document-order`, {
+        documentOrder: newOrderKeys
+      });
+      if (onRefresh) onRefresh();
+    } catch (err) {
+      console.error('Failed to save file order:', err);
+    } finally {
+      setSavingOrder(false);
+    }
+  };
+
   const handleMoveFileItem = async (groupName, fileIndex, direction) => {
     const targetFileIndex = direction === 'up' ? fileIndex - 1 : fileIndex + 1;
     const cat = sortedDocItems.find(item => item.name === groupName || item.id === groupName);
@@ -834,35 +821,6 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
     touchFileStartYRef.current = null;
     setDraggedFile(null);
     setTouchFileHoverIndex(null);
-  };
-
-  const executeFileReorder = async (groupName, fromIndex, toIndex) => {
-    if (fromIndex === null || toIndex === null || fromIndex === toIndex) return;
-    const cat = sortedDocItems.find(item => item.name === groupName || item.id === groupName);
-    if (!cat || !cat.files) return;
-
-    // Reorder files within this category locally
-    const updatedFiles = [...cat.files];
-    const [movedFile] = updatedFiles.splice(fromIndex, 1);
-    updatedFiles.splice(toIndex, 0, movedFile);
-    cat.files = updatedFiles;
-
-    // Generate comprehensive documentOrder list
-    const newOrderKeys = buildOrderKeys(sortedDocItems);
-
-    setLocalOrder(newOrderKeys);
-
-    try {
-      setSavingOrder(true);
-      await api.put(`/clients/${client._id}/document-order`, {
-        documentOrder: newOrderKeys
-      });
-      if (onRefresh) onRefresh();
-    } catch (err) {
-      console.error('Failed to save file order:', err);
-    } finally {
-      setSavingOrder(false);
-    }
   };
 
   // Upload handler
@@ -1403,8 +1361,6 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
     setShareDocModal(null);
   };
 
-  const isPdf = (url) => url && url.toLowerCase().split('?')[0].endsWith('.pdf');
-
   const toggleSelectDoc = (id) => {
     setSelectedDocIds(prev => 
       prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
@@ -1434,33 +1390,83 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
     setExpandedDocGroups(prev => ({ ...prev, [groupId]: !prev[groupId] }));
   };
 
-  // Continuous View Scroll Observer to track active visible doc name
+  // Track active visible document on continuous scroll so header title & #X/Total updates in real time
   useEffect(() => {
     if (viewMode !== 'continuous') return;
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            const index = Number(entry.target.getAttribute('data-doc-index'));
-            if (!isNaN(index)) {
-              setActiveDocIndex(index);
+    let ticking = false;
+    const handleScroll = () => {
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          let bestIndex = 0;
+          let minDistance = Infinity;
+
+          for (let i = 0; i < sortedDocItems.length; i++) {
+            const el = docRefs.current[i] || document.getElementById(`staff-doc-section-${i}`);
+            if (el) {
+              const rect = el.getBoundingClientRect();
+              // Check if document section is currently visible across the reading line (around 140px)
+              if (rect.top <= 160 && rect.bottom >= 120) {
+                bestIndex = i;
+                break;
+              }
+              const dist = Math.abs(rect.top - 140);
+              if (dist < minDistance && rect.bottom > 100) {
+                minDistance = dist;
+                bestIndex = i;
+              }
             }
           }
-        });
-      },
-      {
-        root: null,
-        rootMargin: '-20% 0px -70% 0px',
-        threshold: 0
-      }
-    );
 
-    docRefs.current.forEach((el) => {
+          setActiveDocIndex(bestIndex);
+          ticking = false;
+        });
+        ticking = true;
+      }
+    };
+
+    // Use capturing phase so scroll events from any parent container (drawer overflow-y-auto or window) are caught
+    window.addEventListener('scroll', handleScroll, { capture: true, passive: true });
+    
+    // Also attach directly to any scrollable parent container
+    const scrollParent = docRefs.current[0]?.closest('.overflow-y-auto');
+    if (scrollParent) {
+      scrollParent.addEventListener('scroll', handleScroll, { passive: true });
+    }
+
+    // IntersectionObserver as secondary real-time tracker
+    const observer = new IntersectionObserver((entries) => {
+      const visible = entries.filter(e => e.isIntersecting);
+      if (visible.length > 0) {
+        visible.sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+        const idx = Number(visible[0].target.getAttribute('data-doc-index'));
+        if (!isNaN(idx)) {
+          setActiveDocIndex(idx);
+        }
+      }
+    }, {
+      threshold: [0, 0.2, 0.5, 0.8],
+      rootMargin: '-80px 0px -40% 0px'
+    });
+
+    docRefs.current.forEach(el => {
       if (el) observer.observe(el);
     });
 
-    return () => observer.disconnect();
+    const t1 = setTimeout(handleScroll, 100);
+    const t2 = setTimeout(handleScroll, 300);
+    const t3 = setTimeout(handleScroll, 600);
+
+    return () => {
+      window.removeEventListener('scroll', handleScroll, { capture: true });
+      if (scrollParent) {
+        scrollParent.removeEventListener('scroll', handleScroll);
+      }
+      observer.disconnect();
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+    };
   }, [viewMode, sortedDocItems.length]);
 
   // Bulk Delete Selected Documents

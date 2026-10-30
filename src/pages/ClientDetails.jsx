@@ -54,25 +54,20 @@ const ClientDetails = () => {
     return () => window.removeEventListener('focus', handleFocus);
   }, [id]);
 
-  // Phone Back Button interception: Return to Client List (/clients)
+  // Phone Back Button: Return to Client List (/clients)
   useEffect(() => {
-    try {
-      window.history.pushState({ ktrClientDetails: true }, '');
-    } catch (e) {}
-
     const handlePopState = (e) => {
       // If modal or continuous view was open, those components handle closing themselves
       if (window.history.state?.ktrStaffDocView || window.history.state?.ktrPreviewModal || window.history.state?.ktrModalOpen) {
         return;
       }
-      navigate('/clients', { replace: true });
     };
 
     window.addEventListener('popstate', handlePopState);
     return () => {
       window.removeEventListener('popstate', handlePopState);
     };
-  }, [navigate]);
+  }, []);
 
   const handleStatusChange = async (id, newStatus) => {
     try {
@@ -226,13 +221,13 @@ const ClientDetails = () => {
       {/* Main Client Profile Header Card */}
       <div className="bg-white rounded-2xl shadow-[0_0_20px_rgba(0,0,0,0.03)] border border-gray-100 flex flex-col">
         <div className={`p-6 md:p-8 flex flex-col md:flex-row gap-6 md:items-center justify-between ${activeTab === 'Documents' ? 'hidden md:flex' : 'flex'}`}>
-          <div className="flex items-center gap-6">
-            <div className="w-20 h-20 rounded-full bg-[#081326] flex items-center justify-center text-white text-3xl font-black shadow-lg">
-              {getInitials(client.fullName)}
-            </div>
+          <div className="flex items-center gap-4">
+            {client.photoUrl && (
+              <img src={getAssetUrl(client.photoUrl)} alt="Profile" className="w-14 h-14 rounded-full object-cover shadow-md border-2 border-white shrink-0" />
+            )}
             <div>
               <div className="flex items-center gap-3 mb-2 flex-wrap">
-                <h2 className="text-2xl font-black text-[#081326]">
+                <h2 className="text-xl sm:text-2xl font-black text-[#081326] break-words">
                   {client.fullName}
                   {(client.age || (client.dob ? (new Date().getFullYear() - new Date(client.dob).getFullYear()) : null)) !== null && (
                     <span className="text-base text-gray-500 font-bold ml-2">
