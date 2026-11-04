@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useParams, useSearchParams, Link } from 'react-router-dom';
 import { 
   FileText, ShieldCheck, Download, Share2, Printer, 
-  ExternalLink, ChevronRight, Copy, Check, AlertCircle, 
+  ExternalLink, ChevronLeft, ChevronRight, Copy, Check, AlertCircle, 
   Loader2, ArrowLeft, MoreVertical, X, Eye, FileSpreadsheet, 
   Image as ImageIcon, Building, User, Phone, CheckSquare, Square,
   Users, ChevronUp, ChevronDown, MessageSquare, HelpCircle, Send,
@@ -43,6 +43,7 @@ const SharedDocuments = () => {
   // Action Modals
   const [shareDocModal, setShareDocModal] = useState(null);
   const [topShareModal, setTopShareModal] = useState(false);
+  const [docNavModal, setDocNavModal] = useState(false);
   const [menuDoc, setMenuDoc] = useState(null);
 
   // Raise Query Modal State
@@ -400,11 +401,55 @@ const SharedDocuments = () => {
   const getNoteForDoc = (title, docObj) => {
     if (docObj?.notes) return docObj.notes;
     if (data?.documentNotes) {
-      if (data.documentNotes[title]) return data.documentNotes[title];
-      if (docObj?.name && data.documentNotes[docObj.name]) return data.documentNotes[docObj.name];
-      if (docObj?.category && data.documentNotes[docObj.category]) return data.documentNotes[docObj.category];
+      if (typeof data.documentNotes.get === 'function') {
+        const val = data.documentNotes.get(title) || 
+                    (docObj?.name && data.documentNotes.get(docObj.name)) || 
+                    (docObj?.fileUrl && data.documentNotes.get(docObj.fileUrl)) || 
+                    (docObj?.category && data.documentNotes.get(docObj.category));
+        if (val) return val;
+      } else if (typeof data.documentNotes === 'object') {
+        const val = data.documentNotes[title] || 
+                    (docObj?.name && data.documentNotes[docObj.name]) || 
+                    (docObj?.fileUrl && data.documentNotes[docObj.fileUrl]) || 
+                    (docObj?.category && data.documentNotes[docObj.category]);
+        if (val) return val;
+      }
     }
     return '';
+  };
+
+  const extractPasswordFromText = (text) => {
+    if (!text || typeof text !== 'string') return '';
+    let m = text.match(/\b(?:password|pswd|pwd|pass)\s*[:=\-]\s*([^\s,;]+)/i);
+    if (m && m[1]) return m[1].trim();
+    m = text.match(/\b(?:password|pswd|pwd)\s+is\s+([^\s,;]+)/i);
+    if (m && m[1]) return m[1].trim();
+    m = text.match(/\b(?:pswd|pwd)\s+([a-zA-Z0-9@#$%_*\.+-]+)/i);
+    if (m && m[1]) return m[1].trim();
+    return '';
+  };
+
+  const getPasswordForDoc = (key, docObj) => {
+    if (docObj?.password) return docObj.password;
+    if (data?.documentPasswords) {
+      if (typeof data.documentPasswords.get === 'function') {
+        const val = data.documentPasswords.get(key) || 
+                    (docObj?.name && data.documentPasswords.get(docObj.name)) || 
+                    (docObj?.fileUrl && data.documentPasswords.get(docObj.fileUrl)) || 
+                    (docObj?.fileTitle && data.documentPasswords.get(docObj.fileTitle));
+        if (val) return val;
+      } else if (typeof data.documentPasswords === 'object') {
+        const val = data.documentPasswords[key] || 
+                    (docObj?.name && data.documentPasswords[docObj.name]) || 
+                    (docObj?.title && data.documentPasswords[docObj.title]) || 
+                    (docObj?.fileTitle && data.documentPasswords[docObj.fileTitle]) || 
+                    (docObj?.fileUrl && data.documentPasswords[docObj.fileUrl]) || 
+                    (docObj?.docId && data.documentPasswords[docObj.docId.toString()]);
+        if (val) return val;
+      }
+    }
+    const note = getNoteForDoc(key, docObj);
+    return extractPasswordFromText(note);
   };
 
   // 1. Custom Documents
@@ -421,6 +466,7 @@ const SharedDocuments = () => {
     if (customGroup) groupKey = customGroup;
 
     const docNotes = getNoteForDoc(groupKey, cd) || getNoteForDoc(rawName, cd);
+    const docPassword = getPasswordForDoc(groupKey, cd) || getPasswordForDoc(rawName, cd) || (cd.fileUrl ? getPasswordForDoc(cd.fileUrl, cd) : '');
     const docEntry = {
       id: `cd_${cd._id || idx}`,
       docId: cd._id,
@@ -430,13 +476,17 @@ const SharedDocuments = () => {
       fileUrl: cd.fileUrl,
       docType: cd.docType || 'customDocument',
       category: cd.category || groupKey,
-      notes: docNotes
+      notes: docNotes,
+      password: docPassword
     };
 
     if (groupedDocsMap.has(groupKey)) {
       groupedDocsMap.get(groupKey).files.push(docEntry);
       if (docNotes && !groupedDocsMap.get(groupKey).notes) {
         groupedDocsMap.get(groupKey).notes = docNotes;
+      }
+      if (docPassword && !groupedDocsMap.get(groupKey).password) {
+        groupedDocsMap.get(groupKey).password = docPassword;
       }
     } else {
       groupedDocsMap.set(groupKey, {
@@ -447,6 +497,7 @@ const SharedDocuments = () => {
         docType: docEntry.docType,
         category: docEntry.category,
         notes: docNotes,
+        password: docPassword,
         files: [docEntry],
         fileUrl: docEntry.fileUrl,
         icon: FileText
@@ -469,6 +520,7 @@ const SharedDocuments = () => {
       if (customGroup) groupKey = customGroup;
 
       const docNotes = getNoteForDoc(groupKey, fDoc) || getNoteForDoc(rawName, fDoc);
+      const docPassword = getPasswordForDoc(groupKey, fDoc) || getPasswordForDoc(rawName, fDoc) || (fDoc.fileUrl ? getPasswordForDoc(fDoc.fileUrl, fDoc) : '');
       const docEntry = {
         id: `f_${f._id}_${fDoc._id || fIdx}`,
         docId: fDoc._id,
@@ -479,13 +531,17 @@ const SharedDocuments = () => {
         fileUrl: fDoc.fileUrl,
         docType: 'customFolderFile',
         category: f.folderName || 'Folder File',
-        notes: docNotes
+        notes: docNotes,
+        password: docPassword
       };
 
       if (groupedDocsMap.has(groupKey)) {
         groupedDocsMap.get(groupKey).files.push(docEntry);
         if (docNotes && !groupedDocsMap.get(groupKey).notes) {
           groupedDocsMap.get(groupKey).notes = docNotes;
+        }
+        if (docPassword && !groupedDocsMap.get(groupKey).password) {
+          groupedDocsMap.get(groupKey).password = docPassword;
         }
       } else {
         groupedDocsMap.set(groupKey, {
@@ -496,6 +552,7 @@ const SharedDocuments = () => {
           docType: docEntry.docType,
           category: docEntry.category,
           notes: docNotes,
+          password: docPassword,
           files: [docEntry],
           fileUrl: docEntry.fileUrl,
           icon: FileText
@@ -528,6 +585,7 @@ const SharedDocuments = () => {
       const rawName = customFileTitle || groupKey;
 
       const docNotes = getNoteForDoc(groupKey, null);
+      const docPassword = getPasswordForDoc(groupKey, null) || getPasswordForDoc(item.label, null) || getPasswordForDoc(item.key, null);
       const docEntry = {
         id: `legacy_${item.key}`,
         name: groupKey,
@@ -536,13 +594,17 @@ const SharedDocuments = () => {
         fileUrl: data[item.key],
         docType: item.key,
         category: 'Client Document',
-        notes: docNotes
+        notes: docNotes,
+        password: docPassword
       };
 
       if (groupedDocsMap.has(groupKey)) {
         groupedDocsMap.get(groupKey).files.push(docEntry);
         if (docNotes && !groupedDocsMap.get(groupKey).notes) {
           groupedDocsMap.get(groupKey).notes = docNotes;
+        }
+        if (docPassword && !groupedDocsMap.get(groupKey).password) {
+          groupedDocsMap.get(groupKey).password = docPassword;
         }
       } else {
         groupedDocsMap.set(groupKey, {
@@ -553,6 +615,7 @@ const SharedDocuments = () => {
           docType: docEntry.docType,
           category: docEntry.category,
           notes: docNotes,
+          password: docPassword,
           files: [docEntry],
           fileUrl: docEntry.fileUrl,
           icon: item.icon
@@ -572,6 +635,7 @@ const SharedDocuments = () => {
       const rawName = customFileTitle || groupKey;
 
       const docNotes = getNoteForDoc(groupKey, null);
+      const docPassword = getPasswordForDoc(groupKey, null) || getPasswordForDoc(url, null);
       const docEntry = {
         id: `other_${idx}`,
         name: groupKey,
@@ -580,13 +644,17 @@ const SharedDocuments = () => {
         fileUrl: url,
         docType: 'other',
         category: 'Client Document',
-        notes: docNotes
+        notes: docNotes,
+        password: docPassword
       };
 
       if (groupedDocsMap.has(groupKey)) {
         groupedDocsMap.get(groupKey).files.push(docEntry);
         if (docNotes && !groupedDocsMap.get(groupKey).notes) {
           groupedDocsMap.get(groupKey).notes = docNotes;
+        }
+        if (docPassword && !groupedDocsMap.get(groupKey).password) {
+          groupedDocsMap.get(groupKey).password = docPassword;
         }
       } else {
         groupedDocsMap.set(groupKey, {
@@ -597,6 +665,7 @@ const SharedDocuments = () => {
           docType: docEntry.docType,
           category: docEntry.category,
           notes: docNotes,
+          password: docPassword,
           files: [docEntry],
           fileUrl: docEntry.fileUrl,
           icon: FileText
@@ -979,19 +1048,46 @@ const SharedDocuments = () => {
             )}
           </div>
 
-          {/* Center: When in Continuous View -> SAFE TOP BADGE showing ONLY current document name being viewed */}
+          {/* Center: When in Continuous View -> INTERACTIVE TOP STEPPER & QUICK-JUMP (0% Overlap with document) */}
           {viewMode === 'continuous' && (
-            <div className="flex items-center justify-center min-w-0 flex-1 px-2">
-              <div className="px-3 py-1 bg-amber-50 border border-amber-200/80 rounded-full flex items-center gap-1.5 shadow-2xs max-w-full">
-                <span className="text-[10px] font-mono font-black text-amber-800 bg-amber-200/60 px-1.5 py-0.2 rounded shrink-0">
-                  #{visibleDocIndex + 1}
-                </span>
-                <span className="text-xs font-black text-[#081326] truncate">
-                  {visibleDocTitle || sortedDocs[visibleDocIndex]?.title || 'Document'}
-                </span>
-                <span className="text-[10px] text-gray-400 font-medium hidden sm:inline shrink-0">
-                  ({visibleDocIndex + 1} of {sortedDocs.length})
-                </span>
+            <div className="flex items-center justify-center min-w-0 flex-1 px-1 sm:px-2">
+              <div className="inline-flex items-center bg-[#081326]/90 backdrop-blur-md text-white rounded-full p-0.5 shadow-md border border-slate-700/60 max-w-full">
+                <button
+                  type="button"
+                  onClick={() => scrollToDoc(Math.max(0, visibleDocIndex - 1))}
+                  disabled={visibleDocIndex === 0}
+                  className="p-1 sm:p-1.5 rounded-full hover:bg-amber-400 hover:text-black text-gray-200 disabled:opacity-25 disabled:pointer-events-none transition-colors cursor-pointer shrink-0"
+                  title="Previous Document"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setDocNavModal(true)}
+                  className="px-2 py-0.5 flex items-center gap-1.5 text-xs font-bold truncate cursor-pointer hover:text-amber-300 transition-colors group"
+                  title="Click to jump to any document"
+                >
+                  <span className="text-[10px] sm:text-xs font-mono font-black text-amber-400 shrink-0">
+                    #{visibleDocIndex + 1}
+                  </span>
+                  <span className="text-[11px] sm:text-xs text-slate-100 truncate max-w-[100px] xs:max-w-[150px] sm:max-w-[220px]">
+                    {visibleDocTitle || sortedDocs[visibleDocIndex]?.title || 'Document'}
+                  </span>
+                  <span className="text-[10px] text-gray-400 font-mono hidden xs:inline shrink-0">
+                    / {sortedDocs.length}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => scrollToDoc(Math.min(sortedDocs.length - 1, visibleDocIndex + 1))}
+                  disabled={visibleDocIndex >= sortedDocs.length - 1}
+                  className="p-1 sm:p-1.5 rounded-full hover:bg-amber-400 hover:text-black text-gray-200 disabled:opacity-25 disabled:pointer-events-none transition-colors cursor-pointer shrink-0"
+                  title="Next Document"
+                >
+                  <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                </button>
               </div>
             </div>
           )}
@@ -1297,7 +1393,7 @@ const SharedDocuments = () => {
                           <h3 className="text-xs sm:text-sm font-black text-[#081326] truncate">
                             {doc.title}
                           </h3>
-                          {(doc.password || data?.documentPasswords?.[doc.title] || data?.documentPasswords?.[doc.name]) && (
+                          {(doc.password || getPasswordForDoc(doc.title, doc) || getPasswordForDoc(doc.name, doc)) && (
                             <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-amber-50 text-amber-900 border border-amber-200/80 px-2 py-0.5 rounded-full">
                               <Lock className="w-2.5 h-2.5 text-amber-600" />
                               <span>Password Protected (Auto-unlocked)</span>
@@ -1346,23 +1442,30 @@ const SharedDocuments = () => {
                     {docFiles.map((fileObj, fIdx) => (
                       <div key={fIdx} className="space-y-2">
                         {docFiles.length > 1 && (
-                          <div className="flex items-center justify-between text-[11px] font-bold text-gray-500 px-1">
-                            <span>Attachment {fIdx + 1} of {docFiles.length} ({fileObj.fileTitle || fileObj.title})</span>
-                            <a
-                              href={getAssetUrl(fileObj.fileUrl)}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-blue-600 hover:underline flex items-center gap-1"
-                            >
-                              <ExternalLink className="w-3 h-3" /> Full View
-                            </a>
+                          <div className="space-y-1 px-1">
+                            <div className="flex items-center justify-between text-[11px] font-bold text-gray-500">
+                              <span>Attachment {fIdx + 1} of {docFiles.length} ({fileObj.fileTitle || fileObj.title})</span>
+                              <a
+                                href={getAssetUrl(fileObj.fileUrl)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-600 hover:underline flex items-center gap-1"
+                              >
+                                <ExternalLink className="w-3 h-3" /> Full View
+                              </a>
+                            </div>
+                            {fileObj.notes && fileObj.notes !== doc.notes && (
+                              <p className="text-[11px] text-amber-700 font-medium">
+                                Note: {fileObj.notes}
+                              </p>
+                            )}
                           </div>
                         )}
 
                         {isPdf(fileObj.fileUrl) ? (
                           <PdfViewer
                             url={getAssetUrl(fileObj.fileUrl)}
-                            password={fileObj.password || doc.password || data?.documentPasswords?.[doc.title] || data?.documentPasswords?.[doc.name]}
+                            password={fileObj.password || doc.password || getPasswordForDoc(doc.title, doc) || getPasswordForDoc(doc.name, doc) || getPasswordForDoc(fileObj.fileUrl, fileObj)}
                             title={fileObj.fileTitle || fileObj.title || doc.title}
                           />
                         ) : (
@@ -1393,9 +1496,9 @@ const SharedDocuments = () => {
 
       </main>
 
-      {/* 5. RIGHT SIDE SCROLL INDICATOR / QUICK NAVIGATOR (Visible in Continuous View) */}
+      {/* 5. DESKTOP-ONLY RIGHT SIDE SCROLL INDICATOR / QUICK NAVIGATOR (Visible ONLY on xl screens >= 1280px in outer empty margin, hidden on mobile/tablet so it NEVER covers document content) */}
       {viewMode === 'continuous' && sortedDocs.length > 1 && (
-        <div className="fixed right-3 sm:right-6 top-1/2 -translate-y-1/2 z-30 flex flex-col items-center gap-1 bg-[#081326]/85 backdrop-blur-md text-white p-1.5 rounded-2xl shadow-xl border border-white/10 select-none">
+        <div className="hidden xl:flex fixed right-4 2xl:right-8 top-1/2 -translate-y-1/2 z-30 flex-col items-center gap-1 bg-[#081326]/90 backdrop-blur-md text-white p-1.5 rounded-2xl shadow-xl border border-white/10 select-none">
           <button
             type="button"
             onClick={() => scrollToDoc(Math.max(0, visibleDocIndex - 1))}
@@ -1420,6 +1523,71 @@ const SharedDocuments = () => {
           >
             <ChevronDown className="w-4 h-4" />
           </button>
+        </div>
+      )}
+
+      {/* QUICK JUMP DOCUMENT DRAWER (Opens when tapping the top serial number stepper badge) */}
+      {docNavModal && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-[#081326]/70 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="absolute inset-0" onClick={() => setDocNavModal(false)} />
+          <div className="relative bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl max-h-[80vh] flex flex-col shadow-2xl border border-gray-200 overflow-hidden animate-in slide-in-from-bottom duration-200">
+            <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-slate-50">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-amber-100 text-amber-800 flex items-center justify-center font-bold text-xs">
+                  #
+                </div>
+                <div>
+                  <h3 className="font-black text-gray-900 text-sm">Jump to Document</h3>
+                  <p className="text-[11px] text-gray-500">{sortedDocs.length} Documents in this case file</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDocNavModal(false)}
+                className="w-7 h-7 rounded-full bg-gray-200 hover:bg-gray-300 text-gray-600 flex items-center justify-center cursor-pointer transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto p-3 space-y-1.5 flex-1 divide-y divide-gray-50">
+              {sortedDocs.map((doc, idx) => {
+                const isActive = idx === visibleDocIndex;
+                return (
+                  <button
+                    key={doc.id || idx}
+                    type="button"
+                    onClick={() => {
+                      setDocNavModal(false);
+                      scrollToDoc(idx);
+                    }}
+                    className={`w-full text-left p-2.5 rounded-xl flex items-center gap-3 transition-colors cursor-pointer ${
+                      isActive 
+                        ? 'bg-amber-400 text-[#081326] font-black shadow-xs' 
+                        : 'hover:bg-gray-50 text-gray-800 font-medium'
+                    }`}
+                  >
+                    <span className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-mono font-black shrink-0 ${
+                      isActive ? 'bg-[#081326] text-amber-400' : 'bg-gray-100 text-gray-700'
+                    }`}>
+                      #{idx + 1}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs truncate font-bold">{doc.title}</p>
+                      <p className={`text-[10px] ${isActive ? 'text-[#081326]/80' : 'text-gray-400'}`}>
+                        {doc.files?.length || 1} file(s) {doc.category ? `• ${doc.category}` : ''}
+                      </p>
+                    </div>
+                    {isActive && (
+                      <span className="text-[10px] uppercase tracking-wider font-black bg-[#081326] text-amber-400 px-2 py-0.5 rounded-full shrink-0">
+                        Current
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
       )}
 

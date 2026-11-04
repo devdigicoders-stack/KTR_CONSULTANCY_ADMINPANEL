@@ -31,7 +31,10 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
   const [viewMode, setViewMode] = useState('list');
   const [activeDocIndex, setActiveDocIndex] = useState(0);
   const [selectedSubmission, setSelectedSubmission] = useState(null);
-  const [openActionMenuId, setOpenActionMenuId] = useState(null);
+  // Action Menu & Delete Confirmation State
+  const [activeActionDoc, setActiveActionDoc] = useState(null);
+  const [deleteConfirmTarget, setDeleteConfirmTarget] = useState(null);
+  const [deletingDoc, setDeletingDoc] = useState(false);
   const docRefs = useRef([]);
 
   // Preview File State: { title, files: [{ fileUrl, title, docId, docType }], activeIndex: 0 }
@@ -44,6 +47,8 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [customDocTitle, setCustomDocTitle] = useState('');
   const [customDocNotes, setCustomDocNotes] = useState('');
+  const [customDocPassword, setCustomDocPassword] = useState('');
+  const [showUploadPassword, setShowUploadPassword] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState([]);
 
   // Document Notes & Passwords State
@@ -108,6 +113,15 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
     }, 150);
   }, []);
 
+  const scrollToDocItem = useCallback((index) => {
+    if (index < 0 || index >= sortedDocItems.length) return;
+    setActiveDocIndex(index);
+    const el = docRefs.current[index];
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [sortedDocItems.length]);
+
   const closeContinuousView = useCallback(() => {
     if (window.history.state?.ktrStaffDocView === 'continuous') {
       window.history.back();
@@ -116,12 +130,7 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
     }
   }, []);
 
-  // Close 3-dot dropdown menu on outside click
-  useEffect(() => {
-    const handleOutsideClick = () => setOpenActionMenuId(null);
-    window.addEventListener('click', handleOutsideClick);
-    return () => window.removeEventListener('click', handleOutsideClick);
-  }, []);
+
 
   const closePreview = useCallback(() => {
     if (window.history.state?.ktrPreviewModal) {
@@ -184,17 +193,40 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
 
   // Document Notes Helper
   const getNoteForDoc = (groupKey, cd) => {
-    if (localNotesMap[groupKey] !== undefined) return localNotesMap[groupKey];
-    if (cd?.notes) return cd.notes;
+    if (groupKey && localNotesMap[groupKey] !== undefined) return localNotesMap[groupKey];
+    if (cd?._id && localNotesMap[cd._id] !== undefined) return localNotesMap[cd._id];
+    if (cd?.fileUrl && localNotesMap[cd.fileUrl] !== undefined) return localNotesMap[cd.fileUrl];
+    if (cd?.name && localNotesMap[cd.name] !== undefined) return localNotesMap[cd.name];
+
     if (client?.documentNotes) {
-      if (typeof client.documentNotes.get === 'function') {
-        const val = client.documentNotes.get(groupKey);
-        if (val) return val;
-      } else if (typeof client.documentNotes === 'object') {
-        const val = client.documentNotes[groupKey];
-        if (val) return val;
-      }
+      const getVal = (k) => {
+        if (!k) return undefined;
+        if (typeof client.documentNotes.get === 'function') return client.documentNotes.get(k);
+        if (typeof client.documentNotes === 'object') return client.documentNotes[k];
+        return undefined;
+      };
+
+      const v1 = getVal(groupKey);
+      if (v1 !== undefined) return v1;
+      const v2 = cd?.name ? getVal(cd.name) : undefined;
+      if (v2 !== undefined) return v2;
+      const v3 = cd?.fileUrl ? getVal(cd.fileUrl) : undefined;
+      if (v3 !== undefined) return v3;
+      const v4 = cd?._id ? getVal(cd._id.toString()) : undefined;
+      if (v4 !== undefined) return v4;
     }
+    if (cd?.notes !== undefined && cd?.notes !== null) return cd.notes;
+    return '';
+  };
+
+  const extractPasswordFromText = (text) => {
+    if (!text || typeof text !== 'string') return '';
+    let m = text.match(/\b(?:password|pswd|pwd|pass)\s*[:=\-]\s*([^\s,;]+)/i);
+    if (m && m[1]) return m[1].trim();
+    m = text.match(/\b(?:password|pswd|pwd)\s+is\s+([^\s,;]+)/i);
+    if (m && m[1]) return m[1].trim();
+    m = text.match(/\b(?:pswd|pwd)\s+([a-zA-Z0-9@#$%_*\.+-]+)/i);
+    if (m && m[1]) return m[1].trim();
     return '';
   };
 
@@ -204,14 +236,40 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
     if (cd?.password) return cd.password;
     if (client?.documentPasswords) {
       if (typeof client.documentPasswords.get === 'function') {
-        const val = client.documentPasswords.get(groupKey);
+        const val = client.documentPasswords.get(groupKey) || 
+                    (cd?.name && client.documentPasswords.get(cd.name)) || 
+                    (cd?.fileUrl && client.documentPasswords.get(cd.fileUrl)) || 
+                    (cd?.fileTitle && client.documentPasswords.get(cd.fileTitle));
         if (val) return val;
       } else if (typeof client.documentPasswords === 'object') {
-        const val = client.documentPasswords[groupKey];
+        const val = client.documentPasswords[groupKey] || 
+                    (cd?.name && client.documentPasswords[cd.name]) || 
+                    (cd?.title && client.documentPasswords[cd.title]) || 
+                    (cd?.fileTitle && client.documentPasswords[cd.fileTitle]) || 
+                    (cd?.fileUrl && client.documentPasswords[cd.fileUrl]) || 
+                    (cd?.docId && client.documentPasswords[cd.docId.toString()]);
         if (val) return val;
       }
     }
-    return '';
+    const note = getNoteForDoc(groupKey, cd);
+    return extractPasswordFromText(note);
+  };
+
+  // Background password auto-save when user unlocks a document in the viewer
+  const handlePasswordAutoSave = async (docName, unlockedPassword) => {
+    if (!unlockedPassword || !client?._id || !docName) return;
+    const trimmed = unlockedPassword.trim();
+    if (!trimmed) return;
+    setLocalPasswordsMap(prev => ({ ...prev, [docName]: trimmed }));
+    try {
+      await api.put(`/clients/${client._id}/document-notes`, {
+        docName,
+        password: trimmed
+      });
+      toast.success(`Password saved for ${docName} – future previews will auto-unlock!`, { id: `pwd-save-${docName}` });
+    } catch (e) {
+      console.warn('Auto password save error:', e);
+    }
   };
 
   const handleCopyDocNote = (noteText, docKey) => {
@@ -222,24 +280,40 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
     setTimeout(() => setCopiedNoteKey(null), 2000);
   };
 
-  const handleSaveDocNote = async (docName, doc) => {
+  const handleSaveDocNote = async (docName, doc, explicitClear = false) => {
     if (!client?._id || !docName) return;
     setSavingNote(true);
-    const newNote = (editingNoteDoc?.text || '').trim();
+    const newNote = explicitClear ? '' : (editingNoteDoc?.text || '').trim();
     const newPassword = (editingNoteDoc?.password || '').trim();
+    const targetType = editingNoteDoc?.targetType || 'group';
+    const docId = editingNoteDoc?.docId || doc?.files?.[0]?.docId;
+    const fileUrl = editingNoteDoc?.fileUrl || doc?.files?.[0]?.fileUrl;
+    const groupName = editingNoteDoc?.groupName || docName;
+
     try {
       await api.put(`/clients/${client._id}/document-notes`, {
         docName,
+        groupName,
+        targetType,
         notes: newNote,
         password: newPassword,
-        docId: doc?.files?.[0]?.docId,
+        docId,
+        fileUrl,
         docType: doc?.docType
       });
 
-      setLocalNotesMap(prev => ({ ...prev, [docName]: newNote }));
-      setLocalPasswordsMap(prev => ({ ...prev, [docName]: newPassword }));
+      setLocalNotesMap(prev => ({
+        ...prev,
+        [docName]: newNote,
+        ...(groupName ? { [groupName]: targetType === 'group' ? newNote : prev[groupName] } : {}),
+        ...(docId ? { [docId]: newNote } : {}),
+        ...(fileUrl ? { [fileUrl]: newNote } : {})
+      }));
+      if (newPassword) {
+        setLocalPasswordsMap(prev => ({ ...prev, [docName]: newPassword }));
+      }
       setEditingNoteDoc(null);
-      toast.success('Document details saved successfully!');
+      toast.success(newNote ? 'Document note updated successfully!' : 'Document note cleared successfully!');
       if (onRefresh) onRefresh();
     } catch (err) {
       console.error('Save doc note error:', err);
@@ -850,6 +924,9 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
       if (customDocNotes.trim()) {
         formData.append('notes', customDocNotes.trim());
       }
+      if (customDocPassword.trim()) {
+        formData.append('password', customDocPassword.trim());
+      }
 
       const res = await api.post(`/clients/${client._id}/documents`, formData, {
         timeout: 180000
@@ -859,6 +936,8 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
         setShowUploadModal(false);
         setCustomDocTitle('');
         setCustomDocNotes('');
+        setCustomDocPassword('');
+        setShowUploadPassword(false);
         setSelectedFiles([]);
         toast.success('Document uploaded successfully!');
         if (onRefresh) await onRefresh();
@@ -891,10 +970,15 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
   };
 
   const handleDeleteGroup = async (groupDoc) => {
-    if (!window.confirm(`Are you sure you want to delete "${groupDoc.name}"? This action cannot be undone.`)) return;
-
+    if (!groupDoc || !client?._id) return;
     try {
-      for (const fileObj of groupDoc.files) {
+      const filesToDelete = groupDoc.files && groupDoc.files.length > 0 ? groupDoc.files : [{
+        docType: groupDoc.docType,
+        docId: groupDoc.id,
+        fileUrl: groupDoc.fileUrl
+      }];
+
+      for (const fileObj of filesToDelete) {
         await api.delete(`/clients/${client._id}/documents`, {
           data: {
             docType: fileObj.docType || groupDoc.docType,
@@ -905,7 +989,7 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
           }
         });
       }
-      toast.success(`"${groupDoc.name}" deleted successfully!`);
+      toast.success(`"${groupDoc.name}" deleted successfully! (Retained in recovery backup)`);
       if (onRefresh) onRefresh();
     } catch (err) {
       console.error('Failed to delete doc:', err);
@@ -914,7 +998,7 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
   };
 
   const handleDeleteSingleFileInGroup = async (fileObj, docTitle) => {
-    if (!window.confirm(`Delete attached file "${fileObj.name || docTitle}"?`)) return;
+    if (!fileObj || !client?._id) return;
     try {
       const res = await api.delete(`/clients/${client._id}/documents`, {
         data: {
@@ -926,7 +1010,7 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
         }
       });
       if (res.data.success) {
-        toast.success('File deleted');
+        toast.success(`"${fileObj.fileTitle || fileObj.name || 'File'}" deleted successfully! (Retained in recovery backup)`);
         if (onRefresh) onRefresh();
       }
     } catch (err) {
@@ -1592,9 +1676,29 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
 
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
-                  <span className="px-2 py-0.5 bg-[#081326] text-amber-400 rounded-md text-[10px] font-mono font-bold shrink-0">
-                    Doc {activeDocIndex + 1}/{sortedDocItems.length}
-                  </span>
+                  <div className="inline-flex items-center bg-[#081326] text-amber-400 rounded-lg p-0.5 shrink-0 shadow-xs">
+                    <button
+                      type="button"
+                      onClick={() => scrollToDocItem(Math.max(0, activeDocIndex - 1))}
+                      disabled={activeDocIndex === 0}
+                      className="p-1 hover:text-white disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer"
+                      title="Previous Document"
+                    >
+                      <ChevronLeft className="w-3.5 h-3.5" />
+                    </button>
+                    <span className="px-1 text-[10px] font-mono font-bold select-none">
+                      #{activeDocIndex + 1}/{sortedDocItems.length}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => scrollToDocItem(Math.min(sortedDocItems.length - 1, activeDocIndex + 1))}
+                      disabled={activeDocIndex >= sortedDocItems.length - 1}
+                      className="p-1 hover:text-white disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer"
+                      title="Next Document"
+                    >
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                   <h2 className="text-xs sm:text-sm font-black text-[#081326] truncate">
                     {activeDoc?.name || 'Document Review'}
                   </h2>
@@ -1687,10 +1791,55 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
                               <span className="text-[9px] text-amber-800 underline group-hover:text-amber-950 ml-0.5">View Details &rarr;</span>
                             </button>
                           ) : doc.notes ? (
-                            <p className="text-[11px] text-amber-700 font-medium truncate">
-                              Note: {doc.notes}
-                            </p>
-                          ) : null}
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <p className="text-[11px] text-amber-700 font-medium truncate">
+                                Note: {doc.notes}
+                              </p>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditingNoteDoc({
+                                    docName: doc.name,
+                                    groupName: doc.name,
+                                    targetType: 'group',
+                                    text: doc.notes || '',
+                                    password: doc.password || '',
+                                    docId: doc?.files?.[0]?.docId,
+                                    fileUrl: doc?.files?.[0]?.fileUrl,
+                                    doc
+                                  });
+                                }}
+                                className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 bg-amber-100 hover:bg-amber-200 border border-amber-300 rounded cursor-pointer transition-colors"
+                                title="Edit Note / Remarks"
+                              >
+                                <Edit3 className="w-2.5 h-2.5" />
+                                <span>Edit Note</span>
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingNoteDoc({
+                                  docName: doc.name,
+                                  groupName: doc.name,
+                                  targetType: 'group',
+                                  text: '',
+                                  password: doc.password || '',
+                                  docId: doc?.files?.[0]?.docId,
+                                  fileUrl: doc?.files?.[0]?.fileUrl,
+                                  doc
+                                });
+                              }}
+                              className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium text-gray-500 hover:text-amber-700 hover:bg-amber-50 border border-dashed border-gray-300 hover:border-amber-300 rounded cursor-pointer transition-colors"
+                              title="Add Note to this document"
+                            >
+                              <StickyNote className="w-2.5 h-2.5" />
+                              <span>+ Add Note</span>
+                            </button>
+                          )}
                           {doc.password && (
                             <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-amber-50 text-amber-900 border border-amber-200/80 px-2 py-0.5 rounded-full">
                               <Lock className="w-2.5 h-2.5 text-amber-600" />
@@ -1769,7 +1918,12 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
                             {docFiles.length > 1 && (
                               <button
                                 type="button"
-                                onClick={() => handleDeleteSingleFileInGroup(fileObj, doc.name)}
+                                onClick={() => setDeleteConfirmTarget({
+                                  type: 'file',
+                                  title: fileObj.fileTitle || fileObj.name || `File`,
+                                  fileObj,
+                                  docTitle: doc.name
+                                })}
                                 className="text-red-500 hover:text-red-700 hover:bg-red-50 px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer transition-colors"
                                 title="Delete this single file"
                               >
@@ -1791,8 +1945,9 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
                           <div className="w-full bg-white rounded-xl overflow-hidden border border-gray-200">
                             <PdfViewer
                               url={getAssetUrl(fileObj.fileUrl)}
-                              password={fileObj.password || doc.password || getPasswordForDoc(doc.name)}
+                              password={fileObj.password || doc.password || getPasswordForDoc(doc.name, doc) || getPasswordForDoc(fileObj.fileUrl, fileObj)}
                               title={fileObj.fileTitle || fileObj.name || doc.name}
+                              onPasswordSuccess={(pwd) => handlePasswordAutoSave(doc.name, pwd)}
                             />
                           </div>
                         ) : (
@@ -2103,278 +2258,209 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
                         : 'border-gray-200/90 hover:border-gray-300'
                     }`}
                   >
-                    <div className="p-3.5 sm:p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                      {/* Left: Drag Handle, Serial, Checkbox, Doc Info */}
-                      <div className="flex items-center gap-3 min-w-0 flex-1 w-full sm:w-auto">
-                        {/* Reorder Buttons & Touch Handle */}
-                        <div className="flex items-center gap-1 shrink-0">
+                    <div className="p-3 sm:p-4 space-y-2">
+                      {/* Top Header Row: Drag, Serial, Checkbox, Title & Badges on Left, Chevron & 3-Dot on Right */}
+                      <div className="flex items-center justify-between gap-2">
+                        {/* Left: Drag Handle, Serial, Checkbox, Title & Badges */}
+                        <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                          {/* Reorder Buttons & Touch Handle */}
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              type="button"
+                              onTouchStart={(e) => handleTouchStart(e, index)}
+                              onTouchMove={handleTouchMove}
+                              onTouchEnd={handleTouchEnd}
+                              className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-gray-100 rounded-lg cursor-grab active:cursor-grabbing touch-none select-none transition-colors"
+                              title="Drag to Reorder Serial"
+                            >
+                              <GripVertical className="w-4 h-4" />
+                            </button>
+
+                            <div className="flex flex-col gap-0.5">
+                              <button
+                                type="button"
+                                onClick={() => handleMoveItem(index, 'up')}
+                                disabled={isFirst || savingOrder}
+                                className="p-0.5 text-gray-400 hover:text-[#081326] disabled:opacity-20 transition-colors cursor-pointer"
+                                title="Move Up"
+                              >
+                                <ArrowUp className="w-3 h-3" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleMoveItem(index, 'down')}
+                                disabled={isLast || savingOrder}
+                                className="p-0.5 text-gray-400 hover:text-[#081326] disabled:opacity-20 transition-colors cursor-pointer"
+                                title="Move Down"
+                              >
+                                <ArrowDown className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Checkbox */}
                           <button
                             type="button"
-                            onTouchStart={(e) => handleTouchStart(e, index)}
-                            onTouchMove={handleTouchMove}
-                            onTouchEnd={handleTouchEnd}
-                            className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-gray-100 rounded-lg cursor-grab active:cursor-grabbing touch-none select-none transition-colors"
-                            title="Drag to Reorder Serial"
+                            onClick={() => toggleSelectDoc(doc.id)}
+                            className="text-gray-400 hover:text-amber-600 shrink-0 cursor-pointer"
                           >
-                            <GripVertical className="w-4 h-4" />
+                            {isSelected ? (
+                              <CheckSquare className="w-4 h-4 text-amber-600" />
+                            ) : (
+                              <Square className="w-4 h-4 text-gray-300" />
+                            )}
                           </button>
 
-                          <div className="flex flex-col gap-0.5">
-                            <button
-                              type="button"
-                              onClick={() => handleMoveItem(index, 'up')}
-                              disabled={isFirst || savingOrder}
-                              className="p-0.5 text-gray-400 hover:text-[#081326] disabled:opacity-20 transition-colors"
-                              title="Move Up"
-                            >
-                              <ArrowUp className="w-3 h-3" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleMoveItem(index, 'down')}
-                              disabled={isLast || savingOrder}
-                              className="p-0.5 text-gray-400 hover:text-[#081326] disabled:opacity-20 transition-colors"
-                              title="Move Down"
-                            >
-                              <ArrowDown className="w-3 h-3" />
-                            </button>
+                          {/* Serial Tag */}
+                          <span className="px-2 py-0.5 bg-[#081326] text-amber-400 rounded-md text-[11px] font-mono font-bold shrink-0">
+                            #{index + 1}
+                          </span>
+
+                          {/* Document Name & Badges */}
+                          <div 
+                            className="min-w-0 flex-1 cursor-pointer"
+                            onClick={() => openContinuousView(index)}
+                          >
+                            <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                              <h4 className="text-xs sm:text-sm font-black text-[#081326] hover:text-amber-600 transition-colors truncate">
+                                {doc.name}
+                              </h4>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setRenamingDoc({
+                                    targetType: 'group',
+                                    oldTitle: doc.name,
+                                    newTitle: doc.name,
+                                    fileUrl: primaryUrl,
+                                    doc
+                                  });
+                                }}
+                                className="p-1 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded cursor-pointer transition-colors"
+                                title="Rename Document / Category Title"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+                              {fileCount > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleGroupExpand(doc.id);
+                                  }}
+                                  className="text-[10px] font-bold bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full border border-blue-200 hover:bg-blue-100 transition-colors cursor-pointer"
+                                >
+                                  {fileCount} Files {isExpanded ? '▲' : '▼'}
+                                </button>
+                              )}
+                              <span className="text-[10px] font-medium bg-gray-100 text-gray-600 px-1.5 py-0.2 rounded shrink-0">
+                                {isPdf(primaryUrl) ? 'PDF' : 'IMAGE'}
+                              </span>
+                            </div>
                           </div>
                         </div>
 
-                        {/* Checkbox */}
-                        <button
-                          type="button"
-                          onClick={() => toggleSelectDoc(doc.id)}
-                          className="text-gray-400 hover:text-amber-600 shrink-0 cursor-pointer"
-                        >
-                          {isSelected ? (
-                            <CheckSquare className="w-4 h-4 text-amber-600" />
-                          ) : (
-                            <Square className="w-4 h-4 text-gray-300" />
-                          )}
-                        </button>
+                        {/* Right: Sleek Banker-Style Compact Controls (Chevron & 3-Dot Action Menu) */}
+                        <div className="flex items-center gap-0.5 sm:gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            type="button"
+                            onClick={() => openContinuousView(index)}
+                            className="p-1.5 text-gray-400 hover:text-[#081326] hover:bg-gray-100 rounded-lg cursor-pointer transition-colors"
+                            title="View Document"
+                          >
+                            <ChevronRight className="w-5 h-5" />
+                          </button>
 
-                        {/* Serial Tag */}
-                        <span className="px-2 py-0.5 bg-[#081326] text-amber-400 rounded-md text-[11px] font-mono font-bold shrink-0">
-                          #{index + 1}
-                        </span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveActionDoc({ ...doc, docIndex: index });
+                            }}
+                            className={`p-1.5 rounded-lg cursor-pointer transition-colors ${
+                              activeActionDoc?.id === doc.id
+                                ? 'bg-amber-100 text-[#081326]'
+                                : 'text-gray-400 hover:text-[#081326] hover:bg-gray-100'
+                            }`}
+                            title="More Actions (Edit, Rename, Delete, Share)"
+                          >
+                            <MoreVertical className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
 
-                        {/* Document Name & Badges */}
-                        <div 
-                          className="min-w-0 flex-1 cursor-pointer"
-                          onClick={() => openContinuousView(index)}
-                        >
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <h4 className="text-xs sm:text-sm font-black text-[#081326] hover:text-amber-600 transition-colors truncate">
-                              {doc.name}
-                            </h4>
+                      {/* Notes & Password snippets row below title */}
+                      <div className="pl-12 sm:pl-16 flex items-center gap-2 flex-wrap">
+                        {(doc.isLinkSubmission || (doc.notes && (doc.notes.toLowerCase().includes('link submission') || doc.notes.toLowerCase().includes('submitted via link')))) ? (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenSubmissionModal(doc);
+                            }}
+                            className="inline-flex items-center gap-1 text-[10px] font-bold bg-amber-100 hover:bg-amber-200 text-amber-950 border border-amber-300 px-2 py-0.5 rounded-full cursor-pointer transition-all shadow-2xs group"
+                            title="Click to view all form details & questions submitted by client"
+                          >
+                            <ClipboardCheck className="w-3 h-3 text-[#f59e0b]" />
+                            <span>Link Submission</span>
+                            <span className="text-[9px] text-amber-800 underline group-hover:text-amber-950 ml-0.5">View Details &rarr;</span>
+                          </button>
+                        ) : doc.notes ? (
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <p className="text-[11px] text-amber-700 font-medium truncate max-w-xs">
+                              Note: {doc.notes}
+                            </p>
                             <button
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setRenamingDoc({
-                                  targetType: 'group',
-                                  oldTitle: doc.name,
-                                  newTitle: doc.name,
-                                  fileUrl: primaryUrl,
-                                  doc
-                                });
-                              }}
-                              className="p-1 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded cursor-pointer transition-colors"
-                              title="Rename Document / Category Title"
-                            >
-                              <Edit3 className="w-3.5 h-3.5" />
-                            </button>
-                            {fileCount > 1 && (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  toggleGroupExpand(doc.id);
-                                }}
-                                className="text-[10px] font-bold bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full border border-blue-200 hover:bg-blue-100 transition-colors"
-                              >
-                                {fileCount} Files {isExpanded ? '▲' : '▼'}
-                              </button>
-                            )}
-                            <span className="text-[10px] font-medium bg-gray-100 text-gray-600 px-1.5 py-0.2 rounded">
-                              {isPdf(primaryUrl) ? 'PDF' : 'IMAGE'}
-                            </span>
-                          </div>
-
-                          {/* Notes & Password snippets */}
-                          <div className="flex items-center gap-2 flex-wrap mt-0.5">
-                            {(doc.isLinkSubmission || (doc.notes && (doc.notes.toLowerCase().includes('link submission') || doc.notes.toLowerCase().includes('submitted via link')))) ? (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleOpenSubmissionModal(doc);
-                                }}
-                                className="inline-flex items-center gap-1 text-[10px] font-bold bg-amber-100 hover:bg-amber-200 text-amber-950 border border-amber-300 px-2 py-0.5 rounded-full cursor-pointer transition-all shadow-2xs group"
-                                title="Click to view all form details & questions submitted by client"
-                              >
-                                <ClipboardCheck className="w-3 h-3 text-[#f59e0b]" />
-                                <span>Link Submission</span>
-                                <span className="text-[9px] text-amber-800 underline group-hover:text-amber-950 ml-0.5">View Details &rarr;</span>
-                              </button>
-                            ) : doc.notes ? (
-                              <p className="text-[11px] text-amber-700 font-medium truncate max-w-xs">
-                                Note: {doc.notes}
-                              </p>
-                            ) : null}
-                            {doc.password && (
-                              <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-amber-50 text-amber-900 border border-amber-200/80 px-2 py-0.5 rounded-full">
-                                <Lock className="w-2.5 h-2.5 text-amber-600" />
-                                <span>Password Protected (Auto-unlocked)</span>
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Right: Sleek Banker-Style Compact Controls (Chevron & 3-Dot Action Menu) */}
-                      <div className="flex items-center gap-1 shrink-0 relative" onClick={(e) => e.stopPropagation()}>
-                        <button
-                          type="button"
-                          onClick={() => openContinuousView(index)}
-                          className="p-1.5 text-gray-400 hover:text-[#081326] hover:bg-gray-100 rounded-lg cursor-pointer transition-colors"
-                          title="View Document"
-                        >
-                          <ChevronRight className="w-5 h-5" />
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setOpenActionMenuId(openActionMenuId === (doc.id || index) ? null : (doc.id || index));
-                          }}
-                          className={`p-1.5 rounded-lg cursor-pointer transition-colors ${
-                            openActionMenuId === (doc.id || index)
-                              ? 'bg-amber-100 text-[#081326]'
-                              : 'text-gray-400 hover:text-[#081326] hover:bg-gray-100'
-                          }`}
-                          title="More Actions"
-                        >
-                          <MoreVertical className="w-4 h-4" />
-                        </button>
-
-                        {/* 3-Dot Dropdown Menu */}
-                        {openActionMenuId === (doc.id || index) && (
-                          <div 
-                            className="absolute right-0 top-full mt-1 w-52 bg-white rounded-xl shadow-xl border border-gray-100 py-1.5 z-30 animate-in fade-in zoom-in-95 duration-100 text-xs font-bold text-gray-700"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setOpenActionMenuId(null);
-                                openContinuousView(index);
-                              }}
-                              className="w-full px-3 py-2 text-left hover:bg-amber-50 hover:text-amber-800 flex items-center gap-2.5 transition-colors cursor-pointer"
-                            >
-                              <Eye className="w-3.5 h-3.5 text-blue-600" />
-                              <span>View / Preview</span>
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setOpenActionMenuId(null);
-                                openUploadForExistingCategory(doc.name);
-                              }}
-                              className="w-full px-3 py-2 text-left hover:bg-amber-50 hover:text-amber-800 flex items-center gap-2.5 transition-colors cursor-pointer"
-                            >
-                              <PlusCircle className="w-3.5 h-3.5 text-emerald-600" />
-                              <span>Add More Files</span>
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setOpenActionMenuId(null);
-                                setShareDocModal(doc);
-                              }}
-                              className="w-full px-3 py-2 text-left hover:bg-amber-50 hover:text-amber-800 flex items-center gap-2.5 transition-colors cursor-pointer"
-                            >
-                              <Share2 className="w-3.5 h-3.5 text-indigo-600" />
-                              <span>Share Document</span>
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setOpenActionMenuId(null);
-                                handleSmartPrint([doc], `${doc.name} - ${client?.fullName || 'Client'}`);
-                              }}
-                              className="w-full px-3 py-2 text-left hover:bg-amber-50 hover:text-amber-800 flex items-center gap-2.5 transition-colors cursor-pointer"
-                            >
-                              <Printer className="w-3.5 h-3.5 text-purple-600" />
-                              <span>Smart Print</span>
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                setOpenActionMenuId(null);
-                                handleDownloadFile(e, primaryUrl, doc.name);
-                              }}
-                              className="w-full px-3 py-2 text-left hover:bg-amber-50 hover:text-amber-800 flex items-center gap-2.5 transition-colors cursor-pointer"
-                            >
-                              <Download className="w-3.5 h-3.5 text-emerald-600" />
-                              <span>Download File</span>
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setOpenActionMenuId(null);
                                 setEditingNoteDoc({
                                   docName: doc.name,
+                                  groupName: doc.name,
+                                  targetType: 'group',
                                   text: doc.notes || '',
                                   password: doc.password || '',
+                                  docId: doc?.files?.[0]?.docId,
+                                  fileUrl: doc?.files?.[0]?.fileUrl,
                                   doc
                                 });
                               }}
-                              className="w-full px-3 py-2 text-left hover:bg-amber-50 hover:text-amber-800 flex items-center gap-2.5 transition-colors cursor-pointer"
+                              className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 bg-amber-100 hover:bg-amber-200 border border-amber-300 rounded cursor-pointer transition-colors"
+                              title="Edit Note / Remarks"
                             >
-                              <StickyNote className="w-3.5 h-3.5 text-amber-600" />
-                              <span>Edit Note / Password</span>
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setOpenActionMenuId(null);
-                                setRenamingDoc({
-                                  targetType: 'group',
-                                  oldTitle: doc.name,
-                                  newTitle: doc.name,
-                                  fileUrl: primaryUrl,
-                                  doc
-                                });
-                              }}
-                              className="w-full px-3 py-2 text-left hover:bg-amber-50 hover:text-amber-800 flex items-center gap-2.5 transition-colors cursor-pointer"
-                            >
-                              <Edit3 className="w-3.5 h-3.5 text-gray-600" />
-                              <span>Rename Category</span>
-                            </button>
-
-                            <div className="my-1 border-t border-gray-100"></div>
-
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setOpenActionMenuId(null);
-                                handleDeleteGroup(doc);
-                              }}
-                              className="w-full px-3 py-2 text-left text-red-600 hover:bg-red-50 flex items-center gap-2.5 transition-colors cursor-pointer"
-                            >
-                              <Trash2 className="w-3.5 h-3.5 text-red-600" />
-                              <span>Delete Document</span>
+                              <Edit3 className="w-2.5 h-2.5" />
+                              <span>Edit Note</span>
                             </button>
                           </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingNoteDoc({
+                                docName: doc.name,
+                                groupName: doc.name,
+                                targetType: 'group',
+                                text: '',
+                                password: doc.password || '',
+                                docId: doc?.files?.[0]?.docId,
+                                fileUrl: doc?.files?.[0]?.fileUrl,
+                                doc
+                              });
+                            }}
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium text-gray-500 hover:text-amber-700 hover:bg-amber-50 border border-dashed border-gray-300 hover:border-amber-300 rounded cursor-pointer transition-colors"
+                            title="Add Note / Remarks to this category"
+                          >
+                            <StickyNote className="w-2.5 h-2.5" />
+                            <span>+ Add Note</span>
+                          </button>
+                        )}
+                        {doc.password && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-amber-50 text-amber-900 border border-amber-200/80 px-2 py-0.5 rounded-full">
+                            <Lock className="w-2.5 h-2.5 text-amber-600" />
+                            <span>Password Protected (Auto-unlocked)</span>
+                          </span>
                         )}
                       </div>
                     </div>
@@ -2452,28 +2538,81 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
                                 <span className="w-5 h-5 rounded-md bg-gray-100 text-gray-600 font-mono font-bold flex items-center justify-center text-[10px] shrink-0">
                                   {fIdx + 1}
                                 </span>
-                                <span className="font-medium text-gray-800 truncate">
-                                  {fileObj.fileTitle || fileObj.name || `File ${fIdx + 1}`}
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() => setRenamingDoc({
-                                    targetType: 'file',
-                                    oldTitle: fileObj.fileTitle || fileObj.name || `File ${fIdx + 1}`,
-                                    newTitle: fileObj.fileTitle || fileObj.name || `File ${fIdx + 1}`,
-                                    docId: fileObj.docId,
-                                    fileUrl: fileObj.fileUrl,
-                                    folderId: fileObj.folderId,
-                                    groupName: doc.name
-                                  })}
-                                  className="p-1 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded cursor-pointer transition-colors shrink-0"
-                                  title="Rename this file"
-                                >
-                                  <Edit3 className="w-3.5 h-3.5" />
-                                </button>
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="font-medium text-gray-800 truncate">
+                                      {fileObj.fileTitle || fileObj.name || `File ${fIdx + 1}`}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => setRenamingDoc({
+                                        targetType: 'file',
+                                        oldTitle: fileObj.fileTitle || fileObj.name || `File ${fIdx + 1}`,
+                                        newTitle: fileObj.fileTitle || fileObj.name || `File ${fIdx + 1}`,
+                                        docId: fileObj.docId,
+                                        fileUrl: fileObj.fileUrl,
+                                        folderId: fileObj.folderId,
+                                        groupName: doc.name
+                                      })}
+                                      className="p-1 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded cursor-pointer transition-colors shrink-0"
+                                      title="Rename this file"
+                                    >
+                                      <Edit3 className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                  {fileObj.notes && (
+                                    <div className="flex items-center gap-1.5 mt-0.5">
+                                      <span className="text-[10px] text-amber-700 font-medium truncate max-w-xs">
+                                        Note: {fileObj.notes}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setEditingNoteDoc({
+                                            docName: fileObj.fileTitle || fileObj.name || `File ${fIdx + 1}`,
+                                            groupName: doc.name,
+                                            targetType: 'file',
+                                            text: fileObj.notes || '',
+                                            password: fileObj.password || '',
+                                            docId: fileObj.docId,
+                                            fileUrl: fileObj.fileUrl,
+                                            doc
+                                          });
+                                        }}
+                                        className="p-0.5 text-gray-400 hover:text-amber-600 rounded cursor-pointer"
+                                        title="Edit file note"
+                                      >
+                                        <Edit3 className="w-2.5 h-2.5" />
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
 
                               <div className="flex items-center gap-1 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setEditingNoteDoc({
+                                      docName: fileObj.fileTitle || fileObj.name || `File ${fIdx + 1}`,
+                                      groupName: doc.name,
+                                      targetType: 'file',
+                                      text: fileObj.notes || '',
+                                      password: fileObj.password || '',
+                                      docId: fileObj.docId,
+                                      fileUrl: fileObj.fileUrl,
+                                      doc
+                                    });
+                                  }}
+                                  className={`p-1 rounded cursor-pointer transition-colors ${
+                                    fileObj.notes ? 'text-amber-600 hover:bg-amber-50' : 'text-gray-400 hover:text-amber-600 hover:bg-gray-100'
+                                  }`}
+                                  title={fileObj.notes ? "Edit File Note / Password" : "Add Note / Password to this file"}
+                                >
+                                  <StickyNote className="w-3.5 h-3.5" />
+                                </button>
                                 <a
                                   href={getAssetUrl(fileObj.fileUrl)}
                                   target="_blank"
@@ -2493,8 +2632,13 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => handleDeleteSingleFileInGroup(fileObj, doc.name)}
-                                  className="p-1 text-red-500 hover:bg-red-50 rounded"
+                                  onClick={() => setDeleteConfirmTarget({
+                                    type: 'file',
+                                    title: fileObj.fileTitle || fileObj.name || `File ${fIdx + 1}`,
+                                    fileObj,
+                                    docTitle: doc.name
+                                  })}
+                                  className="p-1 text-red-500 hover:bg-red-50 rounded cursor-pointer transition-colors"
                                   title="Delete Single File"
                                 >
                                   <Trash2 className="w-3.5 h-3.5" />
@@ -2611,9 +2755,10 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
                 <PdfViewer
                   key={activePreviewFile.fileUrl}
                   url={getAssetUrl(activePreviewFile.fileUrl)}
-                  password={activePreviewFile.password || previewData.password || getPasswordForDoc(previewData.title)}
+                  password={activePreviewFile.password || previewData.password || getPasswordForDoc(previewData.title, activePreviewFile) || getPasswordForDoc(activePreviewFile.fileUrl, activePreviewFile)}
                   title={previewData.title}
                   className="w-full h-full"
+                  onPasswordSuccess={(pwd) => handlePasswordAutoSave(previewData.title, pwd)}
                 />
               ) : (
                 <ImageViewer
@@ -2700,6 +2845,39 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
                   onChange={(e) => setCustomDocNotes(e.target.value)}
                   className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-amber-500 focus:bg-white transition-all"
                 />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold text-gray-700">
+                    Document Password (Optional)
+                  </label>
+                  {customDocPassword && (
+                    <span className="text-[10px] text-amber-700 font-bold bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                      Encrypted Vault
+                    </span>
+                  )}
+                </div>
+                <div className="relative">
+                  <input
+                    type={showUploadPassword ? 'text' : 'password'}
+                    placeholder="e.g. DOB, PAN or Bank PDF password"
+                    value={customDocPassword}
+                    onChange={(e) => setCustomDocPassword(e.target.value)}
+                    className="w-full px-3.5 py-2.5 pr-10 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-amber-500 focus:bg-white transition-all"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowUploadPassword(!showUploadPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 p-1 cursor-pointer"
+                    title={showUploadPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showUploadPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                <p className="text-[10px] text-gray-400 mt-1">
+                  If this PDF is password-protected, entering it here enables automatic unlocking in both Staff and Banker previews.
+                </p>
               </div>
 
               <div>
@@ -2886,21 +3064,36 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
 
             <div className="space-y-4 pt-3">
               <div className="bg-amber-50/70 border border-amber-200/60 rounded-xl p-2.5">
-                <span className="text-[10px] font-bold text-amber-800 uppercase tracking-wider block">Document</span>
+                <span className="text-[10px] font-bold text-amber-800 uppercase tracking-wider block">
+                  {editingNoteDoc.targetType === 'file' ? 'Attached File' : 'Document Category'}
+                </span>
                 <span className="text-xs font-black text-[#081326]">{editingNoteDoc.docName}</span>
+                {editingNoteDoc.groupName && editingNoteDoc.groupName !== editingNoteDoc.docName && (
+                  <span className="text-[10px] text-gray-500 block mt-0.5">Category: {editingNoteDoc.groupName}</span>
+                )}
               </div>
 
               {/* Option 1: General Notes / Remarks */}
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-gray-700 flex items-center justify-between">
                   <span>General Notes / Remarks</span>
-                  <span className="text-[10px] font-normal text-gray-400">Optional</span>
+                  {editingNoteDoc.text ? (
+                    <button
+                      type="button"
+                      onClick={() => setEditingNoteDoc(prev => ({ ...prev, text: '' }))}
+                      className="text-[10px] text-red-600 hover:text-red-700 font-bold hover:underline cursor-pointer"
+                    >
+                      Clear Text
+                    </button>
+                  ) : (
+                    <span className="text-[10px] font-normal text-gray-400">Optional</span>
+                  )}
                 </label>
                 <textarea
                   rows={3}
                   value={editingNoteDoc.text || ''}
                   onChange={(e) => setEditingNoteDoc(prev => ({ ...prev, text: e.target.value }))}
-                  placeholder="Enter remarks, verification notes, or status..."
+                  placeholder="Enter remarks, pendency details, or verification notes..."
                   className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium outline-none focus:border-amber-500 focus:bg-white transition-all resize-none"
                 />
               </div>
@@ -2936,23 +3129,40 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
                 </p>
               </div>
 
-              <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
-                <button
-                  type="button"
-                  onClick={() => setEditingNoteDoc(null)}
-                  className="px-4 py-2 text-xs font-bold text-gray-600 hover:bg-gray-100 rounded-xl cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  disabled={savingNote}
-                  onClick={() => handleSaveDocNote(editingNoteDoc.docName, editingNoteDoc.doc)}
-                  className="px-5 py-2 bg-[#081326] text-white hover:bg-[#11203d] rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-40"
-                >
-                  {savingNote && <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />}
-                  <span>{savingNote ? 'Saving...' : 'Save Changes'}</span>
-                </button>
+              <div className="flex items-center justify-between gap-2 pt-2 border-t border-gray-100">
+                {(editingNoteDoc.text || editingNoteDoc.doc?.notes) ? (
+                  <button
+                    type="button"
+                    disabled={savingNote}
+                    onClick={() => handleSaveDocNote(editingNoteDoc.docName, editingNoteDoc.doc, true)}
+                    className="px-3 py-2 bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 rounded-xl text-xs font-bold flex items-center gap-1 cursor-pointer disabled:opacity-40"
+                    title="Clear and delete this note"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                    <span>Delete Note</span>
+                  </button>
+                ) : (
+                  <div />
+                )}
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditingNoteDoc(null)}
+                    className="px-4 py-2 text-xs font-bold text-gray-600 hover:bg-gray-100 rounded-xl cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={savingNote}
+                    onClick={() => handleSaveDocNote(editingNoteDoc.docName, editingNoteDoc.doc, false)}
+                    className="px-5 py-2 bg-[#081326] text-white hover:bg-[#11203d] rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-40"
+                  >
+                    {savingNote && <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />}
+                    <span>{savingNote ? 'Saving...' : 'Save Changes'}</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -3144,6 +3354,286 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
               </div>
             )}
             <p className="text-[10px] text-gray-400 font-medium">Auto-detecting Portrait / Landscape per page</p>
+          </div>
+        </div>
+      )}
+
+      {/* ---------------------------------------------------- */}
+      {/* 7. THREE-DOT ACTION SHEET MODAL (Universal Mobile & Desktop) */}
+      {/* ---------------------------------------------------- */}
+      {activeActionDoc && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-[#081326]/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="absolute inset-0" onClick={() => setActiveActionDoc(null)} />
+          <div className="relative bg-white w-full max-w-md rounded-t-3xl sm:rounded-2xl p-5 shadow-2xl space-y-3.5 animate-in slide-in-from-bottom duration-200 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+              <div className="min-w-0 flex-1 pr-3">
+                <span className="text-[10px] font-mono font-bold text-amber-600 uppercase tracking-wider block">
+                  Document #{activeActionDoc.docIndex !== undefined ? activeActionDoc.docIndex + 1 : ''}
+                </span>
+                <h3 className="text-sm font-black text-[#081326] truncate">{activeActionDoc.name}</h3>
+                <p className="text-[11px] text-gray-500">
+                  {activeActionDoc.files?.length || 1} file(s) {activeActionDoc.category ? `• ${activeActionDoc.category}` : ''}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveActionDoc(null)}
+                className="w-8 h-8 rounded-full bg-gray-100 text-gray-500 hover:text-black flex items-center justify-center cursor-pointer transition-colors shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 gap-1">
+              {/* 1. View / Preview */}
+              <button
+                type="button"
+                onClick={() => {
+                  const idx = activeActionDoc.docIndex !== undefined ? activeActionDoc.docIndex : 0;
+                  setActiveActionDoc(null);
+                  openContinuousView(idx);
+                }}
+                className="w-full p-2.5 rounded-xl hover:bg-amber-50 flex items-center gap-3 transition-colors text-left cursor-pointer group"
+              >
+                <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center shrink-0 group-hover:bg-amber-200">
+                  <Eye className="w-4 h-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-bold text-[#081326]">Open & View Document</p>
+                  <p className="text-[10px] text-gray-500">Review in continuous document feed</p>
+                </div>
+              </button>
+
+              {/* 2. Add More Files */}
+              <button
+                type="button"
+                onClick={() => {
+                  const docName = activeActionDoc.name;
+                  setActiveActionDoc(null);
+                  openUploadForExistingCategory(docName);
+                }}
+                className="w-full p-2.5 rounded-xl hover:bg-emerald-50 flex items-center gap-3 transition-colors text-left cursor-pointer group"
+              >
+                <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0 group-hover:bg-emerald-200">
+                  <PlusCircle className="w-4 h-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-bold text-[#081326]">Add More Files</p>
+                  <p className="text-[10px] text-gray-500">Attach additional files or pages to this category</p>
+                </div>
+              </button>
+
+              {/* 3. Share Document */}
+              <button
+                type="button"
+                onClick={() => {
+                  const targetDoc = activeActionDoc;
+                  setActiveActionDoc(null);
+                  setShareDocModal(targetDoc);
+                }}
+                className="w-full p-2.5 rounded-xl hover:bg-indigo-50 flex items-center gap-3 transition-colors text-left cursor-pointer group"
+              >
+                <div className="w-9 h-9 rounded-xl bg-indigo-100 text-indigo-800 flex items-center justify-center shrink-0 group-hover:bg-indigo-200">
+                  <Share2 className="w-4 h-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-bold text-[#081326]">Share Document</p>
+                  <p className="text-[10px] text-gray-500">Share secure viewing link or download file</p>
+                </div>
+              </button>
+
+              {/* 4. Smart Print */}
+              <button
+                type="button"
+                onClick={() => {
+                  const targetDoc = activeActionDoc;
+                  setActiveActionDoc(null);
+                  handleSmartPrint([targetDoc], `${targetDoc.name} - ${client?.fullName || 'Client'}`);
+                }}
+                className="w-full p-2.5 rounded-xl hover:bg-purple-50 flex items-center gap-3 transition-colors text-left cursor-pointer group"
+              >
+                <div className="w-9 h-9 rounded-xl bg-purple-100 text-purple-800 flex items-center justify-center shrink-0 group-hover:bg-purple-200">
+                  <Printer className="w-4 h-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-bold text-[#081326]">Smart Print</p>
+                  <p className="text-[10px] text-gray-500">Print with auto-orientation detection</p>
+                </div>
+              </button>
+
+              {/* 5. Download File */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  const targetDoc = activeActionDoc;
+                  const primaryUrl = targetDoc.files?.[0]?.fileUrl || targetDoc.fileUrl;
+                  setActiveActionDoc(null);
+                  handleDownloadFile(e, primaryUrl, targetDoc.name);
+                }}
+                className="w-full p-2.5 rounded-xl hover:bg-blue-50 flex items-center gap-3 transition-colors text-left cursor-pointer group"
+              >
+                <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-800 flex items-center justify-center shrink-0 group-hover:bg-blue-200">
+                  <Download className="w-4 h-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-bold text-[#081326]">Download File</p>
+                  <p className="text-[10px] text-gray-500">Save primary file directly to device</p>
+                </div>
+              </button>
+
+              {/* 6. Edit Note / Password */}
+              <button
+                type="button"
+                onClick={() => {
+                  const targetDoc = activeActionDoc;
+                  setActiveActionDoc(null);
+                  setEditingNoteDoc({
+                    docName: targetDoc.name,
+                    groupName: targetDoc.name,
+                    targetType: 'group',
+                    text: targetDoc.notes || '',
+                    password: targetDoc.password || '',
+                    docId: targetDoc?.files?.[0]?.docId,
+                    fileUrl: targetDoc?.files?.[0]?.fileUrl,
+                    doc: targetDoc
+                  });
+                }}
+                className="w-full p-2.5 rounded-xl hover:bg-amber-50 flex items-center gap-3 transition-colors text-left cursor-pointer group"
+              >
+                <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center shrink-0 group-hover:bg-amber-200">
+                  <StickyNote className="w-4 h-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-bold text-[#081326]">Edit Note / Password</p>
+                  <p className="text-[10px] text-gray-500">Update pendency remarks or PDF password</p>
+                </div>
+              </button>
+
+              {/* 7. Rename Category */}
+              <button
+                type="button"
+                onClick={() => {
+                  const targetDoc = activeActionDoc;
+                  const primaryUrl = targetDoc.files?.[0]?.fileUrl || targetDoc.fileUrl;
+                  setActiveActionDoc(null);
+                  setRenamingDoc({
+                    targetType: 'group',
+                    oldTitle: targetDoc.name,
+                    newTitle: targetDoc.name,
+                    fileUrl: primaryUrl,
+                    doc: targetDoc
+                  });
+                }}
+                className="w-full p-2.5 rounded-xl hover:bg-gray-100 flex items-center gap-3 transition-colors text-left cursor-pointer group"
+              >
+                <div className="w-9 h-9 rounded-xl bg-gray-100 text-gray-700 flex items-center justify-center shrink-0 group-hover:bg-gray-200">
+                  <Edit3 className="w-4 h-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-bold text-[#081326]">Rename Category</p>
+                  <p className="text-[10px] text-gray-500">Update category title across all views</p>
+                </div>
+              </button>
+
+              <div className="my-1 border-t border-gray-100"></div>
+
+              {/* 8. Delete Document / Category */}
+              <button
+                type="button"
+                onClick={() => {
+                  const targetDoc = activeActionDoc;
+                  setActiveActionDoc(null);
+                  setDeleteConfirmTarget({
+                    type: 'group',
+                    title: targetDoc.name,
+                    count: targetDoc.files?.length || 1,
+                    doc: targetDoc
+                  });
+                }}
+                className="w-full p-2.5 rounded-xl hover:bg-red-50 flex items-center gap-3 transition-colors text-left cursor-pointer group"
+              >
+                <div className="w-9 h-9 rounded-xl bg-red-100 text-red-700 flex items-center justify-center shrink-0 group-hover:bg-red-200">
+                  <Trash2 className="w-4 h-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-bold text-red-600">Delete Document Category</p>
+                  <p className="text-[10px] text-red-400">Remove from case (secure recovery backup retained)</p>
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ---------------------------------------------------- */}
+      {/* 8. SECURE DELETE CONFIRMATION MODAL */}
+      {/* ---------------------------------------------------- */}
+      {deleteConfirmTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#081326]/70 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="relative bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl space-y-4 animate-in zoom-in-95 duration-150 border border-red-100">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-red-100 text-red-600 flex items-center justify-center shrink-0">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="text-base font-black text-[#081326]">
+                  {deleteConfirmTarget.type === 'file' ? 'Delete Attached File?' : 'Delete Document Category?'}
+                </h3>
+                <p className="text-xs text-gray-500 truncate font-medium">
+                  {deleteConfirmTarget.title}
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl space-y-1.5 text-xs text-amber-950">
+              <p className="font-bold flex items-center gap-1.5">
+                <span>⚠️ Secure Recovery Protection</span>
+              </p>
+              <p className="text-[11px] text-amber-800 leading-relaxed">
+                This item {deleteConfirmTarget.count > 1 ? `(${deleteConfirmTarget.count} files) ` : ''}will be removed from the active case list. An encrypted backup copy is automatically preserved in the system recovery archive and can be restored by Admin if deleted by mistake.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+              <button
+                type="button"
+                disabled={deletingDoc}
+                onClick={() => setDeleteConfirmTarget(null)}
+                className="px-4 py-2.5 text-xs font-bold text-gray-600 hover:bg-gray-100 rounded-xl cursor-pointer disabled:opacity-40"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deletingDoc}
+                onClick={async () => {
+                  setDeletingDoc(true);
+                  try {
+                    if (deleteConfirmTarget.type === 'file') {
+                      await handleDeleteSingleFileInGroup(deleteConfirmTarget.fileObj, deleteConfirmTarget.docTitle);
+                    } else {
+                      await handleDeleteGroup(deleteConfirmTarget.doc);
+                    }
+                    setDeleteConfirmTarget(null);
+                  } finally {
+                    setDeletingDoc(false);
+                  }
+                }}
+                className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-40 shadow-sm"
+              >
+                {deletingDoc ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Confirm Delete</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

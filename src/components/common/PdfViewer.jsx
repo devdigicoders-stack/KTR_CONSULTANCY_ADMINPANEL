@@ -8,7 +8,7 @@ import {
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
-export default function PdfViewer({ url, password = '', title = 'PDF Document', className = '' }) {
+export default function PdfViewer({ url, password = '', title = 'PDF Document', className = '', onPasswordSuccess = null }) {
   const containerRef = useRef(null);
   const canvasRef = useRef(null);
   const renderTaskRef = useRef(null);
@@ -86,6 +86,9 @@ export default function PdfViewer({ url, password = '', title = 'PDF Document', 
           setPasswordRequired(false);
           setPasswordError(false);
           setLoading(false);
+          if (currentPassword && typeof onPasswordSuccess === 'function') {
+            onPasswordSuccess(currentPassword);
+          }
         }
       })
       .catch((err) => {
@@ -114,13 +117,13 @@ export default function PdfViewer({ url, password = '', title = 'PDF Document', 
 
   const handleUnlockPassword = (e) => {
     e?.preventDefault();
-    if (!inputPassword.trim()) return;
+    const pwd = inputPassword.trim();
+    if (!pwd) return;
     setPasswordError(false);
     setLoading(true);
+    setManualPassword(pwd);
     if (passwordCallbackRef.current) {
-      passwordCallbackRef.current(inputPassword.trim());
-    } else {
-      setManualPassword(inputPassword.trim());
+      passwordCallbackRef.current(pwd);
     }
   };
 
@@ -401,54 +404,58 @@ export default function PdfViewer({ url, password = '', title = 'PDF Document', 
           </div>
         )}
 
+        {/* Centered Overlay Password Card */}
         {passwordRequired && !loading && (
-          <div className="m-auto flex flex-col items-center gap-4 p-6 text-center max-w-sm w-full bg-slate-900/95 border border-amber-400/30 rounded-2xl shadow-2xl backdrop-blur-md z-30">
-            <div className="w-12 h-12 rounded-2xl bg-amber-400/10 text-amber-400 flex items-center justify-center ring-1 ring-amber-400/30">
-              <Lock className="w-6 h-6" />
-            </div>
-            <div>
-              <h4 className="text-sm font-bold text-white mb-1">Password Protected PDF</h4>
-              <p className="text-xs text-gray-400">
-                This document is encrypted. Enter the password below to preview.
-              </p>
-            </div>
-            <form onSubmit={handleUnlockPassword} className="w-full space-y-3">
-              <div className="relative">
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={inputPassword}
-                  onChange={(e) => {
-                    setInputPassword(e.target.value);
-                    setPasswordError(false);
-                  }}
-                  placeholder="Enter document password"
-                  className="w-full px-3.5 py-2.5 pr-10 bg-slate-950 border border-white/10 focus:border-amber-400 rounded-xl text-xs text-white placeholder-gray-500 focus:outline-none"
-                  autoFocus
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
-                >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
+          <div className="absolute inset-0 z-30 flex items-center justify-center p-4 sm:p-6 bg-slate-950/90 backdrop-blur-md animate-in fade-in duration-150">
+            <div className="w-full max-w-sm mx-auto bg-slate-900 border border-amber-400/40 rounded-2xl p-5 sm:p-6 shadow-2xl text-center space-y-4">
+              <div className="w-12 h-12 mx-auto rounded-2xl bg-amber-400/10 text-amber-400 flex items-center justify-center ring-1 ring-amber-400/30">
+                <Lock className="w-6 h-6" />
               </div>
-
-              {passwordError && (
-                <p className="text-[11px] font-semibold text-rose-400">
-                  Incorrect password. Please try again.
+              <div>
+                <h4 className="text-sm sm:text-base font-bold text-white mb-1">Password Protected PDF</h4>
+                <p className="text-xs text-gray-300">
+                  This document is encrypted. Enter the password below to preview.
                 </p>
-              )}
+              </div>
+              <form onSubmit={handleUnlockPassword} className="w-full space-y-3 pt-1">
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={inputPassword}
+                    onChange={(e) => {
+                      setInputPassword(e.target.value);
+                      setPasswordError(false);
+                    }}
+                    placeholder="Enter document password"
+                    className="w-full px-3.5 py-2.5 pr-10 bg-slate-950 border border-white/20 focus:border-amber-400 rounded-xl text-xs sm:text-sm text-white placeholder-gray-500 focus:outline-none transition-colors"
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white p-1 cursor-pointer"
+                    title={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
 
-              <button
-                type="submit"
-                disabled={!inputPassword.trim()}
-                className="w-full py-2.5 bg-amber-400 hover:bg-amber-300 disabled:opacity-40 text-slate-950 font-bold text-xs rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer"
-              >
-                <Key className="w-3.5 h-3.5" />
-                <span>Unlock & View</span>
-              </button>
-            </form>
+                {passwordError && (
+                  <p className="text-xs font-semibold text-rose-400 bg-rose-950/40 border border-rose-800/50 py-1.5 px-2.5 rounded-lg">
+                    Incorrect password. Please try again.
+                  </p>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={!inputPassword.trim()}
+                  className="w-full py-2.5 bg-amber-400 hover:bg-amber-300 disabled:opacity-40 text-slate-950 font-bold text-xs sm:text-sm rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Key className="w-4 h-4" />
+                  <span>Unlock & View</span>
+                </button>
+              </form>
+            </div>
           </div>
         )}
 
@@ -478,7 +485,7 @@ export default function PdfViewer({ url, password = '', title = 'PDF Document', 
             transition: isDragging ? 'none' : 'transform 0.1s ease-out'
           }}
           className={`flex items-center justify-center pointer-events-none transition-opacity duration-200 ${
-            loading || error ? 'opacity-0' : 'opacity-100'
+            loading || error || passwordRequired ? 'opacity-0 hidden' : 'opacity-100'
           }`}
         >
           <canvas
