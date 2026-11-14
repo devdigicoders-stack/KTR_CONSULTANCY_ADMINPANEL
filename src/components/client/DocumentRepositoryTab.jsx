@@ -113,15 +113,6 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
     }, 150);
   }, []);
 
-  const scrollToDocItem = useCallback((index) => {
-    if (index < 0 || index >= sortedDocItems.length) return;
-    setActiveDocIndex(index);
-    const el = docRefs.current[index];
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-  }, [sortedDocItems.length]);
-
   const closeContinuousView = useCallback(() => {
     if (window.history.state?.ktrStaffDocView === 'continuous') {
       window.history.back();
@@ -677,6 +668,16 @@ const DocumentRepositoryTab = ({ client, onRefresh }) => {
       });
     }
   });
+
+  // Continuous View Document Stepper Scrolling (Placed safely after sortedDocItems initialization)
+  const scrollToDocItem = useCallback((index) => {
+    if (index < 0 || index >= sortedDocItems.length) return;
+    setActiveDocIndex(index);
+    const el = docRefs.current[index];
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [sortedDocItems.length]);
 
   // Reorder Handler (Arrows)
   const handleMoveItem = async (index, direction) => {
